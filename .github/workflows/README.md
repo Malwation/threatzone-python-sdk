@@ -53,7 +53,7 @@ The `test` job is the slowest — act spins up one container per Python version.
 ./scripts/act-publish.sh --release    # simulate a real release event
 ```
 
-The `--release` mode will trigger `version-check` and attempt to reach `publish-pypi` but still fails safely because no real PyPI token is wired into the local act environment — this is the correct behavior for a pre-transfer sanity check.
+The `--release` mode will trigger `version-check` and attempt to reach `publish-pypi` but still fails safely because no real PyPI token is wired into the local act environment.
 
 ## Event payloads
 
@@ -66,14 +66,3 @@ Every fixture under `.github/act-events/` is a realistic-enough subset of the Gi
 | `actions/upload-artifact@v4` | Skipped via `if: ${{ !env.ACT }}` | v4 requires `ACTIONS_RUNTIME_TOKEN` which act cannot provide. The step runs normally on real GitHub. Consequence: `publish-pypi` under `--release` cannot find the artifact locally, but that path also can't reach PyPI without credentials so it's moot. |
 | `codecov/codecov-action@v4` | Runs, upload silently fails | Gated behind `github.event_name == 'push' && github.ref == 'refs/heads/main'` — the push event payload satisfies this but no codecov token is wired in locally. Non-fatal. |
 | `pypa/gh-action-pypi-publish@release/v1` | Never reached | Blocked by the dry-run gate; see above. |
-
-## Pre-transfer checklist
-
-Before moving this repo out of `threatzone-services`, verify:
-
-- [ ] `./scripts/act-ci.sh` exits 0 end-to-end
-- [ ] `./scripts/act-publish.sh` exits 0 end-to-end (dry-run)
-- [ ] No workflow file references `Malwation/threatzone-services` paths
-- [ ] `.github/act-events/*.json` `repository.full_name` matches `Malwation/threatzone-python-sdk`
-- [ ] `pyproject.toml` project URLs point at `github.com/Malwation/threatzone-python-sdk`
-- [ ] PyPI trusted publishing is configured for the package `threatzone` under the `pypi` environment on the new repo
