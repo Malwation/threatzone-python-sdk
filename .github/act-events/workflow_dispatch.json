@@ -1,0 +1,11 @@
+{
+  "inputs": {
+    "dry_run": "true"
+  },
+  "ref": "refs/heads/main",
+  "repository": {
+    "name": "threatzone-python-sdk",
+    "full_name": "Malwation/threatzone-python-sdk",
+    "default_branch": "main"
+  }
+}

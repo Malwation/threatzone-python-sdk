@@ -1,0 +1,24 @@
+{
+  "ref": "refs/heads/main",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "0000000000000000000000000000000000000001",
+  "repository": {
+    "name": "threatzone-python-sdk",
+    "full_name": "Malwation/threatzone-python-sdk",
+    "default_branch": "main",
+    "master_branch": "main"
+  },
+  "pusher": {
+    "name": "local-act",
+    "email": "local-act@threatzone.test"
+  },
+  "commits": [],
+  "head_commit": {
+    "id": "0000000000000000000000000000000000000001",
+    "message": "local act push event",
+    "author": {
+      "name": "local-act",
+      "email": "local-act@threatzone.test"
+    }
+  }
+}

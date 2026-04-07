@@ -1,0 +1,199 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only, do not publish"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+
+# Only one publish run at a time
+concurrency:
+  group: publish-${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Re-run the full test matrix before publishing. Never release broken code.
+  test:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
+
+  lint:
+    name: Lint + format (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: ruff check
+        run: uv run ruff check src/ tests/
+      - name: ruff format --check
+        run: uv run ruff format --check src/ tests/
+
+  type-check:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: mypy
+        run: uv run mypy src/threatzone
+
+  version-check:
+    name: Verify tag matches pyproject.toml version
+    runs-on: ubuntu-latest
+    # Skip version check on manual workflow_dispatch dry runs
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract tag version
+        id: tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Strip leading 'v' if present (e.g. v1.0.0 -> 1.0.0)
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Tag version: ${VERSION}"
+
+      - name: Extract pyproject version
+        id: pyproject
+        run: |
+          VERSION=$(grep -E '^version = "' pyproject.toml | head -1 | sed -E 's/version = "([^"]+)"/\1/')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "pyproject version: ${VERSION}"
+
+      - name: Extract SDK module version
+        id: module
+        run: |
+          VERSION=$(grep -E '^__version__ = "' src/threatzone/__init__.py | sed -E 's/__version__ = "([^"]+)"/\1/')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "module version: ${VERSION}"
+
+      - name: Assert all three versions match
+        run: |
+          TAG="${{ steps.tag.outputs.version }}"
+          PYPROJECT="${{ steps.pyproject.outputs.version }}"
+          MODULE="${{ steps.module.outputs.version }}"
+          if [[ "$TAG" != "$PYPROJECT" || "$TAG" != "$MODULE" ]]; then
+            echo "::error::Version mismatch: tag=$TAG pyproject=$PYPROJECT module=$MODULE"
+            exit 1
+          fi
+          echo "All three versions match: $TAG"
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    needs: [test, lint, type-check, version-check]
+    # If version-check was skipped (workflow_dispatch), don't require it
+    if: always() && needs.test.result == 'success' && needs.lint.result == 'success' && needs.type-check.result == 'success' && (needs.version-check.result == 'success' || needs.version-check.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Verify wheel imports cleanly
+        run: |
+          uv run --with ./dist/*.whl python -c "
+          import threatzone
+          print(f'Built threatzone version: {threatzone.__version__}')
+          assert threatzone.__version__, 'version missing'
+          "
+
+      - name: Store distribution packages
+        # Skip under nektos/act — upload-artifact@v4 requires ACTIONS_RUNTIME_TOKEN
+        # which act cannot provide. Runs normally on real GitHub.
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+          retention-days: 30
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build]
+    # Publish only on real releases, not dry runs
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/threatzone/
+    permissions:
+      id-token: write  # Trusted publishing (OIDC)
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: false
+          verbose: true

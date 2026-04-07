@@ -1,0 +1,21 @@
+{
+  "action": "opened",
+  "pull_request": {
+    "number": 1,
+    "state": "open",
+    "title": "local act PR",
+    "base": {
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000000"
+    },
+    "head": {
+      "ref": "local-act-branch",
+      "sha": "0000000000000000000000000000000000000001"
+    }
+  },
+  "repository": {
+    "name": "threatzone-python-sdk",
+    "full_name": "Malwation/threatzone-python-sdk",
+    "default_branch": "main"
+  }
+}

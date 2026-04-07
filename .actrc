@@ -1,0 +1,18 @@
+# act defaults for threatzone-python-sdk
+# Use catthehacker's medium image — ships with python, node, uv-compatible tooling.
+# "micro" is too small; "full" is multi-gigabyte. Medium is the sweet spot.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P ubuntu-24.04=catthehacker/ubuntu:act-24.04
+
+# Reuse containers between runs for caching. Faster repeat runs, mirrors CI re-runs.
+--reuse
+
+# Default event context file (realistic push-to-main payload).
+--eventpath .github/act-events/push.json
+
+# Default workflow directory (same as github).
+--workflows .github/workflows/
+
+# Default branch context so github.ref resolves to main.
+--defaultbranch main

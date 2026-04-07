@@ -1,0 +1,15 @@
+{
+  "action": "published",
+  "ref": "refs/tags/v1.0.0",
+  "release": {
+    "tag_name": "v1.0.0",
+    "name": "local act release v1.0.0",
+    "draft": false,
+    "prerelease": false
+  },
+  "repository": {
+    "name": "threatzone-python-sdk",
+    "full_name": "Malwation/threatzone-python-sdk",
+    "default_branch": "main"
+  }
+}
