@@ -1,9 +1,19 @@
 # Threat.Zone Python SDK
 
 Official Python SDK for the [Threat.Zone](https://threat.zone) malware analysis platform.
-Targets the Threat.Zone Public API `1.0.0-rc1` surface, ships fully typed Pydantic v2
+Targets the Threat.Zone Public API, ships fully typed Pydantic v2
 models for every endpoint, and exposes both synchronous (`ThreatZone`) and asynchronous
 (`AsyncThreatZone`) clients with identical method surfaces. Requires **Python 3.10+**.
+
+> [!WARNING]
+> ## ⚠️ Version Compatibility Notice
+>
+> **This SDK requires Threat.Zone v3.2.0 or later.**
+>
+> This SDK targets the Public API shipped with **Threat.Zone v3.2.0**. It will **not** function correctly against earlier versions of the platform.
+>
+>
+> Running an older Threat.Zone version? Pin to a pre-v3.2.0 release of this SDK, or coordinate with your admin to upgrade the platform first.
 
 ## Install
 
