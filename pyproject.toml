@@ -1,6 +1,6 @@
 [project]
 name = "threatzone"
-version = "1.0.0"
+version = "1.0.1"
 description = "Python SDK for the Threat.Zone malware analysis platform"
 readme = "README.md"
 license = { text = "MIT" }
