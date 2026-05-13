@@ -493,25 +493,25 @@ class TestConfigBuildUrl:
     def test_build_url_without_leading_slash(self):
         config = ClientConfig(
             api_key="test",
-            base_url="https://api.threat.zone",
+            base_url="https://app.threat.zone/public-api",
             timeout=30.0,
             max_retries=2,
             verify_ssl=False,
         )
 
-        url = config.build_url("v1/submissions")
+        url = config.build_url("submissions")
 
-        assert url == "https://api.threat.zone/v1/submissions"
+        assert url == "https://app.threat.zone/public-api/submissions"
 
     def test_build_url_with_leading_slash(self):
         config = ClientConfig(
             api_key="test",
-            base_url="https://api.threat.zone",
+            base_url="https://app.threat.zone/public-api",
             timeout=30.0,
             max_retries=2,
             verify_ssl=False,
         )
 
-        url = config.build_url("/v1/submissions")
+        url = config.build_url("/submissions")
 
-        assert url == "https://api.threat.zone/v1/submissions"
+        assert url == "https://app.threat.zone/public-api/submissions"

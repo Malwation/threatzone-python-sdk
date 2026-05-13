@@ -22,6 +22,7 @@ client = ThreatZone(api_key="<your-api-key>")
 10. [Use the async client](#10-use-the-async-client)
 11. [Build a daily report summary](#11-build-a-daily-report-summary)
 12. [Cross-reference MITRE techniques with indicators](#12-cross-reference-mitre-techniques-with-indicators)
+13. [Control Magika filename canonicalisation per submission (`dynamic_mimetype_check`)](#13-control-dynamic_mimetype_check)
 
 ---
 
@@ -631,3 +632,110 @@ for technique_id in sorted(layer):
 - Both endpoints are `ReportStatusGuard('dynamic')`-gated &mdash; wrap them with the
   retry loop from [recipe 7](#7-handle-the-reportunavailableerror-exception) if the
   submission may still be in analysis.
+
+---
+
+### 13. Control `dynamic_mimetype_check`
+
+When Threat.Zone receives a file, Magika (a content-based mimetype detector) inspects
+the bytes and may decide that the real extension differs from the filename extension
+(for example, a PowerShell script saved as `malware.txt` is detected as `ps1`). By
+**default** the persisted `submission.file.name` is canonicalised by appending the
+real extension &mdash; `malware.txt` becomes `malware.txt.ps1`. The same canonical
+name flows into every downstream artifact, queue message, sandbox `task.yaml`, and UI
+surface so the true content type is everywhere consistent.
+
+This canonicalisation is **enabled by default** for every submission endpoint, and
+can be disabled per request. The SDK shape mirrors the API wire shape:
+
+| Endpoint | SDK kwarg | Wire field |
+|---|---|---|
+| `create_sandbox_submission` | `metafields={"dynamic_mimetype_check": ...}` | `metafields.dynamic_mimetype_check` |
+| `create_open_in_browser_submission` | `metafields={"dynamic_mimetype_check": ...}` | `metafields.dynamic_mimetype_check` |
+| `create_static_submission` | `dynamic_mimetype_check=...` | top-level form field |
+| `create_cdr_submission` | `dynamic_mimetype_check=...` | top-level form field |
+
+For archive and email submissions, only the outer container filename is
+canonicalised &mdash; the in-archive `entrypoint` string is forwarded verbatim.
+
+**a) Default behaviour (recommended).** Omit the field entirely. The server's
+default (`true`) applies, and the persisted name is rewritten when Magika disagrees
+with the declared extension:
+
+```python
+client.create_sandbox_submission("./malware.txt", environment="w10_x64")
+client.create_static_submission("./suspicious.bin")
+client.create_cdr_submission("./report.doc")
+```
+
+**b) Keep filename verbatim &mdash; sandbox / open-in-browser.** Send the flag
+inside the `metafields` dict that the SDK forwards as a JSON object:
+
+```python
+client.create_sandbox_submission(
+    "./malware.txt",
+    environment="w10_x64",
+    metafields={
+        "dynamic_mimetype_check": False,
+        "timeout": 120,
+        "mouse_simulation": False,
+    },
+    private=True,
+)
+
+client.create_open_in_browser_submission(
+    "https://example.test/page",
+    metafields={"dynamic_mimetype_check": False},
+)
+```
+
+The dict-style `metafields` is normalised to the JSON object shape the API expects;
+all other keys you pass through (timeout, mouse_simulation, work_path, etc.) are
+validated server-side against your plan.
+
+**c) Keep filename verbatim &mdash; static / CDR.** Pass the top-level kwarg
+directly:
+
+```python
+client.create_static_submission(
+    "./malware.txt",
+    private=True,
+    dynamic_mimetype_check=False,
+)
+
+client.create_cdr_submission(
+    "./report.doc",
+    dynamic_mimetype_check=False,
+)
+```
+
+`dynamic_mimetype_check=None` (or omitting it) sends nothing on the wire, letting
+the server apply its default of `true`. Use `False` only when you have a specific
+reason to disable canonicalisation &mdash; e.g. you intentionally want to feed a
+mis-named sample through unchanged for a regression test.
+
+**d) Read back the result.** After the submission completes you can confirm
+whether canonicalisation actually took effect via the `FileInfo.is_mimetype_checked`
+flag on the submission detail:
+
+```python
+detail = client.get_submission(uuid)
+print(detail.file.name)                   # may be "malware.txt.ps1"
+print(detail.file.is_mimetype_checked)    # True when canonicalisation ran
+```
+
+**Async client.** All four create methods accept the same kwargs on
+`AsyncThreatZone`:
+
+```python
+async with AsyncThreatZone(api_key="...") as client:
+    await client.create_static_submission(
+        "./malware.txt",
+        dynamic_mimetype_check=False,
+    )
+    await client.create_sandbox_submission(
+        "./malware.txt",
+        environment="w10_x64",
+        metafields={"dynamic_mimetype_check": False, "timeout": 120},
+    )
+```

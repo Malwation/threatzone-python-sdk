@@ -233,6 +233,7 @@ class AsyncThreatZone:
         private: bool = False,
         entrypoint: str | None = None,
         password: str | None = None,
+        dynamic_mimetype_check: bool | None = None,
     ) -> SubmissionCreated:
         """
         Create a new static analysis submission.
@@ -242,6 +243,10 @@ class AsyncThreatZone:
             private: If True, submission is private to your workspace.
             entrypoint: Entry point for archive files.
             password: Password for encrypted archives.
+            dynamic_mimetype_check: When True (default on the server),
+                Magika-detected real extension is appended to the filename if
+                it differs from the declared extension. Send False to keep the
+                original filename verbatim. Omit to use the server default.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -251,6 +256,7 @@ class AsyncThreatZone:
             private=private,
             entrypoint=entrypoint,
             password=password,
+            dynamic_mimetype_check=dynamic_mimetype_check,
         )
         response = await self._http.post("/submissions/static", **multipart)
         return SubmissionCreated.model_validate(response.json())
@@ -262,6 +268,7 @@ class AsyncThreatZone:
         private: bool = False,
         entrypoint: str | None = None,
         password: str | None = None,
+        dynamic_mimetype_check: bool | None = None,
     ) -> SubmissionCreated:
         """
         Create a new CDR (Content Disarm & Reconstruction) submission.
@@ -271,6 +278,10 @@ class AsyncThreatZone:
             private: If True, submission is private to your workspace.
             entrypoint: Entry point for archive files.
             password: Password for encrypted archives.
+            dynamic_mimetype_check: When True (default on the server),
+                Magika-detected real extension is appended to the filename if
+                it differs from the declared extension. Send False to keep the
+                original filename verbatim. Omit to use the server default.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -280,6 +291,7 @@ class AsyncThreatZone:
             private=private,
             entrypoint=entrypoint,
             password=password,
+            dynamic_mimetype_check=dynamic_mimetype_check,
         )
         response = await self._http.post("/submissions/cdr", **multipart)
         return SubmissionCreated.model_validate(response.json())
