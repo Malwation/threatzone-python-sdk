@@ -60,6 +60,30 @@ print(f"Verdict: {completed.level}")
 print(f"MITRE techniques: {completed.mitre_techniques}")
 ```
 
+### Filename canonicalisation (`dynamic_mimetype_check`)
+
+By default the server appends the real (Magika-detected) extension to the
+persisted filename when it disagrees with what the file was named. Opt out per
+submission &mdash; sandbox / open-in-browser take it as a `metafields` key, static
+/ CDR take it as a top-level kwarg:
+
+```python
+# sandbox / open-in-browser → inside metafields
+client.create_sandbox_submission(
+    "./malware.txt",
+    environment="w10_x64",
+    metafields={"dynamic_mimetype_check": False, "timeout": 120},
+)
+
+# static / CDR → top-level kwarg
+client.create_static_submission("./malware.txt", dynamic_mimetype_check=False)
+client.create_cdr_submission("./report.doc", dynamic_mimetype_check=False)
+```
+
+See [Recipe 13](docs/RECIPES.md#13-control-dynamic_mimetype_check) for the full
+breakdown including reading back `FileInfo.is_mimetype_checked` after the
+submission completes.
+
 ## Core concepts
 
 - **Submissions** — one analysis target (file or URL) with a stable `uuid`, a workspace
