@@ -77,6 +77,14 @@ def main() -> int:
             print(f"Created sandbox: uuid={sandbox_created.uuid} (enqueued)")
             client.get_submission(sandbox_created.uuid)
             client.get_network_summary(sandbox_created.uuid)
+
+            # Auto-select environment smoke: verify the server picks an env for us.
+            auto_submission = client.create_sandbox_submission(
+                str(file_path),
+                auto_select_environment=True,
+            )
+            print(f"Auto-select sandbox: uuid={auto_submission.uuid} (enqueued)")
+            client.get_submission(auto_submission.uuid)
         except PermissionDeniedError:
             print("Sandbox submission not allowed by plan (403)")
 

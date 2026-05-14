@@ -458,6 +458,45 @@ class TestAsyncCreateSubmissions:
         assert "environment" not in body
         assert "metafields" not in body
 
+    async def test_create_sandbox_submission_sends_auto_select_environment_when_true(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_sandbox_submission(
+                    b"fake-bytes",
+                    auto_select_environment=True,
+                )
+        _, kwargs = mock.call_args
+        data = kwargs.get("data") or {}
+        assert data.get("autoSelectEnvironment") == "true"
+
+    async def test_create_sandbox_submission_omits_auto_select_when_false(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_sandbox_submission(b"fake-bytes")
+        _, kwargs = mock.call_args
+        data = kwargs.get("data") or {}
+        assert "autoSelectEnvironment" not in data
+
+    async def test_create_open_in_browser_submission_sends_auto_select_environment(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_open_in_browser_submission(
+                    "https://example.com",
+                    auto_select_environment=True,
+                )
+        _, kwargs = mock.call_args
+        body = kwargs["json"]
+        assert body.get("autoSelectEnvironment") is True
+
 
 # ---------------------------------------------------------------------------
 # Submissions - Query
