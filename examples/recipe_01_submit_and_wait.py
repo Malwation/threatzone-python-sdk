@@ -30,6 +30,17 @@ def main(client: ThreatZone, sample_path: Path) -> Submission:
     )
     print(f"Created submission {created.uuid}")
 
+    # --- Variant: let the server auto-select the environment ---
+    # When automating across heterogeneous samples (.exe, .elf, .apk, ...), set
+    # auto_select_environment=True and omit the `environment` kwarg. The server
+    # routes the sample based on its detected extension.
+    auto = client.create_sandbox_submission(
+        sample_path,
+        auto_select_environment=True,
+        private=True,
+    )
+    print(f"Submission (auto-env): {auto.uuid}")
+
     try:
         final = client.wait_for_completion(created.uuid, timeout=900, poll_interval=5)
     except AnalysisTimeoutError as exc:

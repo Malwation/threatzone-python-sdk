@@ -184,6 +184,7 @@ class ThreatZone:
         file: FileInput,
         *,
         environment: str | None = None,
+        auto_select_environment: bool = False,
         metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
         private: bool = False,
         entrypoint: str | None = None,
@@ -196,6 +197,10 @@ class ThreatZone:
         Args:
             file: File to analyze. Can be a file path, bytes, or file-like object.
             environment: Sandbox environment to use. See get_environments() for options.
+                Takes precedence over auto_select_environment.
+            auto_select_environment: When True, the server picks the environment based
+                on the file's detected extension. Ignored if `environment` is also set.
+                Falls back to the plan's default OS for unknown extensions. Default: False.
             metafields: Optional analysis metafields.
                 You can pass either:
                 - a dict map, e.g. {"timeout": 120, "internet_connection": True}
@@ -211,6 +216,10 @@ class ThreatZone:
         Returns:
             SubmissionCreated with the new submission UUID.
         """
+        extra_fields: dict[str, Any] = {}
+        if auto_select_environment:
+            extra_fields["autoSelectEnvironment"] = auto_select_environment
+
         multipart = self._http._build_multipart_data(
             file,
             environment=environment,
@@ -219,6 +228,7 @@ class ThreatZone:
             entrypoint=entrypoint,
             password=password,
             configurations=configurations,
+            **extra_fields,
         )
         response = self._http.post("/submissions/sandbox", **multipart)
         return SubmissionCreated.model_validate(response.json())
@@ -320,6 +330,7 @@ class ThreatZone:
         url: str,
         *,
         environment: str | None = None,
+        auto_select_environment: bool = False,
         metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
         private: bool = False,
         configurations: dict[str, str] | None = None,
@@ -332,6 +343,11 @@ class ThreatZone:
         Args:
             url: URL to analyze.
             environment: Optional OS environment key for browser execution.
+                Takes precedence over auto_select_environment.
+            auto_select_environment: When True, server resolves to the plan's
+                open_in_browser default. (No file extension exists for URL
+                submissions, so this is effectively API symmetry with sandbox.)
+                Ignored if `environment` is also set. Default: False.
             metafields: Optional open_in_browser metafields.
                 You can pass either:
                 - a dict map, e.g. {"timeout": 120}
@@ -346,6 +362,8 @@ class ThreatZone:
         normalized_metafields = _normalize_metafields_json(metafields)
         if environment is not None:
             payload["environment"] = environment
+        if auto_select_environment:
+            payload["autoSelectEnvironment"] = auto_select_environment
         if normalized_metafields is not None:
             payload["metafields"] = normalized_metafields
         if configurations is not None:

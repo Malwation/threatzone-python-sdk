@@ -60,6 +60,8 @@ print(f"Verdict: {completed.level}")
 print(f"MITRE techniques: {completed.mitre_techniques}")
 ```
 
+- Pass `auto_select_environment=True` to let the server route the sample to a Windows / Linux / macOS / Android environment based on its detected type. See [recipe 14](./docs/RECIPES.md#14-auto-select-sandbox-environment).
+
 ### Filename canonicalisation (`dynamic_mimetype_check`)
 
 By default the server appends the real (Magika-detected) extension to the
@@ -158,7 +160,7 @@ for the recommended retry loop.
 
 | Document | Purpose |
 |---|---|
-| [Recipes](./docs/RECIPES.md) | 12 runnable examples covering common tasks. |
+| [Recipes](./docs/RECIPES.md) | Runnable examples covering common tasks. |
 | [Type Reference](./docs/TYPES.md) | Pydantic model overview grouped by feature area. |
 
 ## Testing utilities

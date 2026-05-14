@@ -23,6 +23,7 @@ client = ThreatZone(api_key="<your-api-key>")
 11. [Build a daily report summary](#11-build-a-daily-report-summary)
 12. [Cross-reference MITRE techniques with indicators](#12-cross-reference-mitre-techniques-with-indicators)
 13. [Control Magika filename canonicalisation per submission (`dynamic_mimetype_check`)](#13-control-dynamic_mimetype_check)
+14. [Auto-select sandbox environment](#14-auto-select-sandbox-environment)
 
 ---
 
@@ -739,3 +740,32 @@ async with AsyncThreatZone(api_key="...") as client:
         metafields={"dynamic_mimetype_check": False, "timeout": 120},
     )
 ```
+
+---
+
+### 14. Auto-select sandbox environment
+
+**Goal.** Submit a mixed batch of Windows / Linux / Android samples without hard-coding
+a per-sample sandbox OS. Pass `auto_select_environment=True` and let the server route
+each file to the right environment based on its detected type.
+
+```python
+from threatzone import ThreatZone
+
+with ThreatZone(api_key="<your-api-key>") as client:
+    submission = client.create_sandbox_submission(
+        "/path/to/sample.exe",
+        auto_select_environment=True,
+    )
+    print(submission.uuid)
+```
+
+**Notes.**
+
+- If you also pass `environment="w10_x64"`, the explicit choice wins and the auto flag
+  is ignored (the server logs a warning but the request succeeds).
+- Unknown extensions fall back to your plan's default OS, so the call never fails just
+  because the file type is unrecognised.
+- The same kwarg is accepted by `create_open_in_browser_submission()` for API symmetry;
+  since there's no file to route on, OIB always falls back to the plan's default
+  `open_in_browser` OS.
