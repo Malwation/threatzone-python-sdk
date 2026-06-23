@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .common import FileInfo, Hashes, ReportStatus, ReportStatusValue, Tag, ThreatLevel
 
@@ -34,6 +34,19 @@ class SubmissionOverviewJobs(BaseModel):
     failed: int
     skipped: int
     finished: int
+    completed: int = 0
+    """Deprecated alias of ``finished`` (always equal).
+
+    Kept for backward compatibility with integrations that read
+    ``overview.jobs.completed``; new code should use ``finished``. The value is
+    forced to mirror ``finished`` after validation regardless of any incoming
+    ``completed`` value.
+    """
+
+    @model_validator(mode="after")
+    def _mirror_completed_to_finished(self) -> SubmissionOverviewJobs:
+        self.completed = self.finished
+        return self
 
 
 class SubmissionOverview(BaseModel):

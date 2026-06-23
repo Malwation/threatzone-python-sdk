@@ -177,6 +177,28 @@ class TestSubmissionTypes:
         assert jobs.succeeded == 2
         assert jobs.skipped == 1
 
+    def test_submission_overview_jobs_completed_alias(self) -> None:
+        jobs = SubmissionOverviewJobs.model_validate(
+            {"total": 5, "succeeded": 4, "failed": 1, "skipped": 0, "finished": 5}
+        )
+        assert jobs.completed == jobs.finished
+        dumped = jobs.model_dump()
+        assert "completed" in dumped
+        assert dumped["completed"] == jobs.finished
+
+    def test_submission_overview_jobs_completed_mirrors_finished(self) -> None:
+        jobs = SubmissionOverviewJobs.model_validate(
+            {
+                "total": 5,
+                "succeeded": 4,
+                "failed": 1,
+                "skipped": 0,
+                "finished": 5,
+                "completed": 999,
+            }
+        )
+        assert jobs.completed == 5
+
     def test_submission_score_family_duration(self, sample_submission: dict[str, Any]) -> None:
         sub = Submission.model_validate(sample_submission)
         assert sub.score == 78.5

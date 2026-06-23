@@ -13,9 +13,10 @@ API-sync release: brings the SDK into exact agreement with the current
 
 ### Breaking
 
-- **Submission overview `jobs` reshape:** `SubmissionOverviewJobs` no longer
-  exposes `completed`. It now carries `total`, `succeeded`, `failed`,
-  `skipped`, and `finished`.
+- **Submission overview `jobs` reshape:** `SubmissionOverviewJobs` now carries
+  `total`, `succeeded`, `failed`, `skipped`, and `finished`. `completed` is
+  retained as a **deprecated** alias of `finished` (always equal) for
+  backward compatibility; new code should use `finished`.
 - **CDR response is a per-submission singleton:** `CdrResponse` was rewritten
   from an items envelope to a single object
   (`submission`, `status`, `sanitized`, `removed`, `sanitizedFileInfo`,
