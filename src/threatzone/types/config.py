@@ -14,6 +14,7 @@ class MetafieldOptionValue(BaseModel):
 
     value: bool | int | str
     label: str
+    accessible: bool
 
 
 class MetafieldOption(BaseModel):
@@ -26,6 +27,8 @@ class MetafieldOption(BaseModel):
     description: str
     type: Literal["boolean", "number", "string", "select"]
     default: bool | int | str
+    active: bool
+    accessible: bool
     options: list[MetafieldOptionValue] | None = None
 
 
@@ -50,3 +53,5 @@ class EnvironmentOption(BaseModel):
     name: str
     platform: Literal["windows", "linux", "macos", "android"]
     default: bool
+    active: bool
+    accessible: bool

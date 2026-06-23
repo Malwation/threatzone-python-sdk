@@ -52,7 +52,7 @@ def test_filter_by_category(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
     response = sync_client.get_indicators(created.uuid, category="default")
     assert response.total >= 1
     for indicator in response.items:
-        assert indicator.category == "default"
+        assert "default" in indicator.category
 
 
 def test_indicators_response_envelope_shape(

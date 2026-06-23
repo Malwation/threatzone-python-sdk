@@ -42,6 +42,7 @@ from threatzone.types import (
     MetafieldOption,
     Metafields,
     MitreResponse,
+    NetworkConfigListItem,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
@@ -326,6 +327,26 @@ class TestAsyncConfiguration:
         assert isinstance(meta, Metafields)
         assert _call_url(mock).endswith("/config/metafields")
 
+    async def test_list_network_configs_happy(
+        self, api_key: str, sample_network_config: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, {"items": [sample_network_config]}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                configs = await client.list_network_configs()
+        assert all(isinstance(c, NetworkConfigListItem) for c in configs)
+        assert configs[0].id == "cfg1"
+        assert configs[0].has_config_file is False
+        assert _call_url(mock).endswith("/v1/network-configs")
+
+    async def test_list_network_configs_empty(self, api_key: str) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, {"items": []}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                configs = await client.list_network_configs()
+        assert configs == []
+        assert _call_url(mock).endswith("/v1/network-configs")
+
     async def test_get_metafields_specific(
         self, api_key: str, sample_metafields: dict[str, list[dict[str, Any]]]
     ) -> None:
@@ -415,7 +436,11 @@ class TestAsyncCreateSubmissions:
         assert isinstance(result, SubmissionCreated)
         assert _call_url(mock).endswith("/submissions/url_analysis")
         _, kwargs = mock.call_args
-        assert kwargs["json"] == {"url": "https://example.com", "private": False}
+        assert kwargs["json"] == {
+            "url": "https://example.com",
+            "private": False,
+            "safeBrowsing": False,
+        }
 
     async def test_create_url_submission_400(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(400, {"message": "bad"}))
@@ -423,6 +448,32 @@ class TestAsyncCreateSubmissions:
             async with AsyncThreatZone(api_key=api_key) as client:
                 with pytest.raises(BadRequestError):
                     await client.create_url_submission("not-a-url")
+
+    async def test_create_url_submission_sends_safe_browsing(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_url_submission(
+                    "https://example.com", private=True, safe_browsing=True
+                )
+        _, kwargs = mock.call_args
+        assert kwargs["json"] == {
+            "url": "https://example.com",
+            "private": True,
+            "safeBrowsing": True,
+        }
+
+    async def test_create_url_submission_safe_browsing_defaults_false(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_url_submission("https://example.com")
+        _, kwargs = mock.call_args
+        assert kwargs["json"]["safeBrowsing"] is False
 
     async def test_create_open_in_browser_submission(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -560,6 +611,32 @@ class TestAsyncQuerySubmissions:
         params = _call_params(mock)
         assert params["startDate"].startswith("2024-01-01T12:00:00")
         assert params["endDate"].startswith("2024-01-31T12:00:00")
+
+    async def test_list_submissions_sends_sort_order(
+        self,
+        api_key: str,
+        sample_paginated_submissions: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_paginated_submissions))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.list_submissions(sort="createdAt", order="asc")
+        params = _call_params(mock)
+        assert params["sort"] == "createdAt"
+        assert params["order"] == "asc"
+
+    async def test_list_submissions_omits_sort_order_when_none(
+        self,
+        api_key: str,
+        sample_paginated_submissions: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_paginated_submissions))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.list_submissions()
+        params = _call_params(mock)
+        assert "sort" not in params
+        assert "order" not in params
 
     async def test_list_submissions_401(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(401, {"message": "auth"}))
@@ -896,6 +973,7 @@ class TestAsyncReportEnvelopes:
             async with AsyncThreatZone(api_key=api_key) as client:
                 res = await client.get_static_scan_results("sub-789")
         assert isinstance(res, StaticScanResponse)
+        assert res.report_format == "exe"
         assert _call_url(mock).endswith("/submissions/sub-789/static-scan")
 
     async def test_get_static_scan_results_409(self, api_key: str) -> None:
@@ -1057,6 +1135,34 @@ class TestAsyncDynamicReport:
         assert params["operation"] == "create"
         assert params["page"] == 2
         assert params["limit"] == 50
+
+    async def test_get_behaviours_sends_type_and_process_name(
+        self, api_key: str, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_behaviours_response))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_behaviours(
+                    "sub-789",
+                    os="windows",
+                    type="registry",
+                    process_name="cmd.exe",
+                )
+        params = _call_params(mock)
+        assert params["os"] == "windows"
+        assert params["type"] == "registry"
+        assert params["processName"] == "cmd.exe"
+
+    async def test_get_behaviours_omits_type_and_process_name_when_none(
+        self, api_key: str, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_behaviours_response))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_behaviours("sub-789", os="windows")
+        params = _call_params(mock)
+        assert "type" not in params
+        assert "processName" not in params
 
     async def test_get_behaviours_without_os_raises(self, api_key: str) -> None:
         async with AsyncThreatZone(api_key=api_key) as client:
@@ -1431,6 +1537,24 @@ class TestAsyncDownloads:
             async with AsyncThreatZone(api_key=api_key) as client:
                 with pytest.raises(NotFoundError):
                     await client.download_cdr_result("ghost")
+
+    async def test_get_static_scan_strings_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b'{"strings": ["a", "b"]}')
+        ctx, mock = _patched_async_stream(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                res = await client.get_static_scan_strings("sub-789")
+                assert await res.read() == b'{"strings": ["a", "b"]}'
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/static-scan/strings")
+
+    async def test_get_static_scan_strings_404(self, api_key: str) -> None:
+        response = _make_response(404, {"message": "no"})
+        ctx, _ = _patched_async_stream(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(NotFoundError):
+                    await client.get_static_scan_strings("ghost")
 
 
 class TestAsyncMedia:

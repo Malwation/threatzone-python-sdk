@@ -31,6 +31,7 @@ from threatzone.types import (
     MetafieldOption,
     Metafields,
     MitreResponse,
+    NetworkConfigListResponse,
     NetworkSummary,
     NetworkThreat,
     PaginatedSubmissions,
@@ -108,11 +109,17 @@ def _indicator_rollup(state: SubmissionState) -> dict[str, Any]:
 def _submission_overview(state: SubmissionState) -> dict[str, Any]:
     status = state.current_status()
     report_types = state.report_types()
-    completed = len(report_types) if status == "completed" else 0
     total = max(len(report_types), 1)
+    finished = total if status == "completed" else 0
     return {
         "status": status,
-        "jobs": {"completed": completed, "total": total},
+        "jobs": {
+            "total": total,
+            "succeeded": finished,
+            "failed": 0,
+            "skipped": 0,
+            "finished": finished,
+        },
     }
 
 
@@ -251,7 +258,7 @@ def build_indicators_response(
                 "id": f"ind-{idx}",
                 "name": f"Indicator {seed.attack_code}",
                 "description": f"Triggered MITRE technique {seed.attack_code}",
-                "category": "default",
+                "category": ["default"],
                 "level": seed.level,
                 "score": 80 if seed.level == "malicious" else 50,
                 "pids": list(seed.pids),
@@ -388,33 +395,63 @@ def build_mitre_response(state: SubmissionState) -> MitreResponse:
 
 
 def build_static_scan_response(state: SubmissionState) -> StaticScanResponse:
-    """Build the static scan results envelope."""
-    artifact = state.artifact_ids[0] if state.artifact_ids else "artifact-0"
-    items: list[dict[str, Any]] = [
+    """Build the per-format static analysis report singleton."""
+    return StaticScanResponse.model_validate(
         {
-            "artifact": artifact,
+            "submission": state.uuid,
             "status": "completed",
-            "data": {"verdict": state.level},
-            "lastErrorMessage": None,
-            "engineVersion": "1.0.0",
+            "reportFormat": "exe",
+            "level": state.level,
+            "score": 92.0,
+            "fileInfo": {
+                "md5": "0" * 32,
+                "sha1": "0" * 40,
+                "sha256": state.sha256,
+                "ssdeep": "3:aaaa:aaaa",
+                "mime_type": "application/x-dosexec",
+                "file_type": "PE32",
+                "entropy": 7.1,
+                "filesize": "1.00 MB",
+            },
+            "strings": {"totalCount": 1234},
+            "dieResults": [{"name": "PE", "string": "PE32", "type": "exe", "version": None}],
+            "analysisTime": "00:00:02",
+            "metafields": None,
+            "imports": [{"library": "kernel32.dll", "functions": ["VirtualAlloc"]}],
+            "peExeSections": [{"name": ".text", "entropy": 6.5}],
         }
-    ]
-    return StaticScanResponse.model_validate({"items": items, "total": len(items)})
+    )
+
+
+def build_static_scan_strings(state: SubmissionState) -> dict[str, Any]:
+    """Build the canned extracted-strings JSON payload streamed by the fake."""
+    return {
+        "submission": state.uuid,
+        "totalCount": 2,
+        "strings": ["VirtualAlloc", "kernel32.dll"],
+    }
 
 
 def build_cdr_response(state: SubmissionState) -> CdrResponse:
-    """Build the CDR results envelope."""
-    artifact = state.artifact_ids[0] if state.artifact_ids else "artifact-0"
-    items: list[dict[str, Any]] = [
+    """Build the per-submission CDR transformation result."""
+    return CdrResponse.model_validate(
         {
-            "artifact": artifact,
+            "submission": state.uuid,
             "status": "completed",
-            "data": {"sanitized": True},
-            "lastErrorMessage": None,
-            "engineVersion": "1.0.0",
+            "sanitized": ["doc.pdf"],
+            "removed": ["macro1"],
+            "sanitizedFileInfo": {
+                "description": "Sanitized",
+                "fileType": "PDF",
+                "fileSize": 1024,
+                "sha256": "ab" * 32,
+                "name": "doc.pdf",
+                "details": [{"name": "macro", "action": "removed", "data": None}],
+            },
+            "elapsedTime": "00:00:43",
+            "metafields": None,
         }
-    ]
-    return CdrResponse.model_validate({"items": items, "total": len(items)})
+    )
 
 
 def build_signature_check_response(state: SubmissionState) -> SignatureCheckResponse:
@@ -778,6 +815,8 @@ def build_metafields() -> Metafields:
             "description": "Analysis timeout in seconds",
             "type": "number",
             "default": 120,
+            "active": True,
+            "accessible": True,
             "options": None,
         },
         {
@@ -786,6 +825,8 @@ def build_metafields() -> Metafields:
             "description": "Allow internet connection",
             "type": "boolean",
             "default": True,
+            "active": True,
+            "accessible": True,
             "options": None,
         },
     ]
@@ -796,6 +837,8 @@ def build_metafields() -> Metafields:
             "description": "Enable deep static scan",
             "type": "boolean",
             "default": False,
+            "active": True,
+            "accessible": True,
             "options": None,
         }
     ]
@@ -826,8 +869,51 @@ def build_metafields_for(scan_type: str) -> list[MetafieldOption]:
 def build_environments() -> list[EnvironmentOption]:
     """Build the available sandbox environments."""
     items: list[dict[str, Any]] = [
-        {"key": "w10_64", "name": "Windows 10 x64", "platform": "windows", "default": True},
-        {"key": "w11_64", "name": "Windows 11 x64", "platform": "windows", "default": False},
-        {"key": "ub22", "name": "Ubuntu 22.04", "platform": "linux", "default": False},
+        {
+            "key": "w10_64",
+            "name": "Windows 10 x64",
+            "platform": "windows",
+            "default": True,
+            "active": True,
+            "accessible": True,
+        },
+        {
+            "key": "w11_64",
+            "name": "Windows 11 x64",
+            "platform": "windows",
+            "default": False,
+            "active": True,
+            "accessible": True,
+        },
+        {
+            "key": "ub22",
+            "name": "Ubuntu 22.04",
+            "platform": "linux",
+            "default": False,
+            "active": True,
+            "accessible": True,
+        },
     ]
     return [EnvironmentOption.model_validate(item) for item in items]
+
+
+def build_network_configs() -> NetworkConfigListResponse:
+    """Build the workspace's available network configurations."""
+    return NetworkConfigListResponse.model_validate(
+        {
+            "items": [
+                {
+                    "id": "cfg1",
+                    "name": "Corp Proxy",
+                    "type": "proxy",
+                    "protocol": "socks5",
+                    "host": "1.2.3.4",
+                    "port": 1080,
+                    "username": "u",
+                    "hasConfigFile": False,
+                    "createdAt": "2026-06-01T00:00:00.000Z",
+                    "updatedAt": "2026-06-01T00:00:00.000Z",
+                }
+            ]
+        }
+    )

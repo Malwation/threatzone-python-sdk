@@ -29,8 +29,11 @@ class SubmissionOverviewJobs(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    completed: int
     total: int
+    succeeded: int
+    failed: int
+    skipped: int
+    finished: int
 
 
 class SubmissionOverview(BaseModel):
@@ -105,6 +108,8 @@ class Submission(BaseModel):
     hashes: Hashes | None = None
     file: FileInfo | None = None
     level: SubmissionLevel
+    score: float | None = None
+    family: str | None = None
     private: bool
     tags: list[Tag]
     reports: list[ReportStatus]

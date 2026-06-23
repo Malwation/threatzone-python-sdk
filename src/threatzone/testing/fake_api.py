@@ -427,6 +427,7 @@ class FakeThreatZoneAPI:
             "get_metafields_all": self._handle_metafields_all,
             "get_metafields_by_type": self._handle_metafields_by_type,
             "get_environments": self._handle_environments,
+            "list_network_configs": self._handle_list_network_configs,
             "list_submissions": self._handle_list_submissions,
             "get_submission": self._handle_get_submission,
             "search_by_sha256": self._handle_search_by_sha256,
@@ -444,6 +445,7 @@ class FakeThreatZoneAPI:
             "get_eml_analysis": self._handle_get_eml,
             "get_mitre": self._handle_get_mitre,
             "get_static_scan": self._handle_get_static_scan,
+            "get_static_scan_strings": self._handle_get_static_scan_strings,
             "get_cdr": self._handle_get_cdr_report,
             "get_signature_check": self._handle_get_signature_check,
             "get_processes": self._handle_get_processes,
@@ -606,6 +608,12 @@ class FakeThreatZoneAPI:
     def _handle_environments(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         del request, match
         return _json_list(list(_responses.build_environments()))
+
+    def _handle_list_network_configs(
+        self, request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        del request, match
+        return _json(_responses.build_network_configs())
 
     def _handle_list_submissions(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         del match
@@ -907,6 +915,19 @@ class FakeThreatZoneAPI:
         if guard is not None:
             return guard
         return _json(_responses.build_static_scan_response(state))
+
+    def _handle_get_static_scan_strings(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_static(state)
+        if guard is not None:
+            return guard
+        payload = _responses.build_static_scan_strings(state)
+        return _binary(json.dumps(payload).encode("utf-8"), "application/json")
 
     def _handle_get_cdr_report(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])

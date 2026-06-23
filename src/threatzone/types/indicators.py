@@ -33,7 +33,7 @@ class Indicator(BaseModel):
     id: str
     name: str
     description: str
-    category: str
+    category: list[str]
     level: IndicatorLevel
     score: int
     pids: list[int]
@@ -217,6 +217,8 @@ class OverviewSummary(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    score: float | None = None
+    family: str | None = None
     indicators: SummaryIndicators
     behavior_event_count: int = Field(alias="behaviorEventCount")
     syscall_count: int = Field(alias="syscallCount")
