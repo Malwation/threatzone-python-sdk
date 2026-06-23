@@ -117,20 +117,42 @@ def sample_environments() -> list[dict[str, Any]]:
             "name": "Windows 10 64-bit",
             "platform": "windows",
             "default": True,
+            "active": True,
+            "accessible": True,
         },
         {
             "key": "w11_x64",
             "name": "Windows 11 64-bit",
             "platform": "windows",
             "default": False,
+            "active": True,
+            "accessible": True,
         },
         {
             "key": "ubuntu_22",
             "name": "Ubuntu 22.04",
             "platform": "linux",
             "default": False,
+            "active": True,
+            "accessible": True,
         },
     ]
+
+
+@pytest.fixture
+def sample_network_config() -> dict[str, Any]:
+    return {
+        "id": "cfg1",
+        "name": "Corp Proxy",
+        "type": "proxy",
+        "protocol": "socks5",
+        "host": "1.2.3.4",
+        "port": 1080,
+        "username": "u",
+        "hasConfigFile": False,
+        "createdAt": "2026-06-01T00:00:00.000Z",
+        "updatedAt": "2026-06-01T00:00:00.000Z",
+    }
 
 
 @pytest.fixture
@@ -141,8 +163,15 @@ def sample_metafields() -> dict[str, list[dict[str, Any]]]:
                 "key": "timeout",
                 "label": "Timeout",
                 "description": "Analysis timeout in seconds",
-                "type": "number",
+                "type": "select",
                 "default": 120,
+                "active": True,
+                "accessible": True,
+                "options": [
+                    {"value": 60, "label": "60 Seconds", "accessible": True},
+                    {"value": 120, "label": "120 Seconds", "accessible": True},
+                    {"value": 300, "label": "300 Seconds", "accessible": False},
+                ],
             }
         ],
         "static": [],
@@ -155,6 +184,8 @@ def sample_metafields() -> dict[str, list[dict[str, Any]]]:
                 "description": "Browser execution timeout in seconds",
                 "type": "number",
                 "default": 120,
+                "active": True,
+                "accessible": True,
             }
         ],
     }
@@ -182,6 +213,7 @@ def sample_report_status_completed() -> dict[str, Any]:
         "level": "malicious",
         "score": 95,
         "format": "v2",
+        "duration": 0.2,
         "operatingSystem": {"name": "Windows 10", "platform": "windows"},
     }
 
@@ -193,6 +225,7 @@ def sample_report_status_in_progress() -> dict[str, Any]:
         "status": "in_progress",
         "level": None,
         "score": None,
+        "duration": None,
     }
 
 
@@ -200,7 +233,7 @@ def sample_report_status_in_progress() -> dict[str, Any]:
 def sample_submission_overview() -> dict[str, Any]:
     return {
         "status": "completed",
-        "jobs": {"completed": 3, "total": 3},
+        "jobs": {"total": 3, "succeeded": 2, "failed": 0, "skipped": 1, "finished": 3},
     }
 
 
@@ -280,6 +313,8 @@ def sample_submission(
             "source": {"type": "upload", "url": None},
         },
         "level": "malicious",
+        "score": 78.5,
+        "family": "Sheetrat",
         "private": False,
         "tags": [{"type": "malware", "value": "trojan"}],
         "reports": [sample_report_status_completed, static_completed],
@@ -307,7 +342,7 @@ def sample_indicator() -> dict[str, Any]:
         "id": "ind-1",
         "name": "Creates persistence",
         "description": "Creates registry key for persistence",
-        "category": "persistence",
+        "category": ["evasion", "persistence"],
         "level": "malicious",
         "score": 80,
         "pids": [1234, 5678],
@@ -420,6 +455,8 @@ def all_artifact_types() -> list[str]:
 @pytest.fixture
 def sample_overview_summary() -> dict[str, Any]:
     return {
+        "score": 84.0,
+        "family": "Sheetrat",
         "indicators": {
             "total": 10,
             "levels": {"malicious": 5, "suspicious": 3, "benign": 2},
@@ -663,32 +700,47 @@ def sample_syscalls_response() -> dict[str, Any]:
 @pytest.fixture
 def sample_cdr_response() -> dict[str, Any]:
     return {
-        "items": [
-            {
-                "artifact": "art-1",
-                "status": "completed",
-                "data": {"reason": "macro stripped"},
-                "lastErrorMessage": None,
-                "engineVersion": "1.2.3",
-            }
-        ],
-        "total": 1,
+        "submission": "uuid-1",
+        "status": "completed",
+        "sanitized": ["doc.pdf"],
+        "removed": ["macro1"],
+        "sanitizedFileInfo": {
+            "description": "Sanitized",
+            "fileType": "PDF",
+            "fileSize": 1024,
+            "sha256": "ab" * 32,
+            "name": "doc.pdf",
+            "details": [{"name": "macro", "action": "removed", "data": None}],
+        },
+        "elapsedTime": "00:00:43",
+        "metafields": None,
     }
 
 
 @pytest.fixture
 def sample_static_scan_response() -> dict[str, Any]:
     return {
-        "items": [
-            {
-                "artifact": "art-1",
-                "status": "completed",
-                "data": {"sections": ["text", "data"]},
-                "lastErrorMessage": None,
-                "engineVersion": "9.9.9",
-            }
-        ],
-        "total": 1,
+        "submission": "uuid-1",
+        "status": "completed",
+        "reportFormat": "exe",
+        "level": "malicious",
+        "score": 92.0,
+        "fileInfo": {
+            "md5": "a" * 32,
+            "sha1": "b" * 40,
+            "sha256": "c" * 64,
+            "ssdeep": "x",
+            "mime_type": "application/x-dosexec",
+            "file_type": "PE32",
+            "entropy": 7.1,
+            "filesize": "1.00 MB",
+        },
+        "strings": {"totalCount": 1234},
+        "dieResults": [{"name": "PE", "string": "PE32", "type": "exe", "version": None}],
+        "analysisTime": "00:00:02",
+        "metafields": None,
+        "imports": [{"library": "kernel32.dll", "functions": ["VirtualAlloc"]}],
+        "peExeSections": [{"name": ".text", "entropy": 6.5}],
     }
 
 

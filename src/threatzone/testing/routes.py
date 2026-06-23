@@ -31,6 +31,7 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"^/config/metafields/(?P<scan_type>[A-Za-z_]+)$"),
     ),
     ("get_environments", re.compile(r"^/config/environments$")),
+    ("list_network_configs", re.compile(r"^/v1/network-configs$")),
     ("list_submissions", re.compile(r"^/submissions$")),
     (
         "search_by_sha256",
@@ -47,6 +48,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
     ("get_artifacts", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/artifacts$")),
     ("get_eml_analysis", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/eml-analysis$")),
     ("get_mitre", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/mitre$")),
+    (
+        "get_static_scan_strings",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan/strings$"),
+    ),
     ("get_static_scan", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan$")),
     ("get_cdr", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/cdr$")),
     (

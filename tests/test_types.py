@@ -24,7 +24,6 @@ from threatzone.types import (
     BehaviourEvent,
     BehavioursResponse,
     CdrResponse,
-    CdrResult,
     Connection,
     ConnectionPackets,
     DnsQuery,
@@ -49,6 +48,8 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     ModuleInfo,
+    NetworkConfigListItem,
+    NetworkConfigListResponse,
     NetworkSummary,
     NetworkThreat,
     NetworkThreatTls,
@@ -63,7 +64,6 @@ from threatzone.types import (
     SignatureCheckResponse,
     SignatureCheckResult,
     StaticScanResponse,
-    StaticScanResult,
     Submission,
     SubmissionCreated,
     SubmissionListItem,
@@ -170,9 +170,40 @@ class TestSubmissionTypes:
         assert sc.message == sample_submission_created["message"]
 
     def test_submission_overview_jobs(self) -> None:
-        jobs = SubmissionOverviewJobs.model_validate({"completed": 2, "total": 3})
-        assert jobs.completed == 2
-        assert jobs.total == 3
+        jobs = SubmissionOverviewJobs.model_validate(
+            {"total": 3, "succeeded": 2, "failed": 0, "skipped": 1, "finished": 3}
+        )
+        assert jobs.finished == jobs.total
+        assert jobs.succeeded == 2
+        assert jobs.skipped == 1
+
+    def test_submission_overview_jobs_completed_alias(self) -> None:
+        jobs = SubmissionOverviewJobs.model_validate(
+            {"total": 5, "succeeded": 4, "failed": 1, "skipped": 0, "finished": 5}
+        )
+        assert jobs.completed == jobs.finished
+        dumped = jobs.model_dump()
+        assert "completed" in dumped
+        assert dumped["completed"] == jobs.finished
+
+    def test_submission_overview_jobs_completed_mirrors_finished(self) -> None:
+        jobs = SubmissionOverviewJobs.model_validate(
+            {
+                "total": 5,
+                "succeeded": 4,
+                "failed": 1,
+                "skipped": 0,
+                "finished": 5,
+                "completed": 999,
+            }
+        )
+        assert jobs.completed == 5
+
+    def test_submission_score_family_duration(self, sample_submission: dict[str, Any]) -> None:
+        sub = Submission.model_validate(sample_submission)
+        assert sub.score == 78.5
+        assert sub.family == "Sheetrat"
+        assert sub.reports[0].duration == 0.2
 
     def test_submission_overview(self, sample_submission_overview: dict[str, Any]) -> None:
         ov = SubmissionOverview.model_validate(sample_submission_overview)
@@ -250,6 +281,10 @@ class TestIndicatorsSurfaceTypes:
         assert ind.event_ids == [42, 43]
         assert ind.syscall_line_numbers == [12, 100]
         assert ind.author == "system"
+
+    def test_indicator_category_is_list(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.category == ["evasion", "persistence"]
 
     def test_indicator_missing_field_raises(self, sample_indicator: dict[str, Any]) -> None:
         bad = {**sample_indicator}
@@ -347,6 +382,11 @@ class TestIndicatorsSurfaceTypes:
         assert summary.syscall_count == 1500
         assert summary.network is not None
         assert summary.network.dns_count == 15
+
+    def test_overview_summary_score_family(self, sample_overview_summary: dict[str, Any]) -> None:
+        s = OverviewSummary.model_validate(sample_overview_summary)
+        assert s.score == 84.0
+        assert s.family == "Sheetrat"
 
     def test_overview_summary_without_network(
         self, sample_overview_summary: dict[str, Any]
@@ -529,27 +569,38 @@ class TestSyscallTypes:
 
 
 class TestCdrTypes:
-    def test_cdr_result(self, sample_cdr_response: dict[str, Any]) -> None:
-        result = CdrResult.model_validate(sample_cdr_response["items"][0])
-        assert result.artifact == "art-1"
-        assert result.engine_version == "1.2.3"
-
-    def test_cdr_response(self, sample_cdr_response: dict[str, Any]) -> None:
+    def test_cdr_singleton(self, sample_cdr_response: dict[str, Any]) -> None:
         resp = CdrResponse.model_validate(sample_cdr_response)
-        assert resp.total == 1
-        assert isinstance(resp.items[0], CdrResult)
+        assert resp.submission == "uuid-1"
+        assert resp.sanitized == ["doc.pdf"]
+        assert resp.removed == ["macro1"]
+        assert resp.sanitized_file_info is not None
+        assert resp.sanitized_file_info.file_type == "PDF"
+        assert resp.sanitized_file_info.file_size == 1024
+        assert resp.sanitized_file_info.details[0].action == "removed"
+        assert resp.elapsed_time == "00:00:43"
+        assert resp.metafields is None
 
 
 class TestStaticScanTypes:
-    def test_static_scan_result(self, sample_static_scan_response: dict[str, Any]) -> None:
-        result = StaticScanResult.model_validate(sample_static_scan_response["items"][0])
-        assert result.artifact == "art-1"
-        assert result.data is not None
-        assert result.engine_version == "9.9.9"
-
-    def test_static_scan_response(self, sample_static_scan_response: dict[str, Any]) -> None:
+    def test_static_scan_singleton_and_extra(
+        self, sample_static_scan_response: dict[str, Any]
+    ) -> None:
         resp = StaticScanResponse.model_validate(sample_static_scan_response)
-        assert isinstance(resp.items[0], StaticScanResult)
+        assert resp.submission == "uuid-1"
+        assert resp.report_format == "exe"
+        assert resp.level == "malicious"
+        assert resp.score == 92.0
+        assert resp.file_info is not None
+        assert resp.file_info.sha256 == "c" * 64
+        assert resp.strings is not None
+        assert resp.strings.total_count == 1234
+        assert resp.die_results[0].name == "PE"
+        assert resp.analysis_time == "00:00:02"
+        assert resp.metafields is None
+        assert resp.model_extra is not None
+        assert resp.model_extra["peExeSections"][0]["name"] == ".text"
+        assert resp.model_extra["imports"][0]["library"] == "kernel32.dll"
 
 
 class TestSignatureCheckTypes:
@@ -644,7 +695,7 @@ class TestConfigTypes:
     def test_metafield_option(self, sample_metafields: dict[str, list[dict[str, Any]]]) -> None:
         opt = MetafieldOption.model_validate(sample_metafields["sandbox"][0])
         assert opt.key == "timeout"
-        assert opt.type == "number"
+        assert opt.type == "select"
 
     def test_metafields(self, sample_metafields: dict[str, list[dict[str, Any]]]) -> None:
         m = Metafields.model_validate(sample_metafields)
@@ -656,6 +707,20 @@ class TestConfigTypes:
         assert env.key == "w10_x64"
         assert env.platform == "windows"
         assert env.default is True
+
+    def test_metafield_active_accessible(
+        self, sample_metafields: dict[str, list[dict[str, Any]]]
+    ) -> None:
+        mf = Metafields.model_validate(sample_metafields)
+        opt = mf.sandbox[0]
+        assert opt.active is True and opt.accessible is True
+        assert opt.options is not None
+        assert opt.options[0].accessible is True
+        assert opt.options[2].accessible is False
+
+    def test_environment_active_accessible(self, sample_environments: list[dict[str, Any]]) -> None:
+        env = EnvironmentOption.model_validate(sample_environments[0])
+        assert env.active is True and env.accessible is True
 
 
 class TestDownloadTypes:
@@ -716,6 +781,39 @@ class TestMeTypes:
 # ---------------------------------------------------------------------------
 # API error envelope
 # ---------------------------------------------------------------------------
+
+
+class TestNetworkConfigs:
+    def test_network_config_item(self, sample_network_config: dict[str, Any]) -> None:
+        item = NetworkConfigListItem.model_validate(sample_network_config)
+        assert item.id == "cfg1"
+        assert item.type == "proxy"
+        assert item.port == 1080
+        assert item.has_config_file is False
+        assert item.created_at == "2026-06-01T00:00:00.000Z"
+        assert item.updated_at == "2026-06-01T00:00:00.000Z"
+
+    def test_network_config_list_response(self, sample_network_config: dict[str, Any]) -> None:
+        response = NetworkConfigListResponse.model_validate({"items": [sample_network_config]})
+        assert len(response.items) == 1
+        assert response.items[0].name == "Corp Proxy"
+
+    def test_network_config_optional_fields_default_none(self) -> None:
+        item = NetworkConfigListItem.model_validate(
+            {
+                "id": "cfg2",
+                "name": "Corp VPN",
+                "type": "openvpn",
+                "hasConfigFile": True,
+                "createdAt": "2026-06-02T00:00:00.000Z",
+                "updatedAt": "2026-06-02T00:00:00.000Z",
+            }
+        )
+        assert item.protocol is None
+        assert item.host is None
+        assert item.port is None
+        assert item.username is None
+        assert item.has_config_file is True
 
 
 class TestApiErrorEnvelope:

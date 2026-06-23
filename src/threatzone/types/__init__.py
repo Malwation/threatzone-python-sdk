@@ -1,7 +1,7 @@
 """Type definitions for the Threat.Zone Python SDK."""
 
 from .behaviours import BehaviourEvent, BehaviourOs, BehavioursResponse
-from .cdr import CdrResponse, CdrResult
+from .cdr import CdrResponse, CdrSanitizedFileInfo, CdrSanitizedFileInfoDetail
 from .common import (
     FileEntrypoint,
     FileInfo,
@@ -77,6 +77,7 @@ from .network import (
     ThreatProtocol,
     ThreatSeverity,
 )
+from .network_configs import NetworkConfigListItem, NetworkConfigListResponse
 from .processes import (
     Process,
     ProcessesResponse,
@@ -88,7 +89,12 @@ from .processes import (
     ProcessTreeResponse,
 )
 from .signature_check import SignatureCheckResponse, SignatureCheckResult
-from .static_scan import StaticScanResponse, StaticScanResult
+from .static_scan import (
+    StaticScanDieResult,
+    StaticScanFileInfo,
+    StaticScanResponse,
+    StaticScanStrings,
+)
 from .submissions import (
     PaginatedSubmissions,
     Submission,
@@ -192,6 +198,9 @@ __all__ = [
     "ThreatAppProto",
     "ThreatProtocol",
     "ThreatSeverity",
+    # Network configs
+    "NetworkConfigListItem",
+    "NetworkConfigListResponse",
     # Processes
     "Process",
     "ProcessesResponse",
@@ -209,10 +218,13 @@ __all__ = [
     "SyscallsResponse",
     # Static scan
     "StaticScanResponse",
-    "StaticScanResult",
+    "StaticScanFileInfo",
+    "StaticScanStrings",
+    "StaticScanDieResult",
     # CDR
     "CdrResponse",
-    "CdrResult",
+    "CdrSanitizedFileInfo",
+    "CdrSanitizedFileInfoDetail",
     # Signature check
     "SignatureCheckResponse",
     "SignatureCheckResult",

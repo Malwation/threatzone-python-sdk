@@ -47,6 +47,7 @@ from threatzone.types import (
     MetafieldOption,
     Metafields,
     MitreResponse,
+    NetworkConfigListItem,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
@@ -317,6 +318,24 @@ class TestConfiguration:
         assert isinstance(meta, Metafields)
         assert _call_url(mock).endswith("/config/metafields")
 
+    def test_list_network_configs_happy(
+        self, api_key: str, sample_network_config: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, {"items": [sample_network_config]}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            configs = client.list_network_configs()
+        assert all(isinstance(c, NetworkConfigListItem) for c in configs)
+        assert configs[0].id == "cfg1"
+        assert configs[0].has_config_file is False
+        assert _call_url(mock).endswith("/v1/network-configs")
+
+    def test_list_network_configs_empty(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, {"items": []}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            configs = client.list_network_configs()
+        assert configs == []
+        assert _call_url(mock).endswith("/v1/network-configs")
+
     def test_get_metafields_specific(
         self, api_key: str, sample_metafields: dict[str, list[dict[str, Any]]]
     ) -> None:
@@ -396,12 +415,38 @@ class TestCreateSubmissions:
         assert isinstance(result, SubmissionCreated)
         assert _call_url(mock).endswith("/submissions/url_analysis")
         _, kwargs = mock.call_args
-        assert kwargs["json"] == {"url": "https://example.com", "private": False}
+        assert kwargs["json"] == {
+            "url": "https://example.com",
+            "private": False,
+            "safeBrowsing": False,
+        }
 
     def test_create_url_submission_400(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(400, {"message": "bad url"}))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
             client.create_url_submission("not-a-url")
+
+    def test_create_url_submission_sends_safe_browsing(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_submission_created))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.create_url_submission("https://example.com", private=True, safe_browsing=True)
+        _, kwargs = mock.call_args
+        assert kwargs["json"] == {
+            "url": "https://example.com",
+            "private": True,
+            "safeBrowsing": True,
+        }
+
+    def test_create_url_submission_safe_browsing_defaults_false(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_submission_created))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.create_url_submission("https://example.com")
+        _, kwargs = mock.call_args
+        assert kwargs["json"]["safeBrowsing"] is False
 
     def test_create_open_in_browser_submission(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -536,6 +581,30 @@ class TestQuerySubmissions:
         params = _call_params(mock)
         assert params["startDate"].startswith("2024-01-01T12:00:00")
         assert params["endDate"].startswith("2024-01-31T12:00:00")
+
+    def test_list_submissions_sends_sort_order(
+        self,
+        api_key: str,
+        sample_paginated_submissions: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_paginated_submissions))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.list_submissions(sort="createdAt", order="asc")
+        params = _call_params(mock)
+        assert params["sort"] == "createdAt"
+        assert params["order"] == "asc"
+
+    def test_list_submissions_omits_sort_order_when_none(
+        self,
+        api_key: str,
+        sample_paginated_submissions: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_paginated_submissions))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.list_submissions()
+        params = _call_params(mock)
+        assert "sort" not in params
+        assert "order" not in params
 
     def test_list_submissions_401(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(401, {"message": "auth"}))
@@ -823,6 +892,7 @@ class TestReportEnvelopes:
         with ctx, ThreatZone(api_key=api_key) as client:
             res = client.get_static_scan_results("sub-789")
         assert isinstance(res, StaticScanResponse)
+        assert res.report_format == "exe"
         assert _call_url(mock).endswith("/submissions/sub-789/static-scan")
 
     def test_get_static_scan_results_409(self, api_key: str) -> None:
@@ -969,6 +1039,32 @@ class TestDynamicReport:
         assert params["operation"] == "create"
         assert params["page"] == 2
         assert params["limit"] == 50
+
+    def test_get_behaviours_sends_type_and_process_name(
+        self, api_key: str, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviours_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_behaviours(
+                "sub-789",
+                os="windows",
+                type="registry",
+                process_name="cmd.exe",
+            )
+        params = _call_params(mock)
+        assert params["os"] == "windows"
+        assert params["type"] == "registry"
+        assert params["processName"] == "cmd.exe"
+
+    def test_get_behaviours_omits_type_and_process_name_when_none(
+        self, api_key: str, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviours_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_behaviours("sub-789", os="windows")
+        params = _call_params(mock)
+        assert "type" not in params
+        assert "processName" not in params
 
     def test_get_behaviours_without_os_raises(self, api_key: str) -> None:
         with ThreatZone(api_key=api_key) as client, pytest.raises(ValueError, match="os"):
@@ -1305,6 +1401,21 @@ class TestDownloads:
         ctx, _ = _patched_stream(response)
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.download_cdr_result("ghost")
+
+    def test_get_static_scan_strings_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b'{"strings": ["a", "b"]}')
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.get_static_scan_strings("sub-789")
+            assert res.read() == b'{"strings": ["a", "b"]}'
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/static-scan/strings")
+
+    def test_get_static_scan_strings_404(self, api_key: str) -> None:
+        response = _make_response(404, {"message": "no"})
+        ctx, _ = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_static_scan_strings("ghost")
 
 
 class TestMedia:

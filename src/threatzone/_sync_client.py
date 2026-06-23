@@ -33,6 +33,7 @@ from .types import (
     MetafieldOption,
     Metafields,
     MitreResponse,
+    NetworkConfigListItem,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
@@ -175,6 +176,15 @@ class ThreatZone:
         response = self._http.get("/config/environments")
         return [EnvironmentOption.model_validate(item) for item in response.json()]
 
+    def list_network_configs(self) -> list[NetworkConfigListItem]:
+        """List the workspace's available network configurations (proxy/openvpn/wireguard).
+
+        Secrets (passwords, VPN file contents) are never returned — only `has_config_file`.
+        """
+        response = self._http.get("/v1/network-configs")
+        data = response.json()
+        return [NetworkConfigListItem.model_validate(item) for item in data.get("items", [])]
+
     # =========================================================================
     # Submissions - Create
     # =========================================================================
@@ -211,7 +221,7 @@ class ThreatZone:
             configurations: Advanced execution configuration options including:
                 - preScript: Script to run before analysis
                 - startArguments: Command line arguments for the sample
-                - network_config: Network configuration ID (MongoDB ObjectId)
+                - networkConfig: Network configuration ID (MongoDB ObjectId)
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -308,6 +318,7 @@ class ThreatZone:
         url: str,
         *,
         private: bool = False,
+        safe_browsing: bool = False,
     ) -> SubmissionCreated:
         """
         Create a new URL analysis submission.
@@ -315,13 +326,16 @@ class ThreatZone:
         Args:
             url: URL to analyze.
             private: If True, submission is private to your workspace.
+            safe_browsing: If True, spawn an isolated safe-browsing session
+                (a sandboxed Chromium pod accessible over noVNC) alongside
+                URL analysis. Default: False.
 
         Returns:
             SubmissionCreated with the new submission UUID.
         """
         response = self._http.post(
             "/submissions/url_analysis",
-            json={"url": url, "private": private},
+            json={"url": url, "private": private, "safeBrowsing": safe_browsing},
         )
         return SubmissionCreated.model_validate(response.json())
 
@@ -389,6 +403,8 @@ class ThreatZone:
         end_date: datetime | str | None = None,
         private: bool | None = None,
         tags: list[str] | None = None,
+        sort: str | None = None,
+        order: str | None = None,
     ) -> PaginatedSubmissions:
         """
         List submissions with optional filters.
@@ -404,6 +420,8 @@ class ThreatZone:
             end_date: Filter submissions created before this date.
             private: Filter by privacy status.
             tags: Filter by tags.
+            sort: Sort field (e.g. "createdAt").
+            order: Sort order ("asc" or "desc").
 
         Returns:
             PaginatedSubmissions with items and pagination info.
@@ -427,6 +445,10 @@ class ThreatZone:
             params["private"] = private
         if tags:
             params["tags"] = tags
+        if sort is not None:
+            params["sort"] = sort
+        if order is not None:
+            params["order"] = order
 
         response = self._http.get("/submissions", params=params)
         return PaginatedSubmissions.model_validate(response.json())
@@ -690,13 +712,18 @@ class ThreatZone:
 
     def get_static_scan_results(self, uuid: str) -> StaticScanResponse:
         """
-        Get static scan results (per artifact) for a submission.
+        Get static analysis results for a submission.
+
+        The response is a per-submission static analysis report, discriminated
+        by ``reportFormat``. Format-specific keys (e.g. ``peExeSections``,
+        ``apkInfo``) are inlined at the top level and preserved on
+        ``.model_extra``.
 
         Args:
             uuid: Submission UUID.
 
         Returns:
-            Static scan envelope with per-artifact analyzer output.
+            Static analysis report singleton.
 
         Raises:
             ReportUnavailableError: When the static report is not yet available.
@@ -704,18 +731,34 @@ class ThreatZone:
         response = self._http.get(f"/submissions/{uuid}/static-scan")
         return StaticScanResponse.model_validate(response.json())
 
+    def get_static_scan_strings(self, uuid: str) -> DownloadResponse:
+        """Stream the raw extracted-strings JSON (``{uuid}_strings.json``) for a static report.
+
+        The response is a streamed application/json file (can be multi-MB). Use
+        ``.read()``, ``.iter_bytes()``, or ``.save(path)``. Raises
+        ReportUnavailableError (409) when the static report is not complete,
+        NotFoundError (404) when no strings file exists.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            DownloadResponse for streaming or saving the strings JSON file.
+        """
+        return self._http.get_stream(f"/submissions/{uuid}/static-scan/strings")
+
     def get_cdr_results(self, uuid: str) -> CdrResponse:
         """
         Get Content Disarm and Reconstruction (CDR) results for a submission.
 
-        This returns the structured per-artifact CDR engine output. Use
+        This returns the per-submission CDR transformation result. Use
         ``download_cdr_result()`` to download the sanitized file itself.
 
         Args:
             uuid: Submission UUID.
 
         Returns:
-            CDR results envelope.
+            CDR transformation result.
 
         Raises:
             ReportUnavailableError: When the CDR report is not yet available.
@@ -780,8 +823,10 @@ class ThreatZone:
         uuid: str,
         *,
         os: BehaviourOs,
+        type: str | None = None,
         pid: int | None = None,
         operation: str | None = None,
+        process_name: str | None = None,
         page: int | None = None,
         limit: int | None = None,
     ) -> BehavioursResponse:
@@ -791,8 +836,10 @@ class ThreatZone:
         Args:
             uuid: Submission UUID.
             os: REQUIRED. Target operating system (windows/linux/android/macos).
+            type: Filter by event type (e.g. registry, file, network, process, mutex).
             pid: Filter by process ID.
             operation: Filter by operation name.
+            process_name: Filter by process name (exact match).
             page: 1-indexed page number.
             limit: Maximum items per page (1-500).
 
@@ -807,10 +854,14 @@ class ThreatZone:
             raise ValueError("get_behaviours() requires the 'os' keyword argument")
 
         params: dict[str, Any] = {"os": os}
+        if type is not None:
+            params["type"] = type
         if pid is not None:
             params["pid"] = pid
         if operation is not None:
             params["operation"] = operation
+        if process_name is not None:
+            params["processName"] = process_name
         if page is not None:
             params["page"] = page
         if limit is not None:

@@ -82,5 +82,6 @@ class ReportStatus(BaseModel):
     status: ReportStatusValue
     level: ThreatLevel | None = None
     score: int | None = None
+    duration: float | None = None
     format: str | None = None
     operating_system: ReportOperatingSystem | None = Field(default=None, alias="operatingSystem")

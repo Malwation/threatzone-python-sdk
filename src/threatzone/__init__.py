@@ -36,7 +36,8 @@ from .types import (
     BehaviourOs,
     BehavioursResponse,
     CdrResponse,
-    CdrResult,
+    CdrSanitizedFileInfo,
+    CdrSanitizedFileInfoDetail,
     Connection,
     DnsQuery,
     EmlAnalysis,
@@ -57,6 +58,8 @@ from .types import (
     Metafields,
     MitreResponse,
     ModuleInfo,
+    NetworkConfigListItem,
+    NetworkConfigListResponse,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
@@ -68,8 +71,10 @@ from .types import (
     ReportStatus,
     SignatureCheckResponse,
     SignatureCheckResult,
+    StaticScanDieResult,
+    StaticScanFileInfo,
     StaticScanResponse,
-    StaticScanResult,
+    StaticScanStrings,
     Submission,
     SubmissionCreated,
     SubmissionLimits,
@@ -84,7 +89,7 @@ from .types import (
     YaraRulesResponse,
 )
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 
 __all__ = [
     # Clients
@@ -150,6 +155,9 @@ __all__ = [
     "HttpRequest",
     "Connection",
     "NetworkThreat",
+    # Types - Network configs
+    "NetworkConfigListItem",
+    "NetworkConfigListResponse",
     # Types - Processes
     "Process",
     "ProcessesResponse",
@@ -162,9 +170,12 @@ __all__ = [
     "SyscallsResponse",
     # Types - Static scan / CDR / Signature check
     "StaticScanResponse",
-    "StaticScanResult",
+    "StaticScanFileInfo",
+    "StaticScanStrings",
+    "StaticScanDieResult",
     "CdrResponse",
-    "CdrResult",
+    "CdrSanitizedFileInfo",
+    "CdrSanitizedFileInfoDetail",
     "SignatureCheckResponse",
     "SignatureCheckResult",
     # Types - URL analysis
