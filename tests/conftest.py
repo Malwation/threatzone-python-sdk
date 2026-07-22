@@ -680,7 +680,9 @@ def sample_behaviours_response(
     return {
         "items": [sample_behaviour_event],
         "total": 1,
-        "os": "windows",
+        "page": 1,
+        "limit": 100,
+        "totalPages": 1,
     }
 
 

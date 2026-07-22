@@ -17,7 +17,6 @@ from ._exceptions import AnalysisTimeoutError, YaraRulePendingError
 from ._streaming import AsyncDownloadResponse
 from .types import (
     ArtifactsResponse,
-    BehaviourOs,
     BehavioursResponse,
     CdrResponse,
     Connection,
@@ -825,7 +824,6 @@ class AsyncThreatZone:
         self,
         uuid: str,
         *,
-        os: BehaviourOs,
         type: str | None = None,
         pid: int | None = None,
         operation: str | None = None,
@@ -834,11 +832,10 @@ class AsyncThreatZone:
         limit: int | None = None,
     ) -> BehavioursResponse:
         """
-        Get OS-specific behaviour events captured during dynamic analysis.
+        Get behaviour events captured during dynamic analysis.
 
         Args:
             uuid: Submission UUID.
-            os: REQUIRED. Target operating system (windows/linux/android/macos).
             type: Filter by event type (e.g. registry, file, network, process, mutex).
             pid: Filter by process ID.
             operation: Filter by operation name.
@@ -847,16 +844,12 @@ class AsyncThreatZone:
             limit: Maximum items per page (1-500).
 
         Returns:
-            Paginated behaviour events tagged with their source OS.
+            Paginated behaviour events.
 
         Raises:
-            ValueError: When ``os`` is None or empty.
             ReportUnavailableError: When the dynamic report is not yet available.
         """
-        if not os:
-            raise ValueError("get_behaviours() requires the 'os' keyword argument")
-
-        params: dict[str, Any] = {"os": os}
+        params: dict[str, Any] = {}
         if type is not None:
             params["type"] = type
         if pid is not None:

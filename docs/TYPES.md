@@ -104,8 +104,8 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 | `ProcessTreeNode` | Recursive spawn-tree node. Does **not** carry network/events &mdash; only `pid`, `ppid`, `tid`, `name`, `cmd`, `children`. | `GET /submissions/:uuid/processes/tree` |
 | `ProcessTreeResponse` | `{nodes: List[ProcessTreeNode]}`. | same |
 | `BehaviourEvent` | OS-specific behaviour event with `type`, `pid`, `ppid`, `process_name`, `operation`, `event_id`, `event_count`, `syscall_line_number`, `timestamp`, `details`. | `GET /submissions/:uuid/behaviours` |
-| `BehavioursResponse` | `{items, total, os}`. | same |
-| `BehaviourOs` | `Literal["windows", "linux", "android", "macos"]`. **Required** query parameter. | same |
+| `BehavioursResponse` | `{items, total, page, limit, total_pages}`. | same |
+| `BehaviourOs` | Deprecated compatibility alias; the endpoint derives the OS from the submission. | same |
 | `SyscallsResponse` | `{items: List[str], total}`. `items` are raw unparsed log lines. | `GET /submissions/:uuid/syscalls` |
 | `NetworkSummary` | `{dns_count, http_count, tcp_count, udp_count, threat_count, pcap_available}`. | `GET /submissions/:uuid/network/summary` |
 | `DnsQuery` | `{id, host, type, status, records, timeshift}`. | `GET /submissions/:uuid/network/dns` |

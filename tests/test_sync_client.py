@@ -1014,11 +1014,11 @@ class TestDynamicReport:
     ) -> None:
         ctx, mock = _patched_client(_make_response(200, sample_behaviours_response))
         with ctx, ThreatZone(api_key=api_key) as client:
-            behaviours = client.get_behaviours("sub-789", os="windows")
+            behaviours = client.get_behaviours("sub-789")
         assert isinstance(behaviours, BehavioursResponse)
         assert _call_url(mock).endswith("/submissions/sub-789/behaviours")
         params = _call_params(mock)
-        assert params["os"] == "windows"
+        assert "os" not in params
 
     def test_get_behaviours_with_filters(
         self, api_key: str, sample_behaviours_response: dict[str, Any]
@@ -1027,14 +1027,13 @@ class TestDynamicReport:
         with ctx, ThreatZone(api_key=api_key) as client:
             client.get_behaviours(
                 "sub-789",
-                os="linux",
                 pid=1234,
                 operation="create",
                 page=2,
                 limit=50,
             )
         params = _call_params(mock)
-        assert params["os"] == "linux"
+        assert "os" not in params
         assert params["pid"] == 1234
         assert params["operation"] == "create"
         assert params["page"] == 2
@@ -1047,12 +1046,11 @@ class TestDynamicReport:
         with ctx, ThreatZone(api_key=api_key) as client:
             client.get_behaviours(
                 "sub-789",
-                os="windows",
                 type="registry",
                 process_name="cmd.exe",
             )
         params = _call_params(mock)
-        assert params["os"] == "windows"
+        assert "os" not in params
         assert params["type"] == "registry"
         assert params["processName"] == "cmd.exe"
 
@@ -1061,25 +1059,22 @@ class TestDynamicReport:
     ) -> None:
         ctx, mock = _patched_client(_make_response(200, sample_behaviours_response))
         with ctx, ThreatZone(api_key=api_key) as client:
-            client.get_behaviours("sub-789", os="windows")
+            client.get_behaviours("sub-789")
         params = _call_params(mock)
+        assert "os" not in params
         assert "type" not in params
         assert "processName" not in params
-
-    def test_get_behaviours_without_os_raises(self, api_key: str) -> None:
-        with ThreatZone(api_key=api_key) as client, pytest.raises(ValueError, match="os"):
-            client.get_behaviours("sub-789", os="")  # type: ignore[arg-type]
 
     def test_get_behaviours_409(self, api_key: str) -> None:
         body = _409_body()
         ctx, _ = _patched_client(_make_response(409, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
-            client.get_behaviours("sub-789", os="windows")
+            client.get_behaviours("sub-789")
 
     def test_get_behaviours_404(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(404, {"message": "no"}))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
-            client.get_behaviours("ghost", os="windows")
+            client.get_behaviours("ghost")
 
     def test_get_syscalls_happy(
         self, api_key: str, sample_syscalls_response: dict[str, Any]

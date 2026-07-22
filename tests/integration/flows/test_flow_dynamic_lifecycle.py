@@ -6,6 +6,7 @@ from threatzone import ThreatZone
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
     ArtifactsResponse,
+    BehavioursResponse,
     IndicatorsResponse,
     IoCsResponse,
     NetworkSummary,
@@ -35,6 +36,22 @@ def test_processes_and_tree(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
     tree = sync_client.get_process_tree(uuid)
     assert isinstance(procs, ProcessesResponse)
     assert isinstance(tree, ProcessTreeResponse)
+
+
+def test_behaviours_without_os_parameter(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    uuid = _submit(fake_api, sync_client)
+    behaviours = sync_client.get_behaviours(
+        uuid,
+        type="file",
+        process_name="malware.exe",
+    )
+    assert isinstance(behaviours, BehavioursResponse)
+    assert behaviours.total == 1
+    assert behaviours.page == 1
+    assert behaviours.limit == 100
+    assert behaviours.total_pages == 1
 
 
 def test_indicators_iocs_yara_artifacts(

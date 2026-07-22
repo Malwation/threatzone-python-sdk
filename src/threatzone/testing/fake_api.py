@@ -983,23 +983,6 @@ class FakeThreatZoneAPI:
             return guard
         try:
             query = self._query(request)
-            os_value = self._first(query, "os")
-            if not os_value:
-                return _error(
-                    400,
-                    "Bad Request",
-                    "Missing required query parameter: os",
-                    "INVALID_QUERY_PARAM",
-                    {"param": "os"},
-                )
-            if os_value not in {"windows", "linux", "android", "macos"}:
-                return _error(
-                    400,
-                    "Bad Request",
-                    f"Invalid os value: {os_value}",
-                    "INVALID_QUERY_PARAM",
-                    {"param": "os"},
-                )
             page = self._int(query, "page")
             limit = self._int(query, "limit")
             pid = self._int(query, "pid")
@@ -1022,9 +1005,10 @@ class FakeThreatZoneAPI:
         return _json(
             _responses.build_behaviours_response(
                 state,
-                os_name=os_value,  # type: ignore[arg-type]
+                event_type=self._first(query, "type"),
                 pid=pid,
                 operation=self._first(query, "operation"),
+                process_name=self._first(query, "processName"),
                 page=page,
                 limit=limit,
             )
