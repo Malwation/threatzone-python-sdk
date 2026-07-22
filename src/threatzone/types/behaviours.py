@@ -26,15 +26,17 @@ class BehaviourEvent(BaseModel):
     event_count: int = Field(alias="eventCount")
     syscall_line_number: int | None = Field(default=None, alias="syscallLineNumber")
     timestamp: int
-    # OS-specific structured payload. Shape depends on `os` and event `type`.
+    # OS-specific structured payload. Shape depends on the submission OS and event type.
     details: dict[str, Any]
 
 
 class BehavioursResponse(BaseModel):
-    """Paginated behaviour event list, OS-tagged."""
+    """Paginated behaviour event list."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     items: list[BehaviourEvent]
     total: int
-    os: BehaviourOs
+    page: int
+    limit: int
+    total_pages: int = Field(alias="totalPages")

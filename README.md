@@ -94,8 +94,8 @@ submission completes.
   `submission.is_complete()` / `submission.has_errors()`. Every report carries its own
   `status`, `level`, `score`.
 - **Observation streams** — the dynamic report produces `indicators` (rule hits),
-  `iocs` (concrete IOC values), `behaviours` (OS-level operations — the `os` query param
-  is required), and `syscalls` (raw log lines).
+  `iocs` (concrete IOC values), `behaviours` (OS-level operations), and `syscalls`
+  (raw log lines).
 - **Artifacts** — files produced or extracted during analysis; keyed by `hashes.sha256`.
 - **Access control** — public submissions are visible to every API key; private
   submissions are workspace-scoped. Cross-workspace reads of private submissions raise

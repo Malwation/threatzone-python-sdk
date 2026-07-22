@@ -543,8 +543,10 @@ class TestBehaviourTypes:
 
     def test_behaviours_response(self, sample_behaviours_response: dict[str, Any]) -> None:
         resp = BehavioursResponse.model_validate(sample_behaviours_response)
-        assert resp.os == "windows"
         assert resp.total == 1
+        assert resp.page == 1
+        assert resp.limit == 100
+        assert resp.total_pages == 1
         assert isinstance(resp.items[0], BehaviourEvent)
 
     def test_behaviour_event_round_trip(self, sample_behaviour_event: dict[str, Any]) -> None:

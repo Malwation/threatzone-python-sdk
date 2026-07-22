@@ -47,7 +47,6 @@ from threatzone.types import (
     UserInfo,
     YaraRulesResponse,
 )
-from threatzone.types.behaviours import BehaviourOs
 from threatzone.types.indicators import OverviewSummary
 from threatzone.types.network import ThreatAppProto, ThreatSeverity
 
@@ -517,13 +516,14 @@ def build_process_tree_response(state: SubmissionState) -> ProcessTreeResponse:
 def build_behaviours_response(
     state: SubmissionState,
     *,
-    os_name: BehaviourOs,
+    event_type: str | None,
     pid: int | None,
     operation: str | None,
+    process_name: str | None,
     page: int | None,
     limit: int | None,
 ) -> BehavioursResponse:
-    """Build the OS-specific behaviour events response."""
+    """Build the paginated behaviour events response."""
     events: list[dict[str, Any]] = []
     if state.has_dynamic_report:
         events.append(
@@ -544,11 +544,24 @@ def build_behaviours_response(
         events = [e for e in events if e["pid"] == pid]
     if operation:
         events = [e for e in events if e["operation"] == operation]
+    if event_type:
+        events = [e for e in events if e["type"] == event_type]
+    if process_name:
+        events = [e for e in events if e["processName"] == process_name]
     total = len(events)
-    if page is not None and limit is not None:
-        start = (page - 1) * limit
-        events = events[start : start + limit]
-    return BehavioursResponse.model_validate({"items": events, "total": total, "os": os_name})
+    page_number = page if page is not None else 1
+    page_limit = limit if limit is not None else 100
+    start = (page_number - 1) * page_limit
+    events = events[start : start + page_limit]
+    return BehavioursResponse.model_validate(
+        {
+            "items": events,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": (total + page_limit - 1) // page_limit,
+        }
+    )
 
 
 def build_syscalls_response(
