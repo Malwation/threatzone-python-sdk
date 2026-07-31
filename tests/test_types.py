@@ -323,6 +323,24 @@ class TestIndicatorsSurfaceTypes:
         resp = YaraRulesResponse.model_validate(sample_yara_rules_response)
         assert isinstance(resp.items[0], YaraRule)
 
+    def test_paginated_indicator_surfaces_expose_the_full_envelope(
+        self,
+        sample_iocs_response: dict[str, Any],
+        sample_indicators_response: dict[str, Any],
+        sample_yara_rules_response: dict[str, Any],
+    ) -> None:
+        # The API returns page/limit/totalPages on all three, but only `items` and `total`
+        # were modelled, so a caller could not page without recomputing what was already
+        # on the wire -- BehavioursResponse has exposed them all along.
+        for resp in (
+            IoCsResponse.model_validate(sample_iocs_response),
+            IndicatorsResponse.model_validate(sample_indicators_response),
+            YaraRulesResponse.model_validate(sample_yara_rules_response),
+        ):
+            assert resp.page == 1
+            assert resp.limit == 20
+            assert resp.total_pages == 1
+
     def test_extracted_config(self, sample_extracted_config: dict[str, Any]) -> None:
         cfg = ExtractedConfig.model_validate(sample_extracted_config)
         assert cfg.family == "AgentTesla"

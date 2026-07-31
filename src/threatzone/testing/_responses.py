@@ -268,11 +268,21 @@ def build_indicators_response(
             }
         )
     total = len(items)
-    if page is not None and limit is not None:
-        start = (page - 1) * limit
-        items = items[start : start + limit]
+    page_number = page if page is not None else 1
+    page_limit = limit if limit is not None else 20
+    start = (page_number - 1) * page_limit
+    items = items[start : start + page_limit]
     counts = _indicator_level_counts(state.indicators)
-    return IndicatorsResponse.model_validate({"items": items, "total": total, "levels": counts})
+    return IndicatorsResponse.model_validate(
+        {
+            "items": items,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": (total + page_limit - 1) // page_limit if page_limit > 0 else 0,
+            "levels": counts,
+        }
+    )
 
 
 def build_iocs_response(
@@ -295,10 +305,19 @@ def build_iocs_response(
             }
         )
     total = len(items)
-    if page is not None and limit is not None:
-        start = (page - 1) * limit
-        items = items[start : start + limit]
-    return IoCsResponse.model_validate({"items": items, "total": total})
+    page_number = page if page is not None else 1
+    page_limit = limit if limit is not None else 20
+    start = (page_number - 1) * page_limit
+    items = items[start : start + page_limit]
+    return IoCsResponse.model_validate(
+        {
+            "items": items,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": (total + page_limit - 1) // page_limit if page_limit > 0 else 0,
+        }
+    )
 
 
 def build_yara_rules_response(
@@ -321,10 +340,19 @@ def build_yara_rules_response(
             }
         )
     total = len(items)
-    if page is not None and limit is not None:
-        start = (page - 1) * limit
-        items = items[start : start + limit]
-    return YaraRulesResponse.model_validate({"items": items, "total": total})
+    page_number = page if page is not None else 1
+    page_limit = limit if limit is not None else 20
+    start = (page_number - 1) * page_limit
+    items = items[start : start + page_limit]
+    return YaraRulesResponse.model_validate(
+        {
+            "items": items,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": (total + page_limit - 1) // page_limit if page_limit > 0 else 0,
+        }
+    )
 
 
 def build_extracted_configs_response(state: SubmissionState) -> ExtractedConfigsResponse:

@@ -361,6 +361,9 @@ def sample_indicators_response(
     return {
         "items": [sample_indicator],
         "total": 1,
+        "page": 1,
+        "limit": 20,
+        "totalPages": 1,
         "levels": sample_indicator_levels,
     }
 
@@ -376,7 +379,7 @@ def sample_ioc() -> dict[str, Any]:
 
 @pytest.fixture
 def sample_iocs_response(sample_ioc: dict[str, Any]) -> dict[str, Any]:
-    return {"items": [sample_ioc], "total": 1}
+    return {"items": [sample_ioc], "total": 1, "page": 1, "limit": 20, "totalPages": 1}
 
 
 @pytest.fixture
@@ -390,7 +393,7 @@ def sample_yara_rule() -> dict[str, Any]:
 
 @pytest.fixture
 def sample_yara_rules_response(sample_yara_rule: dict[str, Any]) -> dict[str, Any]:
-    return {"items": [sample_yara_rule], "total": 1}
+    return {"items": [sample_yara_rule], "total": 1, "page": 1, "limit": 20, "totalPages": 1}
 
 
 @pytest.fixture
