@@ -50,6 +50,9 @@ class IndicatorsResponse(BaseModel):
 
     items: list[Indicator]
     total: int
+    page: int
+    limit: int
+    total_pages: int = Field(alias="totalPages")
     levels: IndicatorLevels
 
 
@@ -85,6 +88,9 @@ class IoCsResponse(BaseModel):
 
     items: list[IoC]
     total: int
+    page: int
+    limit: int
+    total_pages: int = Field(alias="totalPages")
 
 
 YaraRuleCategory = Literal["malicious", "suspicious", "benign"]
@@ -107,6 +113,9 @@ class YaraRulesResponse(BaseModel):
 
     items: list[YaraRule]
     total: int
+    page: int
+    limit: int
+    total_pages: int = Field(alias="totalPages")
 
 
 class ExtractedConfig(BaseModel):
