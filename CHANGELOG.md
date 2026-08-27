@@ -5,6 +5,40 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `create_url_submission()` accepts `metafields` and `configurations`. Use
+  `metafields={"timeout": ..., "device_preset": ...}` to set the interactive session
+  duration and the emulated device. Use
+  `configurations={"networkConfig": ..., "sessionDurationSeconds": ...}` to select an
+  egress profile and the session duration (30-600 seconds).
+- `get_url_analysis_session(uuid)` returns the interactive browser session state and the
+  viewer link as a `UrlAnalysisSession`.
+- `start_url_analysis_session(uuid)` opens a session on an existing URL submission.
+- `restart_url_analysis_session(uuid)` ends the current session and starts a clean one
+  with the same device and network choice.
+- `restart_url_analysis(uuid)` re-runs a completed or errored URL-analysis report.
+- `get_device_presets()` lists the selectable browser device presets as
+  `DevicePresetOption` values.
+- `list_media_files()` and `get_media_file()` accept `source="dynamic"` or
+  `source="url_analysis"`. The parameter is omitted from the request when unset.
+- `MediaFile.kind` reports `"video"`, `"screenshot"`, or `None`.
+- `UrlAnalysisResponse` carries the scoring fields: `verdict_state`, `threat_score`,
+  `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`,
+  `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`,
+  `metafields`, and `scored_at`. Each is `None` or empty until scoring finishes.
+- New types: `Message`, `DevicePresetOption`, `UrlAnalysisSession`,
+  `UrlAnalysisSessionConfig`, `UrlAnalysisPrivacyFactor`, `UrlAnalysisVerdictProvenance`,
+  `UrlAnalysisImpersonationTarget`, `UrlAnalysisCompleteness`, and
+  `UrlAnalysisIntelDetection`.
+- The bundled `FakeThreatZoneAPI` serves the session, restart, and device-preset routes,
+  and returns the extended URL-analysis report. The new
+  `scenarios.seed_interactive_url_session()` seeds a submission with a running session.
+
+Every method above is mirrored on `AsyncThreatZone`.
+
 ## 1.1.1
 
 ### Fixed

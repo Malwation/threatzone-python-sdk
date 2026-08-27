@@ -86,6 +86,72 @@ See [Recipe 13](docs/RECIPES.md#13-control-dynamic_mimetype_check) for the full
 breakdown including reading back `FileInfo.is_mimetype_checked` after the
 submission completes.
 
+## URL analysis
+
+Submit a URL, open an interactive browser session, then read the scored report.
+
+```python
+# Pick an emulated device. Omit the metafield to use the plan default.
+presets = client.get_device_presets()
+mobile = next(p for p in presets if p.category == "mobile")
+
+created = client.create_url_submission(
+    "https://suspicious-landing.example.com/update.php",
+    private=True,
+    safe_browsing=True,
+    metafields={"timeout": 240, "device_preset": mobile.id},
+    configurations={"networkConfig": "<network-config-id>"},
+)
+
+# Poll for the viewer link. A session over workspace capacity is queued, not rejected.
+session = client.get_url_analysis_session(created.uuid)
+if session.state == "queued":
+    print(f"Queued at position {session.queue_position}")
+if session.vnc_available:
+    print(f"Viewer: {session.link}")
+
+client.wait_for_completion(created.uuid, timeout=300)
+report = client.get_url_analysis(created.uuid)
+
+print(report.threat_score, report.risk_level)          # 88 Critical
+print(report.privacy_score, report.privacy_risk_level)  # 35 Medium
+if report.impersonation_target is not None:
+    print(report.impersonation_target.brand_name)
+for hit in report.intel_detections:
+    print(hit.source, hit.severity)
+```
+
+Session control:
+
+- `start_url_analysis_session(uuid)` opens a session on an existing submission.
+- `restart_url_analysis_session(uuid)` ends the current session and starts a clean one
+  with the same device and network choice.
+- Neither call consumes daily submission quota.
+- `restart_url_analysis(uuid)` re-runs the analysis itself. It counts against the
+  concurrent-submission quota.
+
+Scoring fields (`threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`,
+`privacy_breakdown`, `verdict_state`, `verdict_provenance`, `impersonation_target`,
+`completeness`, `intel_detections`, `metafields`, `scored_at`) are `None` or empty until
+scoring finishes. Read them after the report reaches `completed`.
+
+Media from the session:
+
+```python
+media = client.list_media_files(created.uuid, source="url_analysis")
+for item in media:
+    print(item.id, item.kind)  # kind: "video", "screenshot", or None
+
+data = client.get_media_file(created.uuid, media[0].id, source="url_analysis")
+```
+
+`source` accepts `"dynamic"` or `"url_analysis"`. When omitted, the server picks
+`dynamic` if the submission has a dynamic report, otherwise `url_analysis`. A submission
+with neither report returns 409.
+
+See [recipe 2](./docs/RECIPES.md#2-submit-a-url-and-get-the-url-analysis-report) for the
+full flow.
+
 ## Core concepts
 
 - **Submissions** — one analysis target (file or URL) with a stable `uuid`, a workspace

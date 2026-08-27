@@ -36,6 +36,7 @@ from threatzone.types import (
     BehavioursResponse,
     CdrResponse,
     Connection,
+    DevicePresetOption,
     DnsQuery,
     EmlAnalysis,
     EnvironmentOption,
@@ -44,6 +45,7 @@ from threatzone.types import (
     IndicatorsResponse,
     IoCsResponse,
     MediaFile,
+    Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
@@ -60,6 +62,7 @@ from threatzone.types import (
     SubmissionCreated,
     SyscallsResponse,
     UrlAnalysisResponse,
+    UrlAnalysisSession,
     UserInfo,
     YaraRulesResponse,
 )
@@ -357,6 +360,28 @@ class TestConfiguration:
 # ---------------------------------------------------------------------------
 
 
+class TestDevicePresets:
+    def test_get_device_presets(
+        self, api_key: str, device_presets_payload: list[dict[str, Any]]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, device_presets_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            presets = client.get_device_presets()
+        assert all(isinstance(p, DevicePresetOption) for p in presets)
+        assert [p.id for p in presets] == [
+            "68b0000000000000000000a2",
+            "68b0000000000000000000a1",
+        ]
+        assert presets[0].default is True
+        assert presets[1].base_key == "iphone-15-pro"
+        assert _call_url(mock).endswith("/config/device-presets")
+
+    def test_get_device_presets_403(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(403, {"message": "no plan"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.get_device_presets()
+
+
 class TestCreateSubmissions:
     def test_create_sandbox_submission(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -447,6 +472,37 @@ class TestCreateSubmissions:
             client.create_url_submission("https://example.com")
         _, kwargs = mock.call_args
         assert kwargs["json"]["safeBrowsing"] is False
+
+    def test_create_url_submission_sends_metafields_and_configurations(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_submission_created))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.create_url_submission(
+                "https://example.com",
+                metafields={"timeout": 240, "device_preset": "68b0000000000000000000a1"},
+                configurations={
+                    "networkConfig": "68b0000000000000000000bb",
+                    "sessionDurationSeconds": 240,
+                },
+            )
+        _, kwargs = mock.call_args
+        assert kwargs["json"]["metafields"] == {
+            "timeout": 240,
+            "device_preset": "68b0000000000000000000a1",
+        }
+        assert kwargs["json"]["configurations"]["sessionDurationSeconds"] == 240
+        assert kwargs["json"]["configurations"]["networkConfig"] == "68b0000000000000000000bb"
+
+    def test_create_url_submission_omits_absent_option_blocks(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_submission_created))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.create_url_submission("https://example.com")
+        _, kwargs = mock.call_args
+        assert "metafields" not in kwargs["json"]
+        assert "configurations" not in kwargs["json"]
 
     def test_create_open_in_browser_submission(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -1136,6 +1192,63 @@ class TestUrlAnalysis:
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.get_url_analysis("ghost")
 
+    def test_get_url_analysis_session(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_session_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, url_analysis_session_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            session = client.get_url_analysis_session(submission_uuid)
+        assert isinstance(session, UrlAnalysisSession)
+        assert session.state == "running"
+        assert session.vnc_available is True
+        assert session.expired is False
+        assert session.link == "wss://gateway.example/?token=abc"
+        assert session.session_config is not None
+        assert session.session_config.device_preset_name == "iPhone 15 Pro"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/session")
+
+    def test_get_url_analysis_session_503(self, api_key: str, submission_uuid: str) -> None:
+        ctx, _ = _patched_client(_make_response(503, {"message": "session service unavailable"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(InternalServerError):
+            client.get_url_analysis_session(submission_uuid)
+
+    def test_start_url_analysis_session(self, api_key: str, submission_uuid: str) -> None:
+        ctx, mock = _patched_client(
+            _make_response(200, {"message": "Interactive browser session start initiated"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.start_url_analysis_session(submission_uuid)
+        assert isinstance(result, Message)
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/session")
+
+    def test_restart_url_analysis_session(self, api_key: str, submission_uuid: str) -> None:
+        ctx, mock = _patched_client(
+            _make_response(200, {"message": "Interactive browser session restart initiated"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.restart_url_analysis_session(submission_uuid)
+        assert isinstance(result, Message)
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith(
+            f"/submissions/{submission_uuid}/url-analysis/session/restart"
+        )
+
+    def test_restart_url_analysis_posts_to_the_restart_route(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        ctx, mock = _patched_client(
+            _make_response(200, {"message": "URL report restart initiated successfully"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.restart_url_analysis(submission_uuid)
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/restart/url_analysis")
+        assert "restart" in result.message
+
 
 # ---------------------------------------------------------------------------
 # Network endpoints
@@ -1440,6 +1553,36 @@ class TestMedia:
         ctx, _ = _patched_client(_make_response(404, {"message": "no"}))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.list_media_files("ghost")
+
+    def test_list_media_files_passes_the_source(
+        self, api_key: str, sample_media_files: list[dict[str, Any]]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_media_files))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.list_media_files("sub-789", source="url_analysis")
+        assert _call_params(mock)["source"] == "url_analysis"
+
+    def test_list_media_files_omits_the_source_when_absent(
+        self, api_key: str, sample_media_files: list[dict[str, Any]]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_media_files))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.list_media_files("sub-789")
+        assert "source" not in _call_params(mock)
+
+    def test_list_media_files_carries_the_kind(
+        self, api_key: str, sample_media_files: list[dict[str, Any]]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_media_files))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            files = client.list_media_files("sub-789")
+        assert [f.kind for f in files] == ["screenshot", "video"]
+
+    def test_get_media_file_passes_the_source(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, content=b"binary"))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_media_file("sub-789", "1.png", source="url_analysis")
+        assert _call_params(mock)["source"] == "url_analysis"
 
     def test_get_media_file_happy(self, api_key: str) -> None:
         ctx, mock = _patched_client(_make_response(200, content=b"binary"))

@@ -874,7 +874,97 @@ def sample_url_analysis_response() -> dict[str, Any]:
             "threatDetails": [{"source": "intel-1", "details": {"family": "EvilKit"}}],
         },
         "pages": ["https://evil.com/login"],
+        "verdictState": "final",
+        "threatScore": 72,
+        "riskLevel": "High",
+        "privacyScore": 35,
+        "privacyRiskLevel": "Medium",
+        "privacyBreakdown": [
+            {
+                "factor": "trackers",
+                "label": "Third-party trackers",
+                "delta": 20,
+                "detail": "5 trackers",
+            }
+        ],
+        "verdictProvenance": {
+            "rawVerdict": "malicious",
+            "quorumApplied": False,
+            "allowlistApplied": False,
+            "collectionState": "ok",
+            "pass": "final",
+        },
+        "impersonationTarget": {
+            "brandName": "PayPal",
+            "canonicalDomain": "paypal.com",
+            "signals": ["favicon_match"],
+            "confidence": "high",
+        },
+        "completeness": {
+            "measuredSources": ["dns", "tls", "intel"],
+            "skippedSources": ["browser"],
+            "unavailableSources": [],
+            "browserCollection": "partial",
+        },
+        "intelDetections": [
+            {
+                "source": "urlhaus",
+                "detectionType": "malware_url",
+                "severity": "high",
+                "details": "listed",
+            }
+        ],
+        "metafields": {"timeout": 240, "record_session": True},
+        "scoredAt": "2026-08-27T10:00:00.000Z",
     }
+
+
+@pytest.fixture
+def url_analysis_session_payload() -> dict[str, Any]:
+    return {
+        "state": "running",
+        "collectionStatus": "collecting",
+        "recordingStatus": "recording",
+        "queuePosition": None,
+        "vncAvailable": True,
+        "reportAvailable": False,
+        "startedAt": 1756288800000,
+        "readyAt": 1756288805000,
+        "expiresAt": 1756288920000,
+        "finishedAt": None,
+        "failureCode": None,
+        "extensionsUsed": 0,
+        "extensionsMax": 3,
+        "sessionConfig": {
+            "deviceProfileId": "iphone-15-pro",
+            "networkConfigId": None,
+            "sessionDurationSeconds": 240,
+            "devicePresetId": "68b0000000000000000000a1",
+            "devicePresetName": "iPhone 15 Pro",
+        },
+        "link": "wss://gateway.example/?token=abc",
+        "expired": False,
+    }
+
+
+@pytest.fixture
+def device_presets_payload() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "68b0000000000000000000a2",
+            "name": "Desktop",
+            "category": "desktop",
+            "baseKey": "desktop-chrome",
+            "default": True,
+        },
+        {
+            "id": "68b0000000000000000000a1",
+            "name": "iPhone 15 Pro",
+            "category": "mobile",
+            "baseKey": "iphone-15-pro",
+            "default": False,
+        },
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -890,12 +980,14 @@ def sample_media_files() -> list[dict[str, Any]]:
             "name": "screenshot_001.png",
             "contentType": "image/png",
             "size": 50000,
+            "kind": "screenshot",
         },
         {
             "id": "media-2",
             "name": "video.mp4",
             "contentType": "video/mp4",
             "size": 5000000,
+            "kind": "video",
         },
     ]
 

@@ -19,6 +19,7 @@ from .types import (
     BehavioursResponse,
     CdrResponse,
     Connection,
+    DevicePresetOption,
     DnsQuery,
     EmlAnalysis,
     EnvironmentOption,
@@ -29,6 +30,7 @@ from .types import (
     IoCsResponse,
     IoCType,
     MediaFile,
+    Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
@@ -45,6 +47,7 @@ from .types import (
     SubmissionCreated,
     SyscallsResponse,
     UrlAnalysisResponse,
+    UrlAnalysisSession,
     UserInfo,
     YaraRuleCategory,
     YaraRulesResponse,
@@ -184,6 +187,15 @@ class ThreatZone:
         data = response.json()
         return [NetworkConfigListItem.model_validate(item) for item in data.get("items", [])]
 
+    def get_device_presets(self) -> list[DevicePresetOption]:
+        """List the browser device presets your plan can select.
+
+        Pass a preset `id` as the `device_preset` metafield on
+        create_url_submission().
+        """
+        response = self._http.get("/config/device-presets")
+        return [DevicePresetOption.model_validate(item) for item in response.json()]
+
     # =========================================================================
     # Submissions - Create
     # =========================================================================
@@ -318,24 +330,39 @@ class ThreatZone:
         *,
         private: bool = False,
         safe_browsing: bool = False,
+        metafields: dict[str, Any] | None = None,
+        configurations: dict[str, Any] | None = None,
     ) -> SubmissionCreated:
         """
         Create a new URL analysis submission.
 
         Args:
-            url: URL to analyze.
+            url: URL to analyze. A missing scheme is normalised to http:// server-side.
             private: If True, submission is private to your workspace.
-            safe_browsing: If True, spawn an isolated safe-browsing session
-                (a sandboxed Chromium pod accessible over noVNC) alongside
-                URL analysis. Default: False.
+            safe_browsing: If True, start an interactive browser session alongside
+                the analysis. Retrieve the viewer link with get_url_analysis_session().
+                Sessions are queued when the workspace is at capacity. Default: False.
+            metafields: URL-analysis metafields. Discover the accepted keys with
+                get_metafields("url"). `timeout` sets the session duration in seconds;
+                `device_preset` selects the emulated device (get_device_presets()).
+            configurations: Per-scan configuration. `networkConfig` selects an egress
+                profile (list_network_configs()); `sessionDurationSeconds` sets the
+                interactive session duration (30-600, clamped by your plan).
 
         Returns:
             SubmissionCreated with the new submission UUID.
         """
-        response = self._http.post(
-            "/submissions/url_analysis",
-            json={"url": url, "private": private, "safeBrowsing": safe_browsing},
-        )
+        payload: dict[str, Any] = {
+            "url": url,
+            "private": private,
+            "safeBrowsing": safe_browsing,
+        }
+        if metafields is not None:
+            payload["metafields"] = metafields
+        if configurations is not None:
+            payload["configurations"] = configurations
+
+        response = self._http.post("/submissions/url_analysis", json=payload)
         return SubmissionCreated.model_validate(response.json())
 
     def create_open_in_browser_submission(
@@ -919,6 +946,70 @@ class ThreatZone:
         response = self._http.get(f"/submissions/{uuid}/url-analysis")
         return UrlAnalysisResponse.model_validate(response.json())
 
+    def get_url_analysis_session(self, uuid: str) -> UrlAnalysisSession:
+        """
+        Get the interactive browser session state and viewer link for a URL submission.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            UrlAnalysisSession. `link` is None until `vnc_available` is True, and
+            again after the session expires. `queue_position` is set only while
+            `state` is "queued".
+        """
+        response = self._http.get(f"/submissions/{uuid}/url-analysis/session")
+        return UrlAnalysisSession.model_validate(response.json())
+
+    def start_url_analysis_session(self, uuid: str) -> Message:
+        """
+        Start an interactive browser session on an existing URL submission.
+
+        The response confirms acceptance only. Poll get_url_analysis_session()
+        for the viewer link. A request over workspace capacity is queued, not
+        rejected. This call consumes no daily submission quota.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            Message acknowledging the request.
+        """
+        response = self._http.post(f"/submissions/{uuid}/url-analysis/session")
+        return Message.model_validate(response.json())
+
+    def restart_url_analysis_session(self, uuid: str) -> Message:
+        """
+        Tear down the current interactive session and start a fresh one.
+
+        The stored session configuration is re-supplied, so the new session keeps
+        the original device and network choice. This call consumes no daily
+        submission quota.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            Message acknowledging the request.
+        """
+        response = self._http.post(f"/submissions/{uuid}/url-analysis/session/restart")
+        return Message.model_validate(response.json())
+
+    def restart_url_analysis(self, uuid: str) -> Message:
+        """
+        Restart a completed or errored URL-analysis report.
+
+        Counts against the concurrent-submission quota.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            Message acknowledging the request.
+        """
+        response = self._http.post(f"/submissions/{uuid}/restart/url_analysis")
+        return Message.model_validate(response.json())
+
     # =========================================================================
     # Network
     # =========================================================================
@@ -1204,29 +1295,35 @@ class ThreatZone:
         response = self._http.get(f"/submissions/{uuid}/screenshot")
         return response.content
 
-    def list_media_files(self, uuid: str) -> list[MediaFile]:
+    def list_media_files(self, uuid: str, *, source: str | None = None) -> list[MediaFile]:
         """
         List available media files (screenshots, videos) for a submission.
 
         Args:
             uuid: Submission UUID.
+            source: Report family to read from: "dynamic" or "url_analysis".
+                Defaults server-side to "dynamic" when the submission has a
+                dynamic report, otherwise "url_analysis".
 
         Returns:
-            List of available media files.
+            List of available media files. Each item carries a `kind` of
+            "video", "screenshot", or None.
         """
-        response = self._http.get(f"/submissions/{uuid}/media")
+        response = self._http.get(f"/submissions/{uuid}/media", params={"source": source})
         return [MediaFile.model_validate(item) for item in response.json()]
 
-    def get_media_file(self, uuid: str, file_id: str) -> bytes:
+    def get_media_file(self, uuid: str, file_id: str, *, source: str | None = None) -> bytes:
         """
         Get a specific media file.
 
         Args:
             uuid: Submission UUID.
             file_id: Media file ID from list_media_files().
+            source: Report family to read from: "dynamic" or "url_analysis".
+                Defaults server-side as described on list_media_files().
 
         Returns:
             Media file content as bytes.
         """
-        response = self._http.get(f"/submissions/{uuid}/media/{file_id}")
+        response = self._http.get(f"/submissions/{uuid}/media/{file_id}", params={"source": source})
         return response.content

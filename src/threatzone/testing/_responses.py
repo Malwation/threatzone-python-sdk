@@ -20,6 +20,7 @@ from threatzone.types import (
     BehavioursResponse,
     CdrResponse,
     Connection,
+    DevicePresetOption,
     DnsQuery,
     EmlAnalysis,
     EnvironmentOption,
@@ -28,6 +29,7 @@ from threatzone.types import (
     IndicatorsResponse,
     IoCsResponse,
     MediaFile,
+    Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
@@ -44,6 +46,7 @@ from threatzone.types import (
     SubmissionListItem,
     SyscallsResponse,
     UrlAnalysisResponse,
+    UrlAnalysisSession,
     UserInfo,
     YaraRulesResponse,
 )
@@ -778,8 +781,158 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
             "threatDetails": [],
         },
         "pages": [state.final_url] if state.final_url else [target_url],
+        "verdictState": "final" if state.current_status() == "completed" else "provisional",
+        "threatScore": _THREAT_SCORE_BY_LEVEL[state.level],
+        "riskLevel": _RISK_LEVEL_BY_LEVEL[state.level],
+        "privacyScore": 35,
+        "privacyRiskLevel": "Medium",
+        "privacyBreakdown": [
+            {
+                "factor": "trackers",
+                "label": "Third-party trackers",
+                "delta": 20,
+                "detail": "5 trackers",
+            }
+        ],
+        "verdictProvenance": {
+            "rawVerdict": state.level,
+            "quorumApplied": False,
+            "allowlistApplied": False,
+            "collectionState": "ok",
+            "pass": "final" if state.current_status() == "completed" else "provisional",
+        },
+        "impersonationTarget": (
+            {
+                "brandName": "PayPal",
+                "canonicalDomain": "paypal.com",
+                "signals": ["favicon_match"],
+                "confidence": "high",
+            }
+            if state.level == "malicious"
+            else None
+        ),
+        "completeness": {
+            "measuredSources": ["dns", "tls", "intel"],
+            "skippedSources": [] if state.session_active() else ["browser"],
+            "unavailableSources": [],
+            "browserCollection": "complete" if state.session_active() else None,
+        },
+        "intelDetections": (
+            [
+                {
+                    "source": "urlhaus",
+                    "detectionType": "malware_url",
+                    "severity": "high",
+                    "details": state.threat_analysis_summary or "listed",
+                }
+            ]
+            if state.level == "malicious"
+            else []
+        ),
+        "metafields": dict(state.metafields) or None,
+        "scoredAt": state.updated_at.isoformat(),
     }
     return UrlAnalysisResponse.model_validate(payload)
+
+
+_THREAT_SCORE_BY_LEVEL: dict[str, int] = {
+    "unknown": 0,
+    "benign": 5,
+    "suspicious": 45,
+    "malicious": 88,
+}
+
+_RISK_LEVEL_BY_LEVEL: dict[str, str] = {
+    "unknown": "Unknown",
+    "benign": "Low",
+    "suspicious": "Medium",
+    "malicious": "Critical",
+}
+
+
+def build_url_analysis_session(state: SubmissionState) -> UrlAnalysisSession:
+    """Build the interactive browser session state for a URL submission."""
+    active = state.session_active()
+    started_at = int(state.created_at.timestamp() * 1000)
+    duration = state.session_duration_seconds or 120
+    payload: dict[str, Any] = {
+        "state": "running" if active else "unavailable",
+        "collectionStatus": "collecting" if active else "unavailable",
+        "recordingStatus": "recording" if active else "unavailable",
+        "queuePosition": None,
+        "vncAvailable": active,
+        "reportAvailable": state.current_status() == "completed",
+        "startedAt": started_at if active else None,
+        "readyAt": started_at + 4000 if active else None,
+        "expiresAt": started_at + duration * 1000 if active else None,
+        "finishedAt": None,
+        "failureCode": None,
+        "extensionsUsed": 0,
+        "extensionsMax": 3,
+        "sessionConfig": (
+            {
+                "deviceProfileId": device_preset_base_key_for(state.session_device_preset_id),
+                "networkConfigId": state.session_network_config_id,
+                "sessionDurationSeconds": state.session_duration_seconds,
+                "devicePresetId": state.session_device_preset_id,
+                "devicePresetName": state.session_device_preset_name,
+            }
+            if active
+            else None
+        ),
+        "link": (f"wss://fake.threat.zone/vnc/{state.uuid}?token=fake-session-token")
+        if active
+        else None,
+        "expired": not active,
+    }
+    return UrlAnalysisSession.model_validate(payload)
+
+
+def build_message(text: str) -> Message:
+    """Build a one-line acknowledgement returned by an action endpoint."""
+    return Message.model_validate({"message": text})
+
+
+DEVICE_PRESETS: list[dict[str, Any]] = [
+    {
+        "id": "68b0000000000000000000a2",
+        "name": "Desktop",
+        "category": "desktop",
+        "baseKey": "desktop-chrome",
+        "default": True,
+    },
+    {
+        "id": "68b0000000000000000000a1",
+        "name": "iPhone 15 Pro",
+        "category": "mobile",
+        "baseKey": "iphone-15-pro",
+        "default": False,
+    },
+]
+
+
+def build_device_presets() -> list[DevicePresetOption]:
+    """Build the device-preset catalog served by /config/device-presets."""
+    return [DevicePresetOption.model_validate(item) for item in DEVICE_PRESETS]
+
+
+def device_preset_name_for(preset_id: str | None) -> str | None:
+    """Resolve a device-preset id to its display name."""
+    return _device_preset_field(preset_id, "name")
+
+
+def device_preset_base_key_for(preset_id: str | None) -> str | None:
+    """Resolve a device-preset id to the base browser profile it derives from."""
+    return _device_preset_field(preset_id, "baseKey")
+
+
+def _device_preset_field(preset_id: str | None, key: str) -> str | None:
+    if preset_id is None:
+        return None
+    for item in DEVICE_PRESETS:
+        if item["id"] == preset_id:
+            return str(item[key])
+    return None
 
 
 def _domain_from_url(url: str) -> str:
@@ -796,6 +949,7 @@ def build_media_files(state: SubmissionState) -> list[MediaFile]:
                 "name": f"{mid}.png",
                 "contentType": "image/png",
                 "size": 68,
+                "kind": "screenshot",
             }
         )
         for mid in state.media_ids

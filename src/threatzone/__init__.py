@@ -39,6 +39,7 @@ from .types import (
     CdrSanitizedFileInfo,
     CdrSanitizedFileInfoDetail,
     Connection,
+    DevicePresetOption,
     DnsQuery,
     EmlAnalysis,
     EnvironmentOption,
@@ -54,6 +55,7 @@ from .types import (
     IoCsResponse,
     LimitsCount,
     MediaFile,
+    Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
@@ -82,6 +84,7 @@ from .types import (
     SyscallsResponse,
     Tag,
     UrlAnalysisResponse,
+    UrlAnalysisSession,
     UserInfo,
     UserInfoDetails,
     WorkspaceBasicInfo,
@@ -118,10 +121,12 @@ __all__ = [
     "FileInfo",
     "Tag",
     "ReportStatus",
+    "Message",
     # Types - Config
     "MetafieldOption",
     "Metafields",
     "EnvironmentOption",
+    "DevicePresetOption",
     # Types - Downloads
     "MediaFile",
     # Types - Indicators
@@ -180,6 +185,7 @@ __all__ = [
     "SignatureCheckResult",
     # Types - URL analysis
     "UrlAnalysisResponse",
+    "UrlAnalysisSession",
     # Types - Submissions
     "SubmissionCreated",
     "SubmissionListItem",

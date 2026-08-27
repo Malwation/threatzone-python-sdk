@@ -118,11 +118,55 @@ def analyse_url(url: str) -> None:
 analyse_url("https://example-phish.test/login")
 ```
 
+**Interactive session and scoring.**
+
+Pass `safe_browsing=True` to run an interactive browser session alongside the analysis.
+Poll `get_url_analysis_session()` for the viewer link, then read the scored report.
+
+```python
+presets = client.get_device_presets()
+mobile = next(p for p in presets if p.category == "mobile")
+
+created = client.create_url_submission(
+    url,
+    private=True,
+    safe_browsing=True,
+    metafields={"timeout": 240, "device_preset": mobile.id},
+    configurations={"networkConfig": "<network-config-id>"},
+)
+
+session = client.get_url_analysis_session(created.uuid)
+if session.state == "queued":
+    print(f"Queued at position {session.queue_position}")
+if session.vnc_available:
+    print(f"Viewer: {session.link}")
+
+client.wait_for_completion(created.uuid, timeout=300)
+report = client.get_url_analysis(created.uuid)
+
+print(f"Score:   {report.threat_score} ({report.risk_level})")
+print(f"Privacy: {report.privacy_score} ({report.privacy_risk_level})")
+if report.impersonation_target is not None:
+    print(f"Brand:   {report.impersonation_target.brand_name}")
+for hit in report.intel_detections:
+    print(f"Intel:   {hit.source} {hit.severity}")
+
+for item in client.list_media_files(created.uuid, source="url_analysis"):
+    print(item.id, item.kind)
+```
+
 **Notes.**
 
 - `screenshot.available` is `True` when a page screenshot is available. Fetch the bytes
   via `client.get_screenshot(uuid)`.
 - `whois` and `ssl_certificate` are both `Optional` &mdash; always null-check.
+- The scoring fields are `None` (or `[]` for `intel_detections`) until scoring finishes.
+- `start_url_analysis_session(uuid)` opens a session on an existing submission.
+  `restart_url_analysis_session(uuid)` gives a clean session with the same configuration.
+  Neither consumes daily submission quota.
+- `restart_url_analysis(uuid)` re-runs the analysis. It counts against the
+  concurrent-submission quota.
+- A session over workspace capacity is queued, not rejected. Read `queue_position`.
 - Use `create_open_in_browser_submission(url, environment="w10_x64")` instead if you
   need the full dynamic + browser capture on top of the URL analysis.
 

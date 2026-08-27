@@ -31,6 +31,7 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"^/config/metafields/(?P<scan_type>[A-Za-z_]+)$"),
     ),
     ("get_environments", re.compile(r"^/config/environments$")),
+    ("get_device_presets", re.compile(r"^/config/device-presets$")),
     ("list_network_configs", re.compile(r"^/v1/network-configs$")),
     ("list_submissions", re.compile(r"^/submissions$")),
     (
@@ -114,6 +115,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/cdr$"),
     ),
     (
+        "get_url_analysis_session",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/session$"),
+    ),
+    (
         "get_url_analysis",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis$"),
     ),
@@ -136,6 +141,18 @@ _ROUTES_POST: list[tuple[str, re.Pattern[str]]] = [
     ("create_cdr", re.compile(r"^/submissions/cdr$")),
     ("create_url_analysis", re.compile(r"^/submissions/url_analysis$")),
     ("create_open_in_browser", re.compile(r"^/submissions/open_in_browser$")),
+    (
+        "restart_url_analysis_session",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/session/restart$"),
+    ),
+    (
+        "start_url_analysis_session",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/session$"),
+    ),
+    (
+        "restart_url_analysis",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/restart/url_analysis$"),
+    ),
 ]
 
 

@@ -81,6 +81,15 @@ class SubmissionState:
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     artifact_ids: list[str] = field(default_factory=list)
     media_ids: list[str] = field(default_factory=list)
+    metafields: dict[str, Any] = field(default_factory=dict)
+    safe_browsing: bool = False
+    session_started: bool = False
+    session_restarts: int = 0
+    report_restarts: int = 0
+    session_device_preset_id: str | None = None
+    session_device_preset_name: str | None = None
+    session_network_config_id: str | None = None
+    session_duration_seconds: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:
@@ -127,3 +136,7 @@ class SubmissionState:
         if report_type in self.report_status_overrides:
             return self.report_status_overrides[report_type]
         return self.current_status()
+
+    def session_active(self) -> bool:
+        """True when an interactive browser session was requested or started."""
+        return self.safe_browsing or self.session_started

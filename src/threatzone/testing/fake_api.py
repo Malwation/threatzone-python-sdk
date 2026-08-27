@@ -34,6 +34,8 @@ from .state import (
 ThreatLevelStr = Literal["unknown", "benign", "suspicious", "malicious"]
 ReportTypeStr = Literal["dynamic", "static", "cdr", "url_analysis"]
 
+_MEDIA_SOURCES: frozenset[str] = frozenset({"dynamic", "url_analysis"})
+
 
 _MIN_PNG = (
     b"\x89PNG\r\n\x1a\n"
@@ -275,6 +277,9 @@ class FakeThreatZoneAPI:
         final_url: str | None = None,
         screenshot_available: bool = True,
         threat_analysis_summary: str = "Phishing kit detected",
+        safe_browsing: bool = False,
+        device_preset_id: str | None = None,
+        session_duration_seconds: int | None = None,
     ) -> None:
         """Seed a URL-submission scenario keyed by its URL string."""
         submission_uuid = _deterministic_uuid(f"url::{url}")
@@ -294,6 +299,10 @@ class FakeThreatZoneAPI:
             threat_analysis_summary=threat_analysis_summary,
             artifact_ids=[f"art-{submission_uuid[:8]}-1"],
             media_ids=[f"media-{submission_uuid[:8]}-1"],
+            safe_browsing=safe_browsing,
+            session_device_preset_id=device_preset_id,
+            session_device_preset_name=_responses.device_preset_name_for(device_preset_id),
+            session_duration_seconds=session_duration_seconds,
         )
         self._url_to_uuid[url] = submission_uuid
         self._states[submission_uuid] = state
@@ -427,6 +436,7 @@ class FakeThreatZoneAPI:
             "get_metafields_all": self._handle_metafields_all,
             "get_metafields_by_type": self._handle_metafields_by_type,
             "get_environments": self._handle_environments,
+            "get_device_presets": self._handle_device_presets,
             "list_network_configs": self._handle_list_network_configs,
             "list_submissions": self._handle_list_submissions,
             "get_submission": self._handle_get_submission,
@@ -465,6 +475,10 @@ class FakeThreatZoneAPI:
             "download_html_report": self._handle_download_html,
             "download_cdr": self._handle_download_cdr,
             "get_url_analysis": self._handle_get_url_analysis,
+            "get_url_analysis_session": self._handle_get_url_analysis_session,
+            "start_url_analysis_session": self._handle_start_url_analysis_session,
+            "restart_url_analysis_session": self._handle_restart_url_analysis_session,
+            "restart_url_analysis": self._handle_restart_url_analysis,
             "get_screenshot": self._handle_get_screenshot,
             "list_media": self._handle_list_media,
             "get_media_file": self._handle_get_media_file,
@@ -565,6 +579,23 @@ class FakeThreatZoneAPI:
             )
         return None
 
+    def _require_url_submission(self, state: SubmissionState) -> httpx.Response | None:
+        """Interactive sessions exist only on URL submissions, report or not."""
+        if state.type != "url":
+            return _error(
+                409,
+                "Conflict",
+                "This submission is not a URL submission, so it has no interactive session.",
+                "URL_ANALYSIS_REPORT_UNAVAILABLE",
+                {
+                    "submissionUuid": state.uuid,
+                    "requiredReport": "url_analysis",
+                    "currentStatus": "not_started",
+                    "availableReports": state.available_reports(),
+                },
+            )
+        return None
+
     def _require_url_analysis(self, state: SubmissionState) -> httpx.Response | None:
         if not state.has_url_analysis_report:
             return _error(
@@ -608,6 +639,10 @@ class FakeThreatZoneAPI:
     def _handle_environments(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         del request, match
         return _json_list(list(_responses.build_environments()))
+
+    def _handle_device_presets(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        del request, match
+        return _json_list(list(_responses.build_device_presets()))
 
     def _handle_list_network_configs(
         self, request: httpx.Request, match: RouteMatch
@@ -758,7 +793,33 @@ class FakeThreatZoneAPI:
         else:
             self.register_url_analysis(url=target_url, verdict="unknown")
             state = self._states[self._url_to_uuid[target_url]]
+        self._apply_url_options(state, payload)
         return _json(_responses.build_submission_created(state), status_code=200)
+
+    @staticmethod
+    def _apply_url_options(state: SubmissionState, payload: dict[str, Any]) -> None:
+        """Record the create-time session options the SDK sent."""
+        metafields = payload.get("metafields")
+        if isinstance(metafields, dict):
+            state.metafields = dict(metafields)
+            preset_id = metafields.get("device_preset")
+            if isinstance(preset_id, str):
+                state.session_device_preset_id = preset_id
+                state.session_device_preset_name = _responses.device_preset_name_for(preset_id)
+            timeout = metafields.get("timeout")
+            if isinstance(timeout, int):
+                state.session_duration_seconds = timeout
+
+        configurations = payload.get("configurations")
+        if isinstance(configurations, dict):
+            network_config = configurations.get("networkConfig")
+            if isinstance(network_config, str):
+                state.session_network_config_id = network_config
+            duration = configurations.get("sessionDurationSeconds")
+            if isinstance(duration, int):
+                state.session_duration_seconds = duration
+
+        state.safe_browsing = payload.get("safeBrowsing") is True
 
     def _handle_create_open_in_browser(
         self, request: httpx.Request, match: RouteMatch
@@ -1195,6 +1256,59 @@ class FakeThreatZoneAPI:
             return guard
         return _json(_responses.build_url_analysis_response(state))
 
+    def _handle_get_url_analysis_session(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_submission(state)
+        if guard is not None:
+            return guard
+        return _json(_responses.build_url_analysis_session(state))
+
+    def _handle_start_url_analysis_session(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_submission(state)
+        if guard is not None:
+            return guard
+        state.session_started = True
+        return _json(_responses.build_message("Interactive browser session start initiated"))
+
+    def _handle_restart_url_analysis_session(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_submission(state)
+        if guard is not None:
+            return guard
+        state.session_started = True
+        state.session_restarts += 1
+        return _json(_responses.build_message("Interactive browser session restart initiated"))
+
+    def _handle_restart_url_analysis(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_analysis(state)
+        if guard is not None:
+            return guard
+        state.report_restarts += 1
+        state.polls_seen = 0
+        return _json(_responses.build_message("URL report restart initiated successfully"))
+
     def _handle_get_screenshot(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
@@ -1205,18 +1319,63 @@ class FakeThreatZoneAPI:
             return guard
         return _binary(_MIN_PNG, "image/png")
 
-    def _handle_list_media(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
+    def _handle_list_media(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
+        source, source_err = self._resolve_media_source(request, state)
+        if source_err is not None:
+            return source_err
+        del source
         return _json_list(list(_responses.build_media_files(state)))
 
-    def _handle_get_media_file(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
+    def _resolve_media_source(
+        self, request: httpx.Request, state: SubmissionState
+    ) -> tuple[str | None, httpx.Response | None]:
+        """Validate the `source` query param against the submission's reports."""
+        requested = self._first(self._query(request), "source")
+        if requested is not None and requested not in _MEDIA_SOURCES:
+            return None, _error(
+                400,
+                "Bad Request",
+                "source is neither dynamic nor url_analysis",
+                "INVALID_QUERY_PARAM",
+                {"param": "source"},
+            )
+
+        if state.has_dynamic_report:
+            available = "dynamic"
+        elif state.has_url_analysis_report:
+            available = "url_analysis"
+        else:
+            return None, _error(
+                409,
+                "Conflict",
+                "The submission has no media-bearing report",
+                "MEDIA_NOT_FOUND",
+                {"submissionUuid": state.uuid},
+            )
+
+        if requested is not None and requested != available:
+            return None, _error(
+                409,
+                "Conflict",
+                f"The submission has no {requested} media",
+                "MEDIA_NOT_FOUND",
+                {"submissionUuid": state.uuid, "source": requested},
+            )
+        return available, None
+
+    def _handle_get_media_file(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
+        source, source_err = self._resolve_media_source(request, state)
+        if source_err is not None:
+            return source_err
+        del source
         file_id = match.params["file_id"]
         if file_id not in state.media_ids:
             return _error(
