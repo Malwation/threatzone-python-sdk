@@ -5,6 +5,7 @@ Mirrors the `url-analysis.response.dto.ts` DTO in the Threat.Zone Public API.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -133,6 +134,97 @@ class UrlAnalysisThreatAnalysis(BaseModel):
     threat_details: list[UrlAnalysisThreatDetailItem] = Field(alias="threatDetails")
 
 
+class UrlAnalysisPrivacyFactor(BaseModel):
+    """One contributor to the privacy risk score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    factor: str
+    label: str
+    delta: int
+    detail: str | None = None
+
+
+class UrlAnalysisVerdictProvenance(BaseModel):
+    """How the final verdict was produced."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    raw_verdict: str = Field(alias="rawVerdict")
+    quorum_applied: bool = Field(alias="quorumApplied")
+    allowlist_applied: bool = Field(alias="allowlistApplied")
+    collection_state: str | None = Field(default=None, alias="collectionState")
+    pass_: str = Field(alias="pass")
+
+
+class UrlAnalysisImpersonationTarget(BaseModel):
+    """Brand the analysed page most likely impersonates."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    brand_name: str = Field(alias="brandName")
+    canonical_domain: str | None = Field(default=None, alias="canonicalDomain")
+    signals: list[str] = Field(default_factory=list)
+    confidence: str
+
+
+class UrlAnalysisCompleteness(BaseModel):
+    """Which sources produced evidence for the score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    measured_sources: list[str] = Field(default_factory=list, alias="measuredSources")
+    skipped_sources: list[str] = Field(default_factory=list, alias="skippedSources")
+    unavailable_sources: list[str] = Field(default_factory=list, alias="unavailableSources")
+    browser_collection: str | None = Field(default=None, alias="browserCollection")
+
+
+class UrlAnalysisIntelDetection(BaseModel):
+    """One threat-intelligence hit recorded during analysis."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str
+    detection_type: str = Field(alias="detectionType")
+    severity: str
+    details: str | None = None
+
+
+class UrlAnalysisSessionConfig(BaseModel):
+    """Device and network selection the interactive session ran with."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    device_profile_id: str | None = Field(default=None, alias="deviceProfileId")
+    network_config_id: str | None = Field(default=None, alias="networkConfigId")
+    session_duration_seconds: int | None = Field(default=None, alias="sessionDurationSeconds")
+    device_preset_id: str | None = Field(default=None, alias="devicePresetId")
+    device_preset_name: str | None = Field(default=None, alias="devicePresetName")
+
+
+class UrlAnalysisSession(BaseModel):
+    """State of the interactive browser session for a URL submission."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: str
+    collection_status: str = Field(alias="collectionStatus")
+    recording_status: str = Field(alias="recordingStatus")
+    queue_position: int | None = Field(default=None, alias="queuePosition")
+    vnc_available: bool = Field(alias="vncAvailable")
+    report_available: bool = Field(alias="reportAvailable")
+    started_at: int | None = Field(default=None, alias="startedAt")
+    ready_at: int | None = Field(default=None, alias="readyAt")
+    expires_at: int | None = Field(default=None, alias="expiresAt")
+    finished_at: int | None = Field(default=None, alias="finishedAt")
+    failure_code: str | None = Field(default=None, alias="failureCode")
+    extensions_used: int = Field(default=0, alias="extensionsUsed")
+    extensions_max: int = Field(default=0, alias="extensionsMax")
+    session_config: UrlAnalysisSessionConfig | None = Field(default=None, alias="sessionConfig")
+    link: str | None = None
+    expired: bool
+
+
 class UrlAnalysisResponse(BaseModel):
     """Full URL analysis report payload."""
 
@@ -151,3 +243,23 @@ class UrlAnalysisResponse(BaseModel):
     extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
     threat_analysis: UrlAnalysisThreatAnalysis | None = Field(default=None, alias="threatAnalysis")
     pages: list[str]
+    verdict_state: str | None = Field(default=None, alias="verdictState")
+    threat_score: int | None = Field(default=None, alias="threatScore")
+    risk_level: str | None = Field(default=None, alias="riskLevel")
+    privacy_score: int | None = Field(default=None, alias="privacyScore")
+    privacy_risk_level: str | None = Field(default=None, alias="privacyRiskLevel")
+    privacy_breakdown: list[UrlAnalysisPrivacyFactor] | None = Field(
+        default=None, alias="privacyBreakdown"
+    )
+    verdict_provenance: UrlAnalysisVerdictProvenance | None = Field(
+        default=None, alias="verdictProvenance"
+    )
+    impersonation_target: UrlAnalysisImpersonationTarget | None = Field(
+        default=None, alias="impersonationTarget"
+    )
+    completeness: UrlAnalysisCompleteness | None = None
+    intel_detections: list[UrlAnalysisIntelDetection] = Field(
+        default_factory=list, alias="intelDetections"
+    )
+    metafields: dict[str, Any] | None = None
+    scored_at: datetime | None = Field(default=None, alias="scoredAt")

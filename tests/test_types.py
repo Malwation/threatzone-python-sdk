@@ -26,6 +26,7 @@ from threatzone.types import (
     CdrResponse,
     Connection,
     ConnectionPackets,
+    DevicePresetOption,
     DnsQuery,
     EmlAnalysis,
     EmlAnalysisAttachment,
@@ -44,6 +45,7 @@ from threatzone.types import (
     IoCsResponse,
     LimitsCount,
     MediaFile,
+    Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
@@ -72,6 +74,7 @@ from threatzone.types import (
     SyscallsResponse,
     Tag,
     UrlAnalysisResponse,
+    UrlAnalysisSession,
     UserInfo,
     UserInfoDetails,
     WorkspaceBasicInfo,
@@ -705,13 +708,143 @@ class TestUrlAnalysisTypes:
         second = UrlAnalysisResponse.model_validate(dumped)
         assert second.general_info.url == first.general_info.url
 
+    def test_url_analysis_response_keeps_the_scoring_fields(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert report.threat_score == 72
+        assert report.risk_level == "High"
+        assert report.verdict_state == "final"
+        assert report.privacy_score == 35
+        assert report.privacy_risk_level == "Medium"
+        assert report.privacy_breakdown is not None
+        assert report.privacy_breakdown[0].factor == "trackers"
+        assert report.privacy_breakdown[0].delta == 20
+        assert report.verdict_provenance is not None
+        assert report.verdict_provenance.raw_verdict == "malicious"
+        assert report.verdict_provenance.quorum_applied is False
+        assert report.verdict_provenance.pass_ == "final"
+        assert report.impersonation_target is not None
+        assert report.impersonation_target.brand_name == "PayPal"
+        assert report.impersonation_target.canonical_domain == "paypal.com"
+        assert report.completeness is not None
+        assert report.completeness.measured_sources == ["dns", "tls", "intel"]
+        assert report.completeness.browser_collection == "partial"
+        assert report.intel_detections[0].source == "urlhaus"
+        assert report.intel_detections[0].detection_type == "malware_url"
+        assert report.metafields == {"timeout": 240, "record_session": True}
+        assert report.scored_at is not None
+
+    def test_url_analysis_response_tolerates_an_unscored_report(self) -> None:
+        report = UrlAnalysisResponse.model_validate(
+            {
+                "level": "unknown",
+                "status": "completed",
+                "generalInfo": {"url": "https://x", "domain": "x", "websiteTitle": None},
+                "screenshot": {"available": False},
+                "dnsRecords": [],
+                "pages": [],
+            }
+        )
+        assert report.threat_score is None
+        assert report.risk_level is None
+        assert report.verdict_provenance is None
+        assert report.impersonation_target is None
+        assert report.completeness is None
+        assert report.intel_detections == []
+        assert report.metafields is None
+        assert report.scored_at is None
+
+    def test_url_analysis_scoring_round_trip(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        first = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        dumped = first.model_dump(by_alias=True)
+        assert "threatScore" in dumped
+        assert "verdictProvenance" in dumped
+        assert dumped["verdictProvenance"]["pass"] == "final"
+        assert "intelDetections" in dumped
+        second = UrlAnalysisResponse.model_validate(dumped)
+        assert second.threat_score == first.threat_score
+
+
+class TestUrlAnalysisSessionTypes:
+    def test_url_analysis_session(self, url_analysis_session_payload: dict[str, Any]) -> None:
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.state == "running"
+        assert session.collection_status == "collecting"
+        assert session.recording_status == "recording"
+        assert session.queue_position is None
+        assert session.vnc_available is True
+        assert session.report_available is False
+        assert session.started_at == 1756288800000
+        assert session.ready_at == 1756288805000
+        assert session.expires_at == 1756288920000
+        assert session.finished_at is None
+        assert session.failure_code is None
+        assert session.extensions_used == 0
+        assert session.extensions_max == 3
+        assert session.link == "wss://gateway.example/?token=abc"
+        assert session.expired is False
+        assert session.session_config is not None
+        assert session.session_config.device_profile_id == "iphone-15-pro"
+        assert session.session_config.network_config_id is None
+        assert session.session_config.session_duration_seconds == 240
+        assert session.session_config.device_preset_id == "68b0000000000000000000a1"
+
+    def test_url_analysis_session_without_config(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_session_payload["sessionConfig"] = None
+        url_analysis_session_payload["link"] = None
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.session_config is None
+        assert session.link is None
+
+    def test_url_analysis_session_round_trip(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        first = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        dumped = first.model_dump(by_alias=True)
+        assert "vncAvailable" in dumped
+        assert "sessionConfig" in dumped
+        second = UrlAnalysisSession.model_validate(dumped)
+        assert second.state == first.state
+
 
 # ---------------------------------------------------------------------------
 # Config / downloads / me
 # ---------------------------------------------------------------------------
 
 
+class TestMessageType:
+    def test_message(self) -> None:
+        msg = Message.model_validate({"message": "URL report restart initiated successfully"})
+        assert msg.message == "URL report restart initiated successfully"
+
+    def test_message_missing_field_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            Message.model_validate({})
+
+
 class TestConfigTypes:
+    def test_device_preset_option(self, device_presets_payload: list[dict[str, Any]]) -> None:
+        preset = DevicePresetOption.model_validate(device_presets_payload[1])
+        assert preset.id == "68b0000000000000000000a1"
+        assert preset.name == "iPhone 15 Pro"
+        assert preset.category == "mobile"
+        assert preset.base_key == "iphone-15-pro"
+        assert preset.default is False
+
+    def test_device_preset_option_round_trip(
+        self, device_presets_payload: list[dict[str, Any]]
+    ) -> None:
+        first = DevicePresetOption.model_validate(device_presets_payload[0])
+        dumped = first.model_dump(by_alias=True)
+        assert "baseKey" in dumped
+        second = DevicePresetOption.model_validate(dumped)
+        assert second.base_key == first.base_key
+
     def test_metafield_option(self, sample_metafields: dict[str, list[dict[str, Any]]]) -> None:
         opt = MetafieldOption.model_validate(sample_metafields["sandbox"][0])
         assert opt.key == "timeout"
@@ -753,6 +886,16 @@ class TestDownloadTypes:
         first = MediaFile.model_validate(sample_media_files[0])
         dumped = first.model_dump(by_alias=True)
         assert "contentType" in dumped
+
+    def test_media_file_kind(self, sample_media_files: list[dict[str, Any]]) -> None:
+        screenshot = MediaFile.model_validate(sample_media_files[0])
+        video = MediaFile.model_validate(sample_media_files[1])
+        assert screenshot.kind == "screenshot"
+        assert video.kind == "video"
+
+    def test_media_file_kind_defaults_to_none(self) -> None:
+        media = MediaFile.model_validate({"id": "report.txt", "name": "report.txt"})
+        assert media.kind is None
 
 
 class TestMeTypes:

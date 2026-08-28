@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MetafieldOptionValue(BaseModel):
@@ -55,3 +55,15 @@ class EnvironmentOption(BaseModel):
     default: bool
     active: bool
     accessible: bool
+
+
+class DevicePresetOption(BaseModel):
+    """A browser device preset selectable for the interactive session."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    name: str
+    category: str
+    base_key: str = Field(alias="baseKey")
+    default: bool = False

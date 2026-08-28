@@ -97,6 +97,32 @@ def seed_phishing_url(fake: FakeThreatZoneAPI, *, url: str = "https://phishing.e
     return url
 
 
+def seed_interactive_url_session(
+    fake: FakeThreatZoneAPI,
+    *,
+    url: str = "https://interactive.example.com",
+    device_preset_id: str = "68b0000000000000000000a1",
+    session_duration_seconds: int = 240,
+) -> str:
+    """Seed a URL submission that already runs an interactive browser session.
+
+    ``GET /submissions/{uuid}/url-analysis/session`` reports ``state == "running"``
+    and returns a viewer link.
+    """
+    fake.register_url_analysis(
+        url=url,
+        verdict="suspicious",
+        advance_after_polls=1,
+        final_url=url,
+        screenshot_available=True,
+        threat_analysis_summary="Credential harvesting form",
+        safe_browsing=True,
+        device_preset_id=device_preset_id,
+        session_duration_seconds=session_duration_seconds,
+    )
+    return url
+
+
 def seed_static_only_submission(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> str:
     """Seed a submission with ONLY a static report. Dynamic/CDR endpoints
     return ``409 DYNAMIC_REPORT_UNAVAILABLE``/``CDR_REPORT_UNAVAILABLE``."""

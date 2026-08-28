@@ -134,7 +134,7 @@ peer report type to dynamic/static/cdr &mdash; it is guarded separately by
 
 | Type | Purpose |
 |------|---------|
-| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file`, optional `threat_analysis`, `pages`. |
+| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file`, optional `threat_analysis`, `pages`, plus the scoring fields `verdict_state`, `threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`, `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`, `metafields`, `scored_at`. |
 | `UrlAnalysisGeneralInfo` | `{url, domain, website_title}`. |
 | `UrlAnalysisScreenshot` | `{available: bool}`. Fetch actual bytes with `client.get_screenshot(uuid)`. |
 | `UrlAnalysisIpInfo` | `{ip, asn, city, country, isp, organization, threat_status}`. |
@@ -146,10 +146,20 @@ peer report type to dynamic/static/cdr &mdash; it is guarded separately by
 | `UrlAnalysisThreatAnalysis` | `{overview, blacklist, threat_details}`. |
 | `UrlAnalysisThreatOverviewItem` | `{source, title, description, verdict}`. Per-intel-source verdict. |
 | `UrlAnalysisThreatDetailItem` | `{source, details}`. Per-intel-source raw detail payload. |
+| `UrlAnalysisPrivacyFactor` | `{factor, label, delta, detail}`. One contributor to the privacy score. |
+| `UrlAnalysisVerdictProvenance` | `{raw_verdict, quorum_applied, allowlist_applied, collection_state, pass_}`. How the verdict was produced. `pass_` maps to the wire field `pass`. |
+| `UrlAnalysisImpersonationTarget` | `{brand_name, canonical_domain, signals, confidence}`. Brand the page most likely impersonates. |
+| `UrlAnalysisCompleteness` | `{measured_sources, skipped_sources, unavailable_sources, browser_collection}`. Which sources produced evidence. |
+| `UrlAnalysisIntelDetection` | `{source, detection_type, severity, details}`. One threat-intelligence hit. |
+| `UrlAnalysisSession` | Interactive browser session state: `state`, `collection_status`, `recording_status`, `queue_position`, `vnc_available`, `report_available`, `started_at`, `ready_at`, `expires_at`, `finished_at`, `failure_code`, `extensions_used`, `extensions_max`, `session_config`, `link`, `expired`. Returned by `get_url_analysis_session()`. |
+| `UrlAnalysisSessionConfig` | `{device_profile_id, network_config_id, session_duration_seconds, device_preset_id, device_preset_name}`. Device and network choice the session runs with. |
 
 `UrlAnalysisResponse.level` is `ThreatLevel`, shared with submission level. Everything
 `Optional` is intentional &mdash; a submission may have no WHOIS (e.g. raw-IP URL), no TLS
 cert (plain HTTP), etc.
+
+The scoring fields are `None` (or `[]` for `intel_detections`) until scoring finishes.
+Read them after the report reaches `completed`.
 
 ---
 
@@ -222,6 +232,7 @@ Types shared across multiple surfaces.
 | `FileEntrypoint` | `{filename}`. Entrypoint inside an archive submission. |
 | `Tag` | `{type, value}`. |
 | `ReportStatus` | Per-report state &mdash; see Submissions section. |
+| `Message` | `{message}`. One-line acknowledgement returned by an action endpoint. |
 | `ReportOperatingSystem` | `{name, platform}`. `platform` is one of `windows`/`linux`/`android`/`macos`. |
 | `ThreatLevel` | Literal union: `unknown` / `benign` / `suspicious` / `malicious`. |
 | `ReportType` | Literal union: `dynamic` / `static` / `cdr` / `url_analysis` / `open_in_browser`. |
@@ -237,7 +248,8 @@ Types shared across multiple surfaces.
 | `Metafields` | Metafields grouped by scan type: `sandbox`, `static`, `cdr`, `url`, `open_in_browser`. | `GET /config/metafields` |
 | `MetafieldOption` | Single metafield: `key`, `label`, `description`, `type`, `default`, optional `options`. | same |
 | `EnvironmentOption` | `{key, name, platform, default}`. One available OS environment. | `GET /config/environments` |
-| `MediaFile` | `{id, name, content_type, size}`. | `GET /submissions/:uuid/media` |
+| `DevicePresetOption` | `{id, name, category, base_key, default}`. One selectable browser device preset. Pass `id` as the `device_preset` metafield. | `GET /config/device-presets` |
+| `MediaFile` | `{id, name, content_type, size, kind}`. `kind` is `"video"`, `"screenshot"`, or `None`. | `GET /submissions/:uuid/media` |
 
 Download endpoints return `DownloadResponse` (sync) or `AsyncDownloadResponse` (async)
 from `threatzone._streaming`. Both are context managers; both expose `filename`,

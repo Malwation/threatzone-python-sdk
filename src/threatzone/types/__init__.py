@@ -7,6 +7,7 @@ from .common import (
     FileInfo,
     FileSource,
     Hashes,
+    Message,
     OperatingSystemPlatform,
     ReportOperatingSystem,
     ReportStatus,
@@ -16,6 +17,7 @@ from .common import (
     ThreatLevel,
 )
 from .config import (
+    DevicePresetOption,
     EnvironmentOption,
     MetafieldOption,
     Metafields,
@@ -110,17 +112,24 @@ from .submissions import (
 )
 from .syscalls import SyscallsResponse
 from .url_analysis import (
+    UrlAnalysisCompleteness,
     UrlAnalysisDnsRecord,
     UrlAnalysisExtractedFile,
     UrlAnalysisGeneralInfo,
+    UrlAnalysisImpersonationTarget,
+    UrlAnalysisIntelDetection,
     UrlAnalysisIpInfo,
+    UrlAnalysisPrivacyFactor,
     UrlAnalysisResponse,
     UrlAnalysisScreenshot,
+    UrlAnalysisSession,
+    UrlAnalysisSessionConfig,
     UrlAnalysisSslCertificate,
     UrlAnalysisThreatAnalysis,
     UrlAnalysisThreatDetailItem,
     UrlAnalysisThreatOverviewItem,
     UrlAnalysisThreatStatus,
+    UrlAnalysisVerdictProvenance,
     UrlAnalysisWhoisInfo,
 )
 
@@ -130,6 +139,7 @@ __all__ = [
     "FileInfo",
     "FileSource",
     "Hashes",
+    "Message",
     "OperatingSystemPlatform",
     "ReportOperatingSystem",
     "ReportStatus",
@@ -141,6 +151,7 @@ __all__ = [
     "ApiError",
     "ApiErrorCode",
     # Config
+    "DevicePresetOption",
     "EnvironmentOption",
     "MetafieldOption",
     "Metafields",
@@ -229,17 +240,24 @@ __all__ = [
     "SignatureCheckResponse",
     "SignatureCheckResult",
     # URL analysis
+    "UrlAnalysisCompleteness",
     "UrlAnalysisDnsRecord",
     "UrlAnalysisExtractedFile",
     "UrlAnalysisGeneralInfo",
+    "UrlAnalysisImpersonationTarget",
+    "UrlAnalysisIntelDetection",
     "UrlAnalysisIpInfo",
+    "UrlAnalysisPrivacyFactor",
     "UrlAnalysisResponse",
     "UrlAnalysisScreenshot",
+    "UrlAnalysisSession",
+    "UrlAnalysisSessionConfig",
     "UrlAnalysisSslCertificate",
     "UrlAnalysisThreatAnalysis",
     "UrlAnalysisThreatDetailItem",
     "UrlAnalysisThreatOverviewItem",
     "UrlAnalysisThreatStatus",
+    "UrlAnalysisVerdictProvenance",
     "UrlAnalysisWhoisInfo",
     # Submissions
     "PaginatedSubmissions",

@@ -14,3 +14,4 @@ class MediaFile(BaseModel):
     name: str
     content_type: str | None = Field(default=None, alias="contentType")
     size: int | None = None
+    kind: str | None = None

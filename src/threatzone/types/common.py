@@ -14,6 +14,14 @@ ThreatLevel = Literal["unknown", "benign", "suspicious", "malicious"]
 OperatingSystemPlatform = Literal["windows", "linux", "android", "macos"]
 
 
+class Message(BaseModel):
+    """A one-line acknowledgement returned by an action endpoint."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str
+
+
 class Hashes(BaseModel):
     """File hash values."""
 
