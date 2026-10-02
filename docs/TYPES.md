@@ -80,7 +80,9 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 - `Artifact.type` is `ArtifactType` (14-value literal including `sample`, `dropped_file`,
   `memory_dump`, `pcap`, `yara_rule`, &hellip;).
 - `OverviewSummary.network` is `Optional` &mdash; `None` on submissions without a
-  completed dynamic report.
+  completed dynamic report. `OverviewSummary.network` also carries `counts_available`,
+  `availability` and `source_scope` (same types as `NetworkSummary`). When `counts_available`
+  is `False` the counts are 0 and do not mean the sample had no network activity.
 
 Cross-references: `Indicator.pids` points at `Process.pid` (see Dynamic Scan), 
 `Indicator.attack_codes` at `MitreResponse.techniques`, `Indicator.syscall_line_numbers`
@@ -122,7 +124,7 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 - `DnsQuery.type` is `DnsRecordType` (16-value literal: `A`, `AAAA`, `CNAME`, `MX`, &hellip;).
 - `DnsQuery.status` is `DnsStatus` (DNS RCODE literal, e.g. `NOERROR`, `NXDOMAIN`, `TIMEOUT`).
 - `NetworkAvailability.state` is `NetworkAvailabilityState` (`disabled`, `unavailable`, `verified_zero`, `observed`); `coverage` is `NetworkCoverage` (`none`, `partial`, `complete`). When `NetworkSummary.counts_available` is `False`, all counts are 0 and do not mean the sample had no network activity.
-- `source_scope` is `NetworkSourceScope` (`sample_attributed`, `submission_ip_scoped`, `submission_unattributed`, `none`) or `None` on legacy reports. Unknown values from a newer server are kept as plain strings. Unknown values from a newer server are kept as plain strings.
+- `source_scope` is `NetworkSourceScope` (`sample_attributed`, `submission_ip_scoped`, `submission_unattributed`, `none`) or `None` on legacy reports. Unknown values from a newer server are kept as plain strings.
 - The list endpoints send the `X-Network-Evidence-Availability` response header on Windows V2. The `get_*` list methods return plain lists, so the SDK does not surface it. Read `get_network_summary().availability` instead.
 - `Connection.protocol` is `ConnectionProtocol = Literal["tcp", "udp"]`.
 - `NetworkThreat.protocol` is `ThreatProtocol = Literal["TCP", "UDP"]` (uppercase!).

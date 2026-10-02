@@ -433,6 +433,66 @@ class TestIndicatorsSurfaceTypes:
         summary = OverviewSummary.model_validate(sample_overview_summary)
         assert summary.network is None
 
+    def test_overview_summary_network_v2_unavailable(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        sample_overview_summary["network"] = {
+            "dnsCount": 0,
+            "httpCount": 0,
+            "tcpCount": 0,
+            "udpCount": 0,
+            "threatCount": 0,
+            "countsAvailable": False,
+            "availability": {
+                "state": "unavailable",
+                "reason": "capture_unavailable",
+                "coverage": "none",
+            },
+            "sourceScope": "none",
+        }
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.dns_count == 0
+        assert network.counts_available is False
+        assert network.availability == NetworkAvailability(
+            state="unavailable", reason="capture_unavailable", coverage="none"
+        )
+        assert network.source_scope == "none"
+
+    def test_overview_summary_network_legacy_has_no_availability(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.dns_count == 15
+        assert network.counts_available is None
+        assert network.availability is None
+        assert network.source_scope is None
+
+    def test_overview_summary_network_explicit_null_and_unknown_values(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        sample_overview_summary["network"].update(
+            {"countsAvailable": None, "availability": None, "sourceScope": None}
+        )
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.counts_available is None
+        assert network.availability is None
+        assert network.source_scope is None
+
+        sample_overview_summary["network"].update(
+            {
+                "availability": {"state": "future_state", "reason": None, "coverage": "future_cov"},
+                "sourceScope": "future_scope",
+            }
+        )
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.availability is not None
+        assert network.availability.state == "future_state"
+        assert network.source_scope == "future_scope"
+
     def test_overview_summary_round_trip(self, sample_overview_summary: dict[str, Any]) -> None:
         first = OverviewSummary.model_validate(sample_overview_summary)
         dumped = first.model_dump(by_alias=True)

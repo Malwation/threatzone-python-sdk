@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Indicator.score_maximum` (`10` legacy, `100` Windows V2) gives the scale of `Indicator.score`.
 - `NetworkSummary` adds `counts_available`, `availability` (new `NetworkAvailability` model
   with `state`, `reason`, `coverage`) and `source_scope`. `DnsQuery`, `HttpRequest`,
-  `Connection` and `NetworkThreat` add `source_scope`. Legacy reports send `counts_available=True`, `availability=None` and `source_scope=None`. Every new field is `None` when an older server omits it. Enum-like fields accept unknown values, so a new server value does not fail the call. Enum-like fields accept unknown values, so a new server value does not fail the call.
+  `Connection` and `NetworkThreat` add `source_scope`. Legacy reports send `counts_available=True`, `availability=None` and `source_scope=None`. Every new field is `None` when an older server omits it. Enum-like fields accept unknown values, so a new server value does not fail the call.
+  `SummaryNetwork` (`OverviewSummary.network`) adds the same three fields.
   The `X-Network-Evidence-Availability` header of the list endpoints is not exposed, because
   the list methods return plain lists. Use `get_network_summary().availability`.
 - `create_url_submission()` accepts `metafields` and `configurations`. Use
