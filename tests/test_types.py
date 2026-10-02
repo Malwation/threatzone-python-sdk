@@ -50,6 +50,7 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     ModuleInfo,
+    NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
     NetworkSummary,
@@ -285,6 +286,18 @@ class TestIndicatorsSurfaceTypes:
         assert ind.syscall_line_numbers == [12, 100]
         assert ind.author == "system"
 
+    def test_indicator_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        v2 = Indicator.model_validate({**sample_indicator, "score": 45, "scoreMaximum": 100})
+        assert v2.score == 45
+        assert v2.score_maximum == 100
+        legacy = Indicator.model_validate({**sample_indicator, "scoreMaximum": 10})
+        assert legacy.score_maximum == 10
+
+    def test_indicator_without_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.score_maximum is None
+        assert ind.score == sample_indicator["score"]
+
     def test_indicator_category_is_list(self, sample_indicator: dict[str, Any]) -> None:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.category == ["evasion", "persistence"]
@@ -434,6 +447,71 @@ class TestNetworkTypes:
         s = NetworkSummary.model_validate(sample_network_summary)
         assert s.dns_count == 15
         assert s.pcap_available is True
+
+    def test_network_summary_v2_unavailable(self, sample_network_summary: dict[str, Any]) -> None:
+        payload = {
+            **sample_network_summary,
+            "pcapAvailable": False,
+            "countsAvailable": False,
+            "availability": {
+                "state": "unavailable",
+                "reason": "capture_unavailable",
+                "coverage": "none",
+            },
+            "sourceScope": "none",
+        }
+        s = NetworkSummary.model_validate(payload)
+        assert s.counts_available is False
+        assert s.availability == NetworkAvailability(
+            state="unavailable", reason="capture_unavailable", coverage="none"
+        )
+        assert s.source_scope == "none"
+        assert s.pcap_available is False
+
+    def test_network_summary_legacy_has_no_availability(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        s = NetworkSummary.model_validate(sample_network_summary)
+        assert s.counts_available is None
+        assert s.availability is None
+        assert s.source_scope is None
+        assert s.dns_count == 15
+        assert s.pcap_available is True
+
+    def test_network_summary_legacy_explicit_nulls(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        payload = {
+            **sample_network_summary,
+            "countsAvailable": True,
+            "availability": None,
+            "sourceScope": None,
+        }
+        s = NetworkSummary.model_validate(payload)
+        assert s.counts_available is True
+        assert s.availability is None
+
+    def test_network_availability_null_reason(self) -> None:
+        a = NetworkAvailability.model_validate(
+            {"state": "observed", "reason": None, "coverage": "complete"}
+        )
+        assert a.reason is None
+
+    def test_list_rows_source_scope(
+        self,
+        sample_dns_query: dict[str, Any],
+        sample_http_request: dict[str, Any],
+        sample_network_threat: dict[str, Any],
+    ) -> None:
+        assert DnsQuery.model_validate(sample_dns_query).source_scope is None
+        dns = DnsQuery.model_validate({**sample_dns_query, "sourceScope": "sample_attributed"})
+        assert dns.source_scope == "sample_attributed"
+        http = HttpRequest.model_validate(
+            {**sample_http_request, "sourceScope": "submission_ip_scoped"}
+        )
+        assert http.source_scope == "submission_ip_scoped"
+        threat = NetworkThreat.model_validate({**sample_network_threat, "sourceScope": "none"})
+        assert threat.source_scope == "none"
 
     def test_network_summary_round_trip(self, sample_network_summary: dict[str, Any]) -> None:
         first = NetworkSummary.model_validate(sample_network_summary)

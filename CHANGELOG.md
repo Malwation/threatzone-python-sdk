@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Indicator.score_maximum` (`10` legacy, `100` Windows V2) gives the scale of `Indicator.score`.
+- `NetworkSummary` adds `counts_available`, `availability` (new `NetworkAvailability` model
+  with `state`, `reason`, `coverage`) and `source_scope`. `DnsQuery`, `HttpRequest`,
+  `Connection` and `NetworkThreat` add `source_scope`. All are `None` for legacy payloads.
+  The `X-Network-Evidence-Availability` header of the list endpoints is not exposed, because
+  the list methods return plain lists. Use `get_network_summary().availability`.
 - `create_url_submission()` accepts `metafields` and `configurations`. Use
   `metafields={"timeout": ..., "device_preset": ...}` to set the interactive session
   duration and the emulated device. Use

@@ -55,6 +55,25 @@ ThreatProtocol = Literal["TCP", "UDP"]
 ThreatAppProto = Literal["HTTP", "TLS", "DNS"]
 ThreatSeverity = Literal["high", "low"]
 
+NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"]
+NetworkCoverage = Literal["none", "partial", "complete"]
+NetworkSourceScope = Literal[
+    "sample_attributed",
+    "submission_ip_scoped",
+    "submission_unattributed",
+    "none",
+]
+
+
+class NetworkAvailability(BaseModel):
+    """Network evidence state of a Windows V2 report."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: NetworkAvailabilityState
+    reason: str | None = None
+    coverage: NetworkCoverage
+
 
 class NetworkSummary(BaseModel):
     """Summary of network activity captured during dynamic analysis."""
@@ -67,6 +86,9 @@ class NetworkSummary(BaseModel):
     udp_count: int = Field(alias="udpCount")
     threat_count: int = Field(alias="threatCount")
     pcap_available: bool = Field(alias="pcapAvailable")
+    counts_available: bool | None = Field(default=None, alias="countsAvailable")
+    availability: NetworkAvailability | None = None
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
 class DnsQuery(BaseModel):
@@ -80,6 +102,7 @@ class DnsQuery(BaseModel):
     status: DnsStatus
     records: list[str]
     timeshift: float
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
 class HttpRequest(BaseModel):
@@ -92,6 +115,7 @@ class HttpRequest(BaseModel):
     ip: str
     port: int
     country: str | None = None
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
 class ConnectionPackets(BaseModel):
@@ -118,6 +142,7 @@ class Connection(BaseModel):
     country: str | None = None
     packets: ConnectionPackets
     timeshift: float
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
 class NetworkThreatTls(BaseModel):
@@ -149,3 +174,4 @@ class NetworkThreat(BaseModel):
     metadata: dict[str, list[str]]
     details: dict[str, str | int]
     tls: NetworkThreatTls | None = None
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")

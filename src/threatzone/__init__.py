@@ -60,6 +60,7 @@ from .types import (
     Metafields,
     MitreResponse,
     ModuleInfo,
+    NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
     NetworkSummary,
@@ -155,6 +156,7 @@ __all__ = [
     "SubmissionLimits",
     "ModuleInfo",
     # Types - Network
+    "NetworkAvailability",
     "NetworkSummary",
     "DnsQuery",
     "HttpRequest",

@@ -36,6 +36,7 @@ class Indicator(BaseModel):
     category: list[str]
     level: IndicatorLevel
     score: int
+    score_maximum: Literal[10, 100] | None = Field(default=None, alias="scoreMaximum")
     pids: list[int]
     attack_codes: list[str] = Field(alias="attackCodes")
     event_ids: list[int] = Field(alias="eventIds")
