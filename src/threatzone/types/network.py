@@ -55,14 +55,17 @@ ThreatProtocol = Literal["TCP", "UDP"]
 ThreatAppProto = Literal["HTTP", "TLS", "DNS"]
 ThreatSeverity = Literal["high", "low"]
 
-NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"]
-NetworkCoverage = Literal["none", "partial", "complete"]
-NetworkSourceScope = Literal[
-    "sample_attributed",
-    "submission_ip_scoped",
-    "submission_unattributed",
-    "none",
-]
+NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"] | str
+NetworkCoverage = Literal["none", "partial", "complete"] | str
+NetworkSourceScope = (
+    Literal[
+        "sample_attributed",
+        "submission_ip_scoped",
+        "submission_unattributed",
+        "none",
+    ]
+    | str
+)
 
 
 class NetworkAvailability(BaseModel):

@@ -74,7 +74,7 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 
 - `Indicator.level` is `IndicatorLevel = Literal["malicious", "suspicious", "benign"]`.
 - `Indicator.author` is `Literal["system", "user"]`.
-- `Indicator.score_maximum` is `Literal[10, 100] | None`: the scale of `score` (10 legacy, 100 Windows V2). `None` when the API does not send it. Divide `score` by `score_maximum` before comparing rows from different scales.
+- `Indicator.score_maximum` is `int | None`: the scale of `score` (10 legacy, 100 Windows V2). `None` when the API does not send it. Divide `score` by `score_maximum` before comparing rows from different scales.
 - `IoC.type` is `IoCType = Literal["ip", "domain", "url", "email", "sha512", "sha256", "sha1", "md5", "registry", "path", "uuid"]`.
 - `YaraRule.category` is `YaraRuleCategory = Literal["malicious", "suspicious", "benign"]`.
 - `Artifact.type` is `ArtifactType` (14-value literal including `sample`, `dropped_file`,
@@ -108,7 +108,7 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 | `BehavioursResponse` | `{items, total, page, limit, total_pages}`. | same |
 | `BehaviourOs` | Deprecated compatibility alias; the endpoint derives the OS from the submission. | same |
 | `SyscallsResponse` | `{items: List[str], total}`. `items` are raw unparsed log lines. | `GET /submissions/:uuid/syscalls` |
-| `NetworkSummary` | `{dns_count, http_count, tcp_count, udp_count, threat_count, pcap_available, counts_available, availability, source_scope}`. The last three are `None` on legacy reports. | `GET /submissions/:uuid/network/summary` |
+| `NetworkSummary` | `{dns_count, http_count, tcp_count, udp_count, threat_count, pcap_available, counts_available, availability, source_scope}`. Legacy reports send `counts_available=True`, `availability=None`, `source_scope=None`; all three are `None` when an older server omits them. | `GET /submissions/:uuid/network/summary` |
 | `NetworkAvailability` | `{state, reason, coverage}`. Network evidence state of a Windows V2 report. | nested in `NetworkSummary` |
 | `DnsQuery` | `{id, host, type, status, records, timeshift, source_scope}`. | `GET /submissions/:uuid/network/dns` |
 | `HttpRequest` | `{id, host, ip, port, country, source_scope}` &mdash; slimmed-down shape, no method/URL/headers. | `GET /submissions/:uuid/network/http` |
@@ -122,7 +122,7 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 - `DnsQuery.type` is `DnsRecordType` (16-value literal: `A`, `AAAA`, `CNAME`, `MX`, &hellip;).
 - `DnsQuery.status` is `DnsStatus` (DNS RCODE literal, e.g. `NOERROR`, `NXDOMAIN`, `TIMEOUT`).
 - `NetworkAvailability.state` is `NetworkAvailabilityState` (`disabled`, `unavailable`, `verified_zero`, `observed`); `coverage` is `NetworkCoverage` (`none`, `partial`, `complete`). When `NetworkSummary.counts_available` is `False`, all counts are 0 and do not mean the sample had no network activity.
-- `source_scope` is `NetworkSourceScope` (`sample_attributed`, `submission_ip_scoped`, `submission_unattributed`, `none`) or `None` on legacy reports.
+- `source_scope` is `NetworkSourceScope` (`sample_attributed`, `submission_ip_scoped`, `submission_unattributed`, `none`) or `None` on legacy reports. Unknown values from a newer server are kept as plain strings. Unknown values from a newer server are kept as plain strings.
 - The list endpoints send the `X-Network-Evidence-Availability` response header on Windows V2. The `get_*` list methods return plain lists, so the SDK does not surface it. Read `get_network_summary().availability` instead.
 - `Connection.protocol` is `ConnectionProtocol = Literal["tcp", "udp"]`.
 - `NetworkThreat.protocol` is `ThreatProtocol = Literal["TCP", "UDP"]` (uppercase!).

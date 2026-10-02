@@ -293,6 +293,10 @@ class TestIndicatorsSurfaceTypes:
         legacy = Indicator.model_validate({**sample_indicator, "scoreMaximum": 10})
         assert legacy.score_maximum == 10
 
+    def test_indicator_unknown_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate({**sample_indicator, "scoreMaximum": 1000})
+        assert ind.score_maximum == 1000
+
     def test_indicator_without_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.score_maximum is None
@@ -490,6 +494,24 @@ class TestNetworkTypes:
         s = NetworkSummary.model_validate(payload)
         assert s.counts_available is True
         assert s.availability is None
+
+    def test_unknown_enum_values_parse(
+        self,
+        sample_network_summary: dict[str, Any],
+        sample_dns_query: dict[str, Any],
+    ) -> None:
+        s = NetworkSummary.model_validate(
+            {
+                **sample_network_summary,
+                "availability": {"state": "future_state", "reason": None, "coverage": "future_cov"},
+                "sourceScope": "future_scope",
+            }
+        )
+        assert s.availability is not None
+        assert s.availability.state == "future_state"
+        assert s.availability.coverage == "future_cov"
+        assert s.source_scope == "future_scope"
+        assert DnsQuery.model_validate({**sample_dns_query, "sourceScope": "x"}).source_scope == "x"
 
     def test_network_availability_null_reason(self) -> None:
         a = NetworkAvailability.model_validate(
