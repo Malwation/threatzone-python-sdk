@@ -48,7 +48,7 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 
 | Type | Purpose | Endpoint |
 |------|---------|----------|
-| `Indicator` | A single rule hit with cross-reference IDs. Fields: `id`, `name`, `description`, `category`, `level`, `score`, `score_maximum`, `pids`, `attack_codes`, `event_ids`, `syscall_line_numbers`, `author`. | `GET /submissions/:uuid/indicators` |
+| `Indicator` | A single rule hit with cross-reference IDs. Fields: `id`, `name`, `description`, `summary`, `category`, `level`, `score`, `score_maximum`, `pids`, `attack_codes`, `event_ids`, `syscall_line_numbers`, `author`. | `GET /submissions/:uuid/indicators` |
 | `IndicatorsResponse` | `{items, total, levels}` envelope. `levels` is a `{malicious, suspicious, benign}` severity rollup. | same |
 | `IndicatorLevels` | Severity counts: `malicious`, `suspicious`, `benign`. | nested |
 | `IoC` | `{type, value, artifacts}`. `type` is the 11-value literal below. | `GET /submissions/:uuid/iocs` |
@@ -75,6 +75,7 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 - `Indicator.level` is `IndicatorLevel = Literal["malicious", "suspicious", "benign"]`.
 - `Indicator.author` is `Literal["system", "user"]`.
 - `Indicator.score_maximum` is `int | None`: the scale of `score` (10 legacy, 100 Windows V2). `None` when the API does not send it. Divide `score` by `score_maximum` before comparing rows from different scales.
+- `Indicator.summary` is `str | None`: a one-sentence plain-language summary, sent for Windows V2 schema 2.1 rows only. `None` on legacy rows and when the API does not send it. On rows with a summary, `description` holds the long analyst text.
 - `IoC.type` is `IoCType = Literal["ip", "domain", "url", "email", "sha512", "sha256", "sha1", "md5", "registry", "path", "uuid"]`.
 - `YaraRule.category` is `YaraRuleCategory = Literal["malicious", "suspicious", "benign"]`.
 - `Artifact.type` is `ArtifactType` (14-value literal including `sample`, `dropped_file`,

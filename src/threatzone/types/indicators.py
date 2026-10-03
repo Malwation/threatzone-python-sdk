@@ -35,6 +35,7 @@ class Indicator(BaseModel):
     id: str
     name: str
     description: str
+    summary: str | None = None
     category: list[str]
     level: IndicatorLevel
     score: int

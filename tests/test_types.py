@@ -302,6 +302,17 @@ class TestIndicatorsSurfaceTypes:
         assert ind.score_maximum is None
         assert ind.score == sample_indicator["score"]
 
+    def test_indicator_summary(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(
+            {**sample_indicator, "summary": "word.exe hollowed svchost.exe.", "scoreMaximum": 100}
+        )
+        assert ind.summary == "word.exe hollowed svchost.exe."
+        assert ind.description == sample_indicator["description"]
+
+    def test_indicator_without_summary(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.summary is None
+
     def test_indicator_category_is_list(self, sample_indicator: dict[str, Any]) -> None:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.category == ["evasion", "persistence"]
