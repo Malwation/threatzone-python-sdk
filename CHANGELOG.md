@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Network rows (`DnsQuery`, `HttpRequest`, `Connection`, `NetworkThreat`) add `attribution`,
+  `attribution_reason`, `process_id` and `process_image` (new base model `NetworkRowSource`,
+  new type `NetworkAttribution`). `DnsQuery` adds `status_text`. `NetworkSummary` adds
+  `windows_background_count`. The network list methods accept `attribution=[...]`; when it is
+  unset, the server omits `windows_background` rows. Every new field is `None` when an older
+  server omits it, and existing fields do not change.
 - `Indicator.summary` (`str | None`) carries the one-sentence analyst summary of Windows V2 schema 2.1 rows. It is `None` on legacy rows and when an older server omits it. On rows with a summary, `Indicator.description` holds the long analyst text.
 - `Indicator.score_maximum` (`10` legacy, `100` Windows V2) gives the scale of `Indicator.score`.
 - `NetworkSummary` adds `counts_available`, `availability` (new `NetworkAvailability` model

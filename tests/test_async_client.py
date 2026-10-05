@@ -1401,6 +1401,17 @@ class TestAsyncNetwork:
         params = _call_params(mock)
         assert params == {"limit": 10, "skip": 20}
 
+    async def test_get_network_lists_send_the_attribution_filter(
+        self, api_key: str, sample_tcp_connections: list[dict[str, Any]]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_tcp_connections))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_tcp_connections(
+                    "sub-789", attribution=["sample", "windows_background"]
+                )
+        assert _call_params(mock) == {"attribution": "sample,windows_background"}
+
     async def test_get_dns_queries_500(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(500, {"message": "boom"}))
         with ctx:

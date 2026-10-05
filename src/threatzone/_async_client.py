@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -1036,6 +1037,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> list[DnsQuery]:
         """
         Get DNS queries captured during dynamic analysis.
@@ -1044,6 +1046,9 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return.
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             DNS queries with host, type, status, records, and timeshift.
@@ -1053,6 +1058,8 @@ class AsyncThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = await self._http.get(
             f"/submissions/{uuid}/network/dns",
@@ -1066,6 +1073,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> list[HttpRequest]:
         """
         Get HTTP requests observed during dynamic analysis.
@@ -1078,6 +1086,9 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return.
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             HTTP requests in slimmed-down shape.
@@ -1087,6 +1098,8 @@ class AsyncThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = await self._http.get(
             f"/submissions/{uuid}/network/http",
@@ -1100,6 +1113,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> list[Connection]:
         """
         Get TCP connections captured during dynamic analysis.
@@ -1108,6 +1122,9 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return.
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             TCP connections with destination, geolocation, and packet counts.
@@ -1117,6 +1134,8 @@ class AsyncThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = await self._http.get(
             f"/submissions/{uuid}/network/tcp",
@@ -1130,6 +1149,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> list[Connection]:
         """
         Get UDP connections captured during dynamic analysis.
@@ -1138,6 +1158,9 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return.
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             UDP connections with destination, geolocation, and packet counts.
@@ -1147,6 +1170,8 @@ class AsyncThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = await self._http.get(
             f"/submissions/{uuid}/network/udp",
@@ -1160,6 +1185,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> list[NetworkThreat]:
         """
         Get Suricata network threats detected during dynamic analysis.
@@ -1168,6 +1194,9 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return.
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             Network threats with Suricata signature, protocol, and TLS fingerprint.
@@ -1177,6 +1206,8 @@ class AsyncThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = await self._http.get(
             f"/submissions/{uuid}/network/threats",

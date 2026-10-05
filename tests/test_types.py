@@ -694,6 +694,58 @@ class TestNetworkTypes:
 # ---------------------------------------------------------------------------
 
 
+class TestNetworkRowSourceTypes:
+    def test_older_server_rows_keep_every_field_and_default_the_source(
+        self,
+        sample_dns_query: dict[str, Any],
+        sample_http_request: dict[str, Any],
+        sample_tcp_connection: dict[str, Any],
+        sample_network_threat: dict[str, Any],
+    ) -> None:
+        rows = [
+            DnsQuery.model_validate(sample_dns_query),
+            HttpRequest.model_validate(sample_http_request),
+            Connection.model_validate(sample_tcp_connection),
+            NetworkThreat.model_validate(sample_network_threat),
+        ]
+        for row in rows:
+            assert row.attribution is None
+            assert row.attribution_reason is None
+            assert row.process_id is None
+            assert row.process_image is None
+        assert rows[0].status == "NOERROR"
+        assert rows[0].status_text is None
+        assert rows[2].destination_port == 443
+
+    def test_rows_with_sources(self, sample_dns_query: dict[str, Any]) -> None:
+        q = DnsQuery.model_validate(
+            {
+                **sample_dns_query,
+                "status": "TIMEOUT",
+                "statusText": "NO RESPONSE",
+                "attribution": "sample_child",
+                "attributionReason": "pid 2001 child",
+                "processId": 2001,
+                "processImage": "C:\\Windows\\System32\\cmd.exe",
+            }
+        )
+        assert q.attribution == "sample_child"
+        assert q.attribution_reason == "pid 2001 child"
+        assert q.process_id == 2001
+        assert q.status_text == "NO RESPONSE"
+
+    def test_unknown_source_value_does_not_fail(self, sample_http_request: dict[str, Any]) -> None:
+        r = HttpRequest.model_validate({**sample_http_request, "attribution": "future_source"})
+        assert r.attribution == "future_source"
+
+    def test_summary_windows_background_count(self, sample_network_summary: dict[str, Any]) -> None:
+        assert (
+            NetworkSummary.model_validate(sample_network_summary).windows_background_count is None
+        )
+        s = NetworkSummary.model_validate({**sample_network_summary, "windowsBackgroundCount": 7})
+        assert s.windows_background_count == 7
+
+
 class TestProcessTypes:
     def test_process(self, sample_process: dict[str, Any]) -> None:
         p = Process.model_validate(sample_process)
