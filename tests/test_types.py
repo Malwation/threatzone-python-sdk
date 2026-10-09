@@ -714,7 +714,6 @@ class TestUrlAnalysisTypes:
         report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
         assert report.threat_score == 72
         assert report.risk_level == "High"
-        assert report.verdict_state == "final"
         assert report.privacy_score == 35
         assert report.privacy_risk_level == "Medium"
         assert report.privacy_breakdown is not None

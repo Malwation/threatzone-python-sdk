@@ -134,7 +134,7 @@ peer report type to dynamic/static/cdr &mdash; it is guarded separately by
 
 | Type | Purpose |
 |------|---------|
-| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file`, optional `threat_analysis`, `pages`, plus the scoring fields `verdict_state`, `threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`, `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`, `metafields`, `scored_at`. |
+| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file`, optional `threat_analysis`, `pages`, plus the scoring fields `threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`, `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`, `metafields`, `scored_at`. |
 | `UrlAnalysisGeneralInfo` | `{url, domain, website_title}`. |
 | `UrlAnalysisScreenshot` | `{available: bool}`. Fetch actual bytes with `client.get_screenshot(uuid)`. |
 | `UrlAnalysisIpInfo` | `{ip, asn, city, country, isp, organization, threat_status}`. |
