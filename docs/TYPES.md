@@ -111,13 +111,14 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 | `BehavioursResponse` | `{items, total, page, limit, total_pages}`. | same |
 | `BehaviourOs` | Deprecated compatibility alias; the endpoint derives the OS from the submission. | same |
 | `SyscallsResponse` | `{items: List[str], total}`. `items` are raw unparsed log lines. | `GET /submissions/:uuid/syscalls` |
-| `NetworkSummary` | `{dns_count, http_count, tcp_count, udp_count, threat_count, pcap_available, counts_available, availability, source_scope}`. Legacy reports send `counts_available=True`, `availability=None`, `source_scope=None`; all three are `None` when an older server omits them. | `GET /submissions/:uuid/network/summary` |
+| `NetworkSummary` | `{dns_count, http_count, tcp_count, udp_count, threat_count, pcap_available, counts_available, availability, source_scope, windows_background_count}`. `windows_background_count` gives the rows that the counts and lists omit by default. Legacy reports send `counts_available=True`, `availability=None`, `source_scope=None`; all three are `None` when an older server omits them. | `GET /submissions/:uuid/network/summary` |
 | `NetworkAvailability` | `{state, reason, coverage}`. Network evidence state of a Windows V2 report. | nested in `NetworkSummary` |
-| `DnsQuery` | `{id, host, type, status, records, timeshift, source_scope}`. | `GET /submissions/:uuid/network/dns` |
-| `HttpRequest` | `{id, host, ip, port, country, source_scope}` &mdash; slimmed-down shape, no method/URL/headers. | `GET /submissions/:uuid/network/http` |
-| `Connection` | `{id, protocol, destination_ip, destination_port, domain, asn, country, packets, timeshift, source_scope}`. Used for both TCP and UDP. | `GET /submissions/:uuid/network/tcp`, `GET /submissions/:uuid/network/udp` |
+| `NetworkRowSource` | `{attribution, attribution_reason, process_id, process_image}` on every network row. `attribution` is `NetworkAttribution` (`sample`, `sample_child`, `sensor_only`, `windows_background`, or a new value). The server sends `sample` for rows of older reports; each field is `None` when an older server omits it. | base of the network rows |
+| `DnsQuery` | `{id, host, type, status, status_text, records, timeshift, source_scope}` plus the `NetworkRowSource` fields. `status_text` keeps the sensor text when `status` is `TIMEOUT`. | `GET /submissions/:uuid/network/dns` |
+| `HttpRequest` | `{id, host, ip, port, country, source_scope}` plus the `NetworkRowSource` fields &mdash; slimmed-down shape, no method/URL/headers. | `GET /submissions/:uuid/network/http` |
+| `Connection` | `{id, protocol, destination_ip, destination_port, domain, asn, country, packets, timeshift, source_scope}` plus the `NetworkRowSource` fields. Used for both TCP and UDP. | `GET /submissions/:uuid/network/tcp`, `GET /submissions/:uuid/network/udp` |
 | `ConnectionPackets` | `{sent, received, empty}`. | nested |
-| `NetworkThreat` | Suricata alert: `signature`, `description`, `severity`, `protocol`, `app_proto`, `destination_ip`, `destination_port`, `timeshift`, `metadata`, `details`, optional `tls`, `source_scope`. | `GET /submissions/:uuid/network/threats` |
+| `NetworkThreat` | Suricata alert: `signature`, `description`, `severity`, `protocol`, `app_proto`, `destination_ip`, `destination_port`, `timeshift`, `metadata`, `details`, optional `tls`, `source_scope`, plus the `NetworkRowSource` fields. | `GET /submissions/:uuid/network/threats` |
 | `NetworkThreatTls` | TLS fingerprint block: `version`, `sni`, `ja3_hash`, `ja3s_hash`, `ja3_string`, `ja3s_string`. Present iff `app_proto == "TLS"`. | nested in `NetworkThreat` |
 
 **Discriminative fields.**

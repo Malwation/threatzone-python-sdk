@@ -57,6 +57,16 @@ ThreatSeverity = Literal["high", "low"]
 
 NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"] | str
 NetworkCoverage = Literal["none", "partial", "complete"] | str
+NetworkAttribution = (
+    Literal[
+        "sample",
+        "sample_child",
+        "sensor_only",
+        "windows_background",
+    ]
+    | str
+)
+
 NetworkSourceScope = (
     Literal[
         "sample_attributed",
@@ -89,12 +99,28 @@ class NetworkSummary(BaseModel):
     udp_count: int = Field(alias="udpCount")
     threat_count: int = Field(alias="threatCount")
     pcap_available: bool = Field(alias="pcapAvailable")
+    windows_background_count: int | None = Field(default=None, alias="windowsBackgroundCount")
     counts_available: bool | None = Field(default=None, alias="countsAvailable")
     availability: NetworkAvailability | None = None
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
-class DnsQuery(BaseModel):
+class NetworkRowSource(BaseModel):
+    """Source fields of a network row.
+
+    Each field is ``None`` when an older server omits it. A server with row
+    sources sends ``attribution="sample"`` for rows of older reports.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    attribution: NetworkAttribution | None = None
+    attribution_reason: str | None = Field(default=None, alias="attributionReason")
+    process_id: int | None = Field(default=None, alias="processId")
+    process_image: str | None = Field(default=None, alias="processImage")
+
+
+class DnsQuery(NetworkRowSource):
     """A DNS query captured during dynamic analysis."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -103,12 +129,13 @@ class DnsQuery(BaseModel):
     host: str
     type: DnsRecordType
     status: DnsStatus
+    status_text: str | None = Field(default=None, alias="statusText")
     records: list[str]
     timeshift: float
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
-class HttpRequest(BaseModel):
+class HttpRequest(NetworkRowSource):
     """An HTTP request observed during dynamic analysis (slim shape)."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -131,7 +158,7 @@ class ConnectionPackets(BaseModel):
     empty: bool
 
 
-class Connection(BaseModel):
+class Connection(NetworkRowSource):
     """A TCP or UDP connection captured during dynamic analysis."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -161,7 +188,7 @@ class NetworkThreatTls(BaseModel):
     ja3s_string: str = Field(alias="ja3sString")
 
 
-class NetworkThreat(BaseModel):
+class NetworkThreat(NetworkRowSource):
     """A Suricata-style network alert captured during dynamic analysis."""
 
     model_config = ConfigDict(populate_by_name=True)
