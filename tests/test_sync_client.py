@@ -26,11 +26,14 @@ from threatzone._exceptions import (
     BadRequestError,
     InternalServerError,
     NotFoundError,
+    PdfReportPendingError,
     PermissionDeniedError,
     ReportUnavailableError,
     YaraRulePendingError,
 )
 from threatzone.types import (
+    AiReport,
+    AiReportPending,
     Artifact,
     ArtifactsResponse,
     BehavioursResponse,
@@ -50,10 +53,12 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     NetworkConfigListItem,
+    NetworkExfilRequest,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
+    PdfReportStatus,
     ProcessesResponse,
     ProcessTreeResponse,
     SignatureCheckResponse,
@@ -1642,3 +1647,258 @@ class TestDeletedMethods:
         assert not hasattr(ThreatZone, name), (
             f"Deleted method {name!r} unexpectedly present on ThreatZone"
         )
+
+
+# ---------------------------------------------------------------------------
+# Fields and routes that the API already returns
+# ---------------------------------------------------------------------------
+
+
+class TestSearchBySha256Paging:
+    def test_sends_page_and_limit(self, api_key: str, sample_submission: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_submission]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.search_by_sha256("abc", page=2, limit=100)
+        assert _call_params(mock) == {"page": 2, "limit": 100}
+
+    def test_omits_unset_page_and_limit(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_submission]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.search_by_sha256("abc", limit=50)
+        assert _call_params(mock) == {"limit": 50}
+
+    def test_sends_no_params_by_default(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_submission]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.search_by_sha256("abc")
+        assert _call_params(mock) == {}
+
+
+class TestNetworkExfilRequests:
+    def test_happy(self, api_key: str, sample_network_exfil_request: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_network_exfil_request]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            entries = client.get_network_exfil_requests("sub-789")
+        assert all(isinstance(e, NetworkExfilRequest) for e in entries)
+        assert entries[0].masked_target == "/bot123456789:FAKE-TOKEN-FOR-TESTS/sendDocument"
+        assert _call_url(mock).endswith("/submissions/sub-789/network/exfil-requests")
+        assert _call_params(mock) == {}
+
+    def test_sends_limit_and_skip(
+        self, api_key: str, sample_network_exfil_request: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_network_exfil_request]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_network_exfil_requests("sub-789", limit=10, skip=20)
+        assert _call_params(mock) == {"limit": 10, "skip": 20}
+
+    def test_empty_list(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(200, []))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            assert client.get_network_exfil_requests("sub-789") == []
+
+    def test_409(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(409, _409_body()))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_network_exfil_requests("sub-789")
+
+
+class TestAiReport:
+    def test_200_returns_the_report(self, api_key: str, sample_ai_report: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_ai_report))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            report = client.get_ai_report("sub-789")
+        assert isinstance(report, AiReport)
+        assert report.verdict == "malicious"
+        assert _call_url(mock).endswith("/submissions/sub-789/ai-report")
+
+    def test_202_returns_a_pending_model(
+        self, api_key: str, sample_ai_report_in_progress: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(202, sample_ai_report_in_progress))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            report = client.get_ai_report("sub-789")
+        assert isinstance(report, AiReportPending)
+        assert report.status == "in_progress"
+        assert report.stage == "writing"
+
+    def test_202_waiting_for_analysis(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(202, {"status": "waiting_for_analysis"}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            report = client.get_ai_report("sub-789")
+        assert isinstance(report, AiReportPending)
+        assert report.status == "waiting_for_analysis"
+
+    def test_403(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(403, {"message": "no aiReport permission"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.get_ai_report("sub-789")
+
+    def test_404(self, api_key: str) -> None:
+        body = {"message": "No AI report", "code": "AI_REPORT_NOT_FOUND"}
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_ai_report("sub-789")
+
+
+def _patched_streams(*responses: httpx.Response) -> tuple[Any, MagicMock]:
+    mock = MagicMock(side_effect=[_StreamCtx(r) for r in responses])
+    return patch.object(httpx.Client, "stream", mock), mock
+
+
+def _pdf_pending_response() -> httpx.Response:
+    return _make_response(
+        202,
+        {
+            "status": "accepted",
+            "message": "PDF report generation is in progress.",
+            "retryAfter": 3,
+        },
+    )
+
+
+class TestStixAndPdfReports:
+    def test_download_stix_report_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b'{"type": "bundle"}')
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.download_stix_report("sub-789")
+            assert res.read() == b'{"type": "bundle"}'
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/download/stix-2.1-report")
+
+    def test_download_stix_report_403(self, api_key: str) -> None:
+        response = _make_response(403, {"message": "no stixReport permission"})
+        ctx, _ = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.download_stix_report("sub-789")
+
+    def test_get_pdf_report_status(
+        self, api_key: str, sample_pdf_report_status_queued: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_pdf_report_status_queued))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            status = client.get_pdf_report_status("sub-789")
+        assert isinstance(status, PdfReportStatus)
+        assert status.retry_after_seconds == 3
+        assert _call_url(mock).endswith("/submissions/sub-789/download/pdf-report/status")
+
+    def test_download_pdf_report_without_wait_returns_the_file(self, api_key: str) -> None:
+        ctx, mock = _patched_stream(_make_response(200, content=b"%PDF-1.4"))
+        with (
+            ctx,
+            patch.object(httpx.Client, "request") as request_mock,
+            ThreatZone(api_key=api_key) as client,
+        ):
+            res = client.download_pdf_report("sub-789", wait=False)
+            assert res.read() == b"%PDF-1.4"
+        assert mock.call_args.args[1].endswith("/submissions/sub-789/download/pdf-report")
+        request_mock.assert_not_called()
+
+    def test_download_pdf_report_without_wait_raises_on_202(self, api_key: str) -> None:
+        ctx, _ = _patched_stream(_pdf_pending_response())
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(PdfReportPendingError) as exc_info,
+        ):
+            client.download_pdf_report("sub-789", wait=False)
+        assert exc_info.value.retry_after == 3.0
+        assert exc_info.value.status_code == 202
+
+    def test_download_pdf_report_without_wait_raises_on_409(self, api_key: str) -> None:
+        body = {"message": "Please wait for the analysis to finish.", "code": "CONFLICT"}
+        ctx, _ = _patched_stream(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.download_pdf_report("sub-789", wait=False)
+
+    def test_download_pdf_report_polls_the_status_until_ready(self, api_key: str) -> None:
+        statuses = [
+            _make_response(200, {"status": "analysis_in_progress", "message": "wait"}),
+            _make_response(200, {"status": "queued", "retryAfterSeconds": 3}),
+            _make_response(200, {"status": "ready"}),
+        ]
+        stream_ctx, stream_mock = _patched_streams(_make_response(200, content=b"%PDF-1.4"))
+        with (
+            stream_ctx,
+            patch.object(httpx.Client, "request", side_effect=statuses) as request_mock,
+            ThreatZone(api_key=api_key) as client,
+        ):
+            res = client.download_pdf_report("sub-789", poll_interval=0)
+            assert res.read() == b"%PDF-1.4"
+        assert request_mock.call_count == 3
+        assert stream_mock.call_count == 1
+
+    def test_download_pdf_report_retries_when_the_file_is_pending(self, api_key: str) -> None:
+        statuses = [
+            _make_response(200, {"status": "ready"}),
+            _make_response(200, {"status": "ready"}),
+        ]
+        stream_ctx, stream_mock = _patched_streams(
+            _pdf_pending_response(), _make_response(200, content=b"%PDF-1.4")
+        )
+        with (
+            stream_ctx,
+            patch.object(httpx.Client, "request", side_effect=statuses),
+            ThreatZone(api_key=api_key) as client,
+        ):
+            res = client.download_pdf_report("sub-789", poll_interval=0)
+            assert res.read() == b"%PDF-1.4"
+        assert stream_mock.call_count == 2
+
+    def test_download_pdf_report_uses_the_server_retry_hint(self, api_key: str) -> None:
+        statuses = [
+            _make_response(200, {"status": "generating", "retryAfterSeconds": 3}),
+            _make_response(200, {"status": "ready"}),
+        ]
+        stream_ctx, _ = _patched_streams(_make_response(200, content=b"%PDF-1.4"))
+        with (
+            stream_ctx,
+            patch.object(httpx.Client, "request", side_effect=statuses),
+            patch("threatzone._sync_client.time.sleep") as sleep_mock,
+            ThreatZone(api_key=api_key) as client,
+        ):
+            client.download_pdf_report("sub-789")
+        sleep_mock.assert_called_once_with(3.0)
+
+    def test_download_pdf_report_raises_when_generation_failed(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(200, {"status": "failed", "message": "boom"}))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(InternalServerError) as exc_info,
+        ):
+            client.download_pdf_report("sub-789", poll_interval=0)
+        assert exc_info.value.message == "boom"
+
+    def test_download_pdf_report_stops_at_the_timeout(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(200, {"status": "queued", "retryAfterSeconds": 3}))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(PdfReportPendingError) as exc_info,
+        ):
+            client.download_pdf_report("sub-789", timeout=0)
+        assert exc_info.value.retry_after == 3.0
+
+
+class TestUrlSessionConflict:
+    def test_start_url_analysis_session_409_on_an_errored_report(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = _409_body("URL_ANALYSIS_REPORT_UNAVAILABLE", required_report="url_analysis")
+        ctx, _ = _patched_client(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.start_url_analysis_session(submission_uuid)
+
+    def test_restart_url_analysis_session_409_on_an_errored_report(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = _409_body("URL_ANALYSIS_REPORT_UNAVAILABLE", required_report="url_analysis")
+        ctx, _ = _patched_client(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.restart_url_analysis_session(submission_uuid)

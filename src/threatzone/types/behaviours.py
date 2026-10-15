@@ -25,7 +25,7 @@ class BehaviourEvent(BaseModel):
     event_id: int = Field(alias="eventId")
     event_count: int = Field(alias="eventCount")
     syscall_line_number: int | None = Field(default=None, alias="syscallLineNumber")
-    timestamp: int
+    timestamp: float | None = None
     # OS-specific structured payload. Shape depends on the submission OS and event type.
     details: dict[str, Any]
 

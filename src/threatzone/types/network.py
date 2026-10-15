@@ -5,6 +5,7 @@ Mirrors the `network.response.dto.ts` DTO in the Threat.Zone Public API.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -53,7 +54,11 @@ DnsStatus = Literal[
 ConnectionProtocol = Literal["tcp", "udp"]
 ThreatProtocol = Literal["TCP", "UDP"]
 ThreatAppProto = Literal["HTTP", "TLS", "DNS"]
-ThreatSeverity = Literal["high", "low"]
+ThreatSeverity = Literal["high", "low", "info"] | str
+NetworkThreatCapture = Literal["decrypted_https", "offline_scan"] | str
+NetworkExfilRequestApi = Literal["telegram_bot", "discord_webhook", "slack_webhook"] | str
+NetworkExfilRequestKind = Literal["poll", "send_message", "send_file"] | str
+NetworkExfilRequestCapture = Literal["decrypted_https"] | str
 
 NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"] | str
 NetworkCoverage = Literal["none", "partial", "complete"] | str
@@ -99,6 +104,7 @@ class NetworkSummary(BaseModel):
     udp_count: int = Field(alias="udpCount")
     threat_count: int = Field(alias="threatCount")
     pcap_available: bool = Field(alias="pcapAvailable")
+    exfil_request_count: int | None = Field(default=None, alias="exfilRequestCount")
     windows_background_count: int | None = Field(default=None, alias="windowsBackgroundCount")
     counts_available: bool | None = Field(default=None, alias="countsAvailable")
     availability: NetworkAvailability | None = None
@@ -204,4 +210,34 @@ class NetworkThreat(NetworkRowSource):
     metadata: dict[str, list[str]]
     details: dict[str, str | int]
     tls: NetworkThreatTls | None = None
+    capture: NetworkThreatCapture | None = None
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
+
+
+class NetworkExfilRequest(BaseModel):
+    """Chat bot or webhook requests read from the decrypted HTTPS capture.
+
+    One entry groups the requests of one API, bot or webhook, and kind.
+    ``masked_target`` is the request target as sent, with the full bot token
+    or webhook secret. Old reports show a shortened token.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    api: NetworkExfilRequestApi | None = None
+    kind: NetworkExfilRequestKind | None = None
+    host: str | None = None
+    method: str | None = None
+    api_method: str | None = Field(default=None, alias="apiMethod")
+    target_id: str | None = Field(default=None, alias="targetId")
+    masked_target: str | None = Field(default=None, alias="maskedTarget")
+    request_bytes: int | None = Field(default=None, alias="requestBytes")
+    reply_status: int | None = Field(default=None, alias="replyStatus")
+    request_count: int | None = Field(default=None, alias="requestCount")
+    capture: NetworkExfilRequestCapture | None = None
+    first_seen: datetime | None = Field(default=None, alias="firstSeen")
+    score: float | None = None
+    tier: str | None = None
+    process_id: int | None = Field(default=None, alias="processId")
+    process_image: str | None = Field(default=None, alias="processImage")
+    text: str | None = None

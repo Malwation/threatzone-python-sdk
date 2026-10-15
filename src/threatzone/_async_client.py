@@ -14,9 +14,16 @@ import httpx
 from ._client import AsyncHTTPClient, FileInput
 from ._config import ClientConfig
 from ._constants import DEFAULT_POLL_INTERVAL, DEFAULT_WAIT_TIMEOUT
-from ._exceptions import AnalysisTimeoutError, YaraRulePendingError
+from ._exceptions import (
+    AnalysisTimeoutError,
+    InternalServerError,
+    PdfReportPendingError,
+    YaraRulePendingError,
+)
 from ._streaming import AsyncDownloadResponse
 from .types import (
+    AiReport,
+    AiReportPending,
     ArtifactsResponse,
     BehavioursResponse,
     CdrResponse,
@@ -37,10 +44,12 @@ from .types import (
     Metafields,
     MitreResponse,
     NetworkConfigListItem,
+    NetworkExfilRequest,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
+    PdfReportStatus,
     ProcessesResponse,
     ProcessTreeResponse,
     SignatureCheckResponse,
@@ -82,6 +91,16 @@ def _parse_retry_after(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _pending_body(raw: bytes) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 class AsyncThreatZone:
@@ -496,17 +515,37 @@ class AsyncThreatZone:
         response = await self._http.get(f"/submissions/{uuid}")
         return Submission.model_validate(response.json())
 
-    async def search_by_sha256(self, sha256: str) -> list[Submission]:
+    async def search_by_sha256(
+        self,
+        sha256: str,
+        *,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> list[Submission]:
         """
         Search submissions by SHA256 hash.
 
+        The server returns one page, newest submission first. Without ``page``
+        and ``limit`` the server returns the first 20 rows.
+
         Args:
             sha256: SHA256 hash to search for.
+            page: 1-indexed page number.
+            limit: Maximum items per page (1-100). The server default is 20.
 
         Returns:
-            List of matching submissions.
+            List of matching submissions on the requested page.
         """
-        response = await self._http.get(f"/submissions/search/sha256/{sha256}")
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if limit is not None:
+            params["limit"] = limit
+
+        response = await self._http.get(
+            f"/submissions/search/sha256/{sha256}",
+            params=params if params else None,
+        )
         return [Submission.model_validate(item) for item in response.json()]
 
     async def wait_for_completion(
@@ -978,6 +1017,11 @@ class AsyncThreatZone:
 
         Returns:
             Message acknowledging the request.
+
+        Raises:
+            ReportUnavailableError: When the submission is a file submission,
+                or when the URL report is in ``error`` (HTTP 409). Use
+                restart_url_analysis() for a new capture.
         """
         response = await self._http.post(f"/submissions/{uuid}/url-analysis/session")
         return Message.model_validate(response.json())
@@ -995,6 +1039,11 @@ class AsyncThreatZone:
 
         Returns:
             Message acknowledging the request.
+
+        Raises:
+            ReportUnavailableError: When the submission is a file submission,
+                or when the URL report is in ``error`` (HTTP 409). Use
+                restart_url_analysis() for a new capture.
         """
         response = await self._http.post(f"/submissions/{uuid}/url-analysis/session/restart")
         return Message.model_validate(response.json())
@@ -1013,6 +1062,35 @@ class AsyncThreatZone:
         """
         response = await self._http.post(f"/submissions/{uuid}/restart/url_analysis")
         return Message.model_validate(response.json())
+
+    # =========================================================================
+    # AI Report
+    # =========================================================================
+
+    async def get_ai_report(self, uuid: str) -> AiReport | AiReportPending:
+        """
+        Get the AI analyst report of a submission.
+
+        The report is advisory: the AI verdict never changes the submission
+        ``score`` or ``level``. Requires the ``aiReport`` plan permission.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AiReport when the server answers 200: ``status`` is ``completed``,
+            ``stale``, ``failed``, or ``skipped_quota``. AiReportPending when
+            the server answers 202: the report is ``waiting_for_analysis``,
+            ``queued``, or ``in_progress``. Poll again later.
+
+        Raises:
+            PermissionDeniedError: When the plan has no ``aiReport`` permission.
+            NotFoundError: When the submission has no AI report.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/ai-report")
+        if response.status_code == 202:
+            return AiReportPending.model_validate(response.json())
+        return AiReport.model_validate(response.json())
 
     # =========================================================================
     # Network
@@ -1215,6 +1293,41 @@ class AsyncThreatZone:
         )
         return [NetworkThreat.model_validate(item) for item in response.json()]
 
+    async def get_network_exfil_requests(
+        self,
+        uuid: str,
+        *,
+        limit: int | None = None,
+        skip: int | None = None,
+    ) -> list[NetworkExfilRequest]:
+        """
+        Get chat bot and webhook requests read from the decrypted HTTPS capture.
+
+        Each entry groups the requests of one API, bot or webhook, and kind.
+        ``masked_target`` holds the full bot token or webhook secret as sent.
+        Old reports, legacy reports, and non-Windows reports return an empty
+        list. Read ``exfil_request_count`` on get_network_summary() for the count.
+
+        Args:
+            uuid: Submission UUID.
+            limit: Maximum number of items to return (1-1000).
+            skip: Number of items to skip.
+
+        Returns:
+            Chat bot and webhook requests, in the order of the first request.
+        """
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if skip is not None:
+            params["skip"] = skip
+
+        response = await self._http.get(
+            f"/submissions/{uuid}/network/exfil-requests",
+            params=params if params else None,
+        )
+        return [NetworkExfilRequest.model_validate(item) for item in response.json()]
+
     # =========================================================================
     # Downloads
     # =========================================================================
@@ -1296,6 +1409,10 @@ class AsyncThreatZone:
         """
         Download the HTML analysis report for a submission.
 
+        When analysts in your workspace pinned items or wrote a note on this
+        submission, the report shows them in a "Pinned evidence" section.
+        Other workspaces do not see them.
+
         Args:
             uuid: Submission UUID.
 
@@ -1303,6 +1420,129 @@ class AsyncThreatZone:
             AsyncDownloadResponse for streaming or saving the file.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/html-report")
+
+    async def download_stix_report(self, uuid: str) -> AsyncDownloadResponse:
+        """
+        Download the STIX 2.1 bundle (JSON) of a submission.
+
+        The server builds the bundle on each request from the finalized
+        analysis data. Use a long timeout for large submissions. Requires the
+        ``stixReport`` plan permission.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the ``{uuid}_stix-2.1.json`` file.
+        """
+        return await self._http.get_stream(f"/submissions/{uuid}/download/stix-2.1-report")
+
+    async def get_pdf_report_status(self, uuid: str) -> PdfReportStatus:
+        """
+        Get the generation state of the PDF report.
+
+        A call queues the PDF render when the analysis is finished and no PDF
+        is cached. Requires the ``pdfReport`` plan permission.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            PdfReportStatus. ``status`` is ``analysis_in_progress``, ``queued``,
+            ``generating``, ``ready``, or ``failed``.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/download/pdf-report/status")
+        return PdfReportStatus.model_validate(response.json())
+
+    async def download_pdf_report(
+        self,
+        uuid: str,
+        *,
+        wait: bool = True,
+        timeout: float = DEFAULT_WAIT_TIMEOUT,
+        poll_interval: float | None = None,
+    ) -> AsyncDownloadResponse:
+        """
+        Download the PDF report of a submission.
+
+        The server renders the PDF in the background. When analysts in your
+        workspace pinned items or wrote a note on this submission, the PDF
+        shows them in a "Pinned evidence" section. Other workspaces do not see
+        them. Requires the ``pdfReport`` plan permission.
+
+        Args:
+            uuid: Submission UUID.
+            wait: When True (default), poll get_pdf_report_status() until the
+                status is ``ready``, then download the file. The wait stops
+                after ``timeout`` seconds. When False, request the file once.
+            timeout: Maximum time to wait in seconds when ``wait`` is True.
+                Defaults to 600.
+            poll_interval: Time between status checks in seconds. Defaults to
+                the server ``retry_after_seconds`` hint, or 5 seconds.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the ``{uuid}_report.pdf`` file.
+
+        Raises:
+            PdfReportPendingError: When ``wait`` is False and the server
+                answers 202, or when the PDF is not ready before ``timeout``.
+            InternalServerError: When the status route reports ``failed``.
+            ReportUnavailableError: When ``wait`` is False and the analysis
+                is not finished (HTTP 409).
+        """
+        if not wait:
+            return await self._open_pdf_report(uuid)
+
+        deadline = time.monotonic() + timeout
+        while True:
+            status = await self.get_pdf_report_status(uuid)
+            if status.status == "failed":
+                raise InternalServerError(
+                    status.message or "PDF report generation failed.",
+                    status_code=500,
+                    body=status.model_dump(mode="json", by_alias=True),
+                )
+            retry_after = status.retry_after_seconds
+            if status.status == "ready":
+                try:
+                    return await self._open_pdf_report(uuid)
+                except PdfReportPendingError as pending:
+                    retry_after = pending.retry_after
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PdfReportPendingError(
+                    f"PDF report was not ready within {timeout} seconds "
+                    f"(last status: {status.status}).",
+                    body=status.model_dump(mode="json", by_alias=True),
+                    retry_after=retry_after,
+                )
+            if poll_interval is not None:
+                delay = poll_interval
+            elif retry_after is not None:
+                delay = retry_after
+            else:
+                delay = DEFAULT_POLL_INTERVAL
+            await asyncio.sleep(min(delay, remaining))
+
+    async def _open_pdf_report(self, uuid: str) -> AsyncDownloadResponse:
+        download = await self._http.get_stream(f"/submissions/{uuid}/download/pdf-report")
+        if download.status_code != 202:
+            return download
+
+        try:
+            payload = _pending_body(await download.read())
+        finally:
+            await download.close()
+
+        message = payload.get("message")
+        if not isinstance(message, str) or not message.strip():
+            message = "PDF report generation is in progress. Please retry later."
+        raise PdfReportPendingError(
+            message,
+            body=payload or None,
+            retry_after=_parse_retry_after(payload.get("retryAfter")),
+        )
 
     async def download_cdr_result(self, uuid: str) -> AsyncDownloadResponse:
         """

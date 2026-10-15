@@ -36,9 +36,11 @@ class Indicator(BaseModel):
     name: str
     description: str
     summary: str | None = None
+    why_matched: str | None = Field(default=None, alias="whyMatched")
+    in_verdict_chain: bool | None = Field(default=None, alias="inVerdictChain")
     category: list[str]
     level: IndicatorLevel
-    score: int
+    score: float
     score_maximum: int | None = Field(default=None, alias="scoreMaximum")
     pids: list[int]
     attack_codes: list[str] = Field(alias="attackCodes")
@@ -143,22 +145,31 @@ class ExtractedConfigsResponse(BaseModel):
     total: int
 
 
-ArtifactType = Literal[
-    "sample",
-    "compressed_file_entry",
-    "malware_config",
-    "memory_dump",
-    "file_dump",
-    "pcap",
-    "deobfuscated_code",
-    "process_dump",
-    "unpacked_file",
-    "yara_rule",
-    "unknown",
-    "dropped_file",
-    "downloaded_file",
-    "screenshot",
-]
+ArtifactType = (
+    Literal[
+        "sample",
+        "compressed_file_entry",
+        "malware_config",
+        "memory_dump",
+        "file_dump",
+        "pcap",
+        "deobfuscated_code",
+        "process_dump",
+        "unpacked_file",
+        "yara_rule",
+        "email_file",
+        "email_attachment",
+        "embedded_file",
+        "unknown",
+        "dropped_file",
+        "downloaded_file",
+        "screenshot",
+    ]
+    | str
+)
+
+
+ArtifactProcessAttribution = Literal["unknown"] | str
 
 
 class ArtifactHashes(BaseModel):
@@ -183,6 +194,9 @@ class Artifact(BaseModel):
     source: str
     hashes: ArtifactHashes
     tags: list[str]
+    process_attribution: ArtifactProcessAttribution | None = Field(
+        default=None, alias="processAttribution"
+    )
 
 
 class ArtifactsResponse(BaseModel):

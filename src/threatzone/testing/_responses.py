@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from threatzone.types import (
+    AiReport,
+    AiReportPending,
     ArtifactsResponse,
     BehavioursResponse,
     CdrResponse,
@@ -34,9 +36,11 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     NetworkConfigListResponse,
+    NetworkExfilRequest,
     NetworkSummary,
     NetworkThreat,
     PaginatedSubmissions,
+    PdfReportStatus,
     ProcessesResponse,
     ProcessTreeResponse,
     SignatureCheckResponse,
@@ -65,12 +69,16 @@ def _hashes_for(state: SubmissionState) -> dict[str, str]:
 
 
 def _file_info_for(state: SubmissionState) -> dict[str, Any]:
+    extension = state.filename.rsplit(".", 1)[-1] if "." in state.filename else "bin"
     return {
         "name": state.filename,
         "size": 1024,
-        "extension": state.filename.rsplit(".", 1)[-1] if "." in state.filename else "bin",
+        "extension": extension,
         "mimetype": "application/octet-stream",
         "isMimetypeChecked": True,
+        "declaredExtension": extension,
+        "realExtension": extension,
+        "isMimetypeMismatched": False,
         "entrypoint": None,
         "source": {"type": "upload", "url": None},
     }
@@ -135,7 +143,7 @@ def _submission_payload(state: SubmissionState) -> dict[str, Any]:
         "file": _file_info_for(state) if state.type == "file" else None,
         "level": state.level,
         "private": state.private,
-        "tags": [{"type": "family", "value": "test"}],
+        "tags": [{"type": "family", "value": "test", "origin": "config_extractor"}],
         "reports": _report_statuses(state),
         "overview": _submission_overview(state),
         "indicators": _indicator_rollup(state),
@@ -158,7 +166,7 @@ def _submission_list_item_payload(state: SubmissionState) -> dict[str, Any]:
         "level": state.level,
         "type": state.type,
         "private": state.private,
-        "tags": [{"type": "family", "value": "test"}],
+        "tags": [{"type": "family", "value": "test", "origin": "config_extractor"}],
         "reports": _report_statuses(state),
         "mimetype": "application/octet-stream" if state.type == "file" else None,
         "size": 1024 if state.type == "file" else None,
@@ -268,6 +276,8 @@ def build_indicators_response(
                 "eventIds": [100 + idx],
                 "syscallLineNumbers": [200 + idx],
                 "author": "system",
+                "whyMatched": f"The sample used MITRE technique {seed.attack_code}.",
+                "inVerdictChain": seed.level == "malicious",
             }
         )
     total = len(items)
@@ -390,6 +400,7 @@ def build_artifacts_response(state: SubmissionState) -> ArtifactsResponse:
                     "sha256": f"{idx:064x}",
                 },
                 "tags": ["test"],
+                "processAttribution": None,
             }
         )
     return ArtifactsResponse.model_validate({"items": items, "total": len(items)})
@@ -606,10 +617,19 @@ def build_syscalls_response(
     if state.has_dynamic_report:
         lines = [f"syscall {i}: NtReadFile" for i in range(8)]
     total = len(lines)
-    if page is not None and limit is not None:
-        start = (page - 1) * limit
-        lines = lines[start : start + limit]
-    return SyscallsResponse.model_validate({"items": lines, "total": total})
+    page_number = page if page is not None else 1
+    page_limit = limit if limit is not None else 500
+    start = (page_number - 1) * page_limit
+    lines = lines[start : start + page_limit]
+    return SyscallsResponse.model_validate(
+        {
+            "items": lines,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": (total + page_limit - 1) // page_limit,
+        }
+    )
 
 
 def build_network_summary(state: SubmissionState) -> NetworkSummary:
@@ -622,6 +642,7 @@ def build_network_summary(state: SubmissionState) -> NetworkSummary:
             "udpCount": 1,
             "threatCount": len(state.network_threats),
             "pcapAvailable": state.has_dynamic_report,
+            "exfilRequestCount": len(_exfil_request_payloads(state)),
         }
     )
 
@@ -724,7 +745,150 @@ def _network_threat_payload(seed: NetworkThreatSeed) -> dict[str, Any]:
         "metadata": {"category": ["test"]},
         "details": {"sid": 1},
         "tls": None,
+        "capture": "decrypted_https" if app_proto == "TLS" else None,
     }
+
+
+def _exfil_request_payloads(state: SubmissionState) -> list[dict[str, Any]]:
+    if not state.has_dynamic_report or state.level != "malicious":
+        return []
+    return [
+        {
+            "api": "telegram_bot",
+            "kind": "send_file",
+            "host": "api.telegram.org",
+            "method": "POST",
+            "apiMethod": "sendDocument",
+            "targetId": "123456789",
+            "maskedTarget": "/bot123456789:FAKE-TOKEN-FOR-TESTS/sendDocument",
+            "requestBytes": 1051,
+            "replyStatus": None,
+            "requestCount": 1,
+            "capture": "decrypted_https",
+            "firstSeen": "2026-10-08T15:12:46.875Z",
+            "score": 80,
+            "tier": "Malicious",
+            "processId": None,
+            "processImage": None,
+            "text": "A file was uploaded to the Telegram bot 123456789.",
+        }
+    ]
+
+
+def build_network_exfil_requests(
+    state: SubmissionState,
+    *,
+    limit: int | None,
+    skip: int | None,
+) -> list[NetworkExfilRequest]:
+    """Build the chat bot and webhook requests response."""
+    payloads = _exfil_request_payloads(state)[skip or 0 :]
+    if limit is not None:
+        payloads = payloads[:limit]
+    return [NetworkExfilRequest.model_validate(item) for item in payloads]
+
+
+def build_pdf_report_status(state: SubmissionState) -> PdfReportStatus:
+    """Build the PDF report status response."""
+    if state.current_status() != "completed":
+        return PdfReportStatus.model_validate(
+            {
+                "status": "analysis_in_progress",
+                "message": "Please wait for the analysis to finish before generating the PDF report.",
+            }
+        )
+    if not state.pdf_report_ready:
+        return PdfReportStatus.model_validate({"status": "queued", "retryAfterSeconds": 3})
+    return PdfReportStatus.model_validate({"status": "ready"})
+
+
+_AI_VERDICTS: dict[str, str] = {
+    "malicious": "malicious",
+    "suspicious": "suspicious",
+    "benign": "benign",
+    "unknown": "inconclusive",
+}
+
+
+def build_ai_report(state: SubmissionState) -> AiReport | AiReportPending:
+    """Build the AI report: pending until the analysis completes."""
+    if state.current_status() != "completed":
+        return AiReportPending.model_validate({"status": "waiting_for_analysis"})
+    verdict = _AI_VERDICTS[state.level]
+    evidence = {"source": "submission", "ref": state.uuid, "label": "Submission"}
+    return AiReport.model_validate(
+        {
+            "jobId": None,
+            "status": "completed",
+            "verdict": verdict,
+            "confidence": "high",
+            "agreesWithEngine": True,
+            "family": None,
+            "familyStatus": "none",
+            "report": {
+                "summary": {
+                    "verdict": verdict,
+                    "confidence": "high",
+                    "text": f"The fake AI report for {state.filename}.",
+                    "engineVerdict": state.level,
+                    "agreesWithEngine": True,
+                    "disagreementReason": None,
+                },
+                "classification": {
+                    "family": {"name": None, "status": "none", "evidence": []},
+                    "category": "other",
+                    "impersonatedBrand": None,
+                },
+                "iocs": [
+                    {
+                        "value": seed.value,
+                        "kind": seed.type,
+                        "status": "confirmed",
+                        "reason": "The IoC engine extracted the value.",
+                        "evidence": [{"source": "ioc", "ref": seed.value, "label": "IoC"}],
+                    }
+                    for seed in state.iocs
+                ],
+                "techniques": [
+                    {
+                        "id": technique,
+                        "name": technique,
+                        "tactic": "Execution",
+                        "origin": "engine",
+                        "confidence": "high",
+                        "evidence": [evidence],
+                    }
+                    for technique in state.mitre_techniques
+                ],
+                "attackFlow": {
+                    "nodes": [
+                        {
+                            "id": "n1",
+                            "kind": "process",
+                            "label": state.filename,
+                            "phase": "execution",
+                            "evidence": evidence,
+                        }
+                    ],
+                    "edges": [],
+                },
+                "narrative": [
+                    {
+                        "phase": "execution",
+                        "text": f"{state.filename} started.",
+                        "evidence": [evidence],
+                    }
+                ],
+                "screenshots": [],
+                "engineAgreement": [
+                    {"engine": "dynamic", "reported": state.level, "agrees": True, "note": None}
+                ],
+                "recommendations": [{"kind": "hunting", "text": "Search for the file hash."}],
+                "iocReview": None,
+            },
+            "updatedAt": state.updated_at.isoformat(),
+        }
+    )
 
 
 def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:

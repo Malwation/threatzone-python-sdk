@@ -20,6 +20,7 @@ from ._exceptions import (
     InternalServerError,
     NotFoundError,
     PaymentRequiredError,
+    PdfReportPendingError,
     PermissionDeniedError,
     RateLimitError,
     ReportUnavailableError,
@@ -30,6 +31,9 @@ from ._exceptions import (
 from ._streaming import AsyncDownloadResponse, DownloadResponse
 from ._sync_client import ThreatZone
 from .types import (
+    AiReport,
+    AiReportContent,
+    AiReportPending,
     Artifact,
     ArtifactsResponse,
     BehaviourEvent,
@@ -64,11 +68,13 @@ from .types import (
     NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
+    NetworkExfilRequest,
     NetworkRowSource,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
+    PdfReportStatus,
     PlanInfo,
     Process,
     ProcessesResponse,
@@ -118,6 +124,7 @@ __all__ = [
     "ConnectionError",
     "AnalysisTimeoutError",
     "YaraRulePendingError",
+    "PdfReportPendingError",
     "ReportUnavailableError",
     # Types - Common
     "Hashes",
@@ -132,6 +139,11 @@ __all__ = [
     "DevicePresetOption",
     # Types - Downloads
     "MediaFile",
+    "PdfReportStatus",
+    # Types - AI report
+    "AiReport",
+    "AiReportContent",
+    "AiReportPending",
     # Types - Indicators
     "Indicator",
     "IndicatorsResponse",
@@ -166,6 +178,7 @@ __all__ = [
     "HttpRequest",
     "Connection",
     "NetworkThreat",
+    "NetworkExfilRequest",
     # Types - Network configs
     "NetworkConfigListItem",
     "NetworkConfigListResponse",

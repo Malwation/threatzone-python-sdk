@@ -141,7 +141,7 @@ class UrlAnalysisPrivacyFactor(BaseModel):
 
     factor: str
     label: str
-    delta: int
+    delta: float
     detail: str | None = None
 
 
@@ -243,9 +243,9 @@ class UrlAnalysisResponse(BaseModel):
     extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
     threat_analysis: UrlAnalysisThreatAnalysis | None = Field(default=None, alias="threatAnalysis")
     pages: list[str]
-    threat_score: int | None = Field(default=None, alias="threatScore")
+    threat_score: float | None = Field(default=None, alias="threatScore")
     risk_level: str | None = Field(default=None, alias="riskLevel")
-    privacy_score: int | None = Field(default=None, alias="privacyScore")
+    privacy_score: float | None = Field(default=None, alias="privacyScore")
     privacy_risk_level: str | None = Field(default=None, alias="privacyRiskLevel")
     privacy_breakdown: list[UrlAnalysisPrivacyFactor] | None = Field(
         default=None, alias="privacyBreakdown"

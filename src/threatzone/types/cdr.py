@@ -12,7 +12,7 @@ class CdrSanitizedFileInfoDetail(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     name: str | None = None
     action: str | None = None
-    data: dict[str, object] | None = None
+    data: list[str] | dict[str, object] | str | None = None
 
 
 class CdrSanitizedFileInfo(BaseModel):

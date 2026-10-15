@@ -21,6 +21,8 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 from pydantic import BaseModel
 
+from threatzone.types import AiReportPending
+
 from . import _responses
 from .routes import RouteMatch, match_route
 from .state import (
@@ -468,11 +470,16 @@ class FakeThreatZoneAPI:
             "get_network_tcp": self._handle_get_tcp,
             "get_network_udp": self._handle_get_udp,
             "get_network_threats": self._handle_get_network_threats,
+            "get_network_exfil_requests": self._handle_get_network_exfil_requests,
+            "get_ai_report": self._handle_get_ai_report,
             "download_pcap": self._handle_download_pcap,
             "download_sample": self._handle_download_sample,
             "download_artifact": self._handle_download_artifact,
             "download_yara_rule": self._handle_download_yara_rule,
             "download_html_report": self._handle_download_html,
+            "download_stix_report": self._handle_download_stix,
+            "get_pdf_report_status": self._handle_get_pdf_report_status,
+            "download_pdf_report": self._handle_download_pdf,
             "download_cdr": self._handle_download_cdr,
             "get_url_analysis": self._handle_get_url_analysis,
             "get_url_analysis_session": self._handle_get_url_analysis_session,
@@ -700,12 +707,24 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_submission(state))
 
     def _handle_search_by_sha256(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        del request
         sha = match.params["sha256"]
+        try:
+            query = self._query(request)
+            page = self._int(query, "page") or 1
+            limit = self._int(query, "limit") or 20
+        except _BadQueryParam as exc:
+            return _error(
+                400,
+                "Bad Request",
+                f"Invalid query parameter: {exc.param}",
+                "INVALID_QUERY_PARAM",
+                {"param": exc.param},
+            )
         if sha in self._pending_seeds:
             self._activate_pending_seed(sha)
         results = [s for s in self._states.values() if s.sha256 == sha]
-        return _json_list([_responses.build_submission(s) for s in results])
+        start = (page - 1) * limit
+        return _json_list([_responses.build_submission(s) for s in results[start : start + limit]])
 
     def _create_submission(
         self,
@@ -1169,6 +1188,42 @@ class FakeThreatZoneAPI:
             return guard
         return _json_list(list(_responses.build_network_threats(state)))
 
+    def _handle_get_network_exfil_requests(
+        self, request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_dynamic(state)
+        if guard is not None:
+            return guard
+        try:
+            query = self._query(request)
+            limit = self._int(query, "limit")
+            skip = self._int(query, "skip")
+        except _BadQueryParam as exc:
+            return _error(
+                400,
+                "Bad Request",
+                f"Invalid query parameter: {exc.param}",
+                "INVALID_QUERY_PARAM",
+                {"param": exc.param},
+            )
+        return _json_list(
+            list(_responses.build_network_exfil_requests(state, limit=limit, skip=skip))
+        )
+
+    def _handle_get_ai_report(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        report = _responses.build_ai_report(state)
+        if isinstance(report, AiReportPending):
+            return _json(report, status_code=202)
+        return _json(report)
+
     def _handle_download_pcap(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
@@ -1233,6 +1288,53 @@ class FakeThreatZoneAPI:
             return err
         html = f"<html><body>Fake report for {state.uuid}</body></html>"
         return _binary(html.encode("utf-8"), "text/html")
+
+    def _handle_download_stix(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        bundle = {"type": "bundle", "id": f"bundle--{state.uuid}", "objects": []}
+        return _binary(json.dumps(bundle).encode("utf-8"), "application/json")
+
+    def _handle_get_pdf_report_status(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        status = _responses.build_pdf_report_status(state)
+        if state.current_status() == "completed":
+            state.pdf_report_ready = True
+        return _json(status)
+
+    def _handle_download_pdf(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        if state.current_status() != "completed":
+            return _error(
+                409,
+                "Conflict",
+                "Please wait for the analysis to finish before generating the PDF report.",
+                "CONFLICT",
+            )
+        if not state.pdf_report_ready:
+            state.pdf_report_ready = True
+            return httpx.Response(
+                202,
+                content=json.dumps(
+                    {
+                        "status": "accepted",
+                        "message": "PDF report generation is in progress.",
+                        "retryAfter": 3,
+                    }
+                ).encode("utf-8"),
+                headers={"content-type": "application/json"},
+            )
+        return _binary(b"%PDF-1.4 FAKE-PDF-REPORT", "application/pdf")
 
     def _handle_download_cdr(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])

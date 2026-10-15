@@ -152,6 +152,38 @@ with neither report returns 409.
 See [recipe 2](./docs/RECIPES.md#2-submit-a-url-and-get-the-url-analysis-report) for the
 full flow.
 
+## Reports and exports
+
+```python
+uuid = completed.uuid
+
+# PDF: wait for the background render (bounded by `timeout`, default 600 s).
+client.download_pdf_report(uuid).save("report.pdf")
+
+# PDF without waiting: raises PdfReportPendingError while the render runs.
+status = client.get_pdf_report_status(uuid)  # analysis_in_progress / queued / generating / ready
+
+client.download_stix_report(uuid).save("bundle.json")  # STIX 2.1 bundle
+client.download_html_report(uuid).save("report.html")
+
+# AI analyst report: AiReport (HTTP 200) or AiReportPending (HTTP 202).
+from threatzone import AiReportPending
+
+report = client.get_ai_report(uuid)
+if isinstance(report, AiReportPending):
+    print(f"AI report is {report.status}. Try again later.")
+
+# Chat bot and webhook requests from the decrypted HTTPS capture.
+for entry in client.get_network_exfil_requests(uuid):
+    print(entry.api, entry.api_method, entry.masked_target)
+
+# The SHA-256 search returns one page (server default: 20 rows).
+matches = client.search_by_sha256("<sha256>", page=2, limit=100)
+```
+
+The HTML and PDF reports show the items that analysts in your workspace pinned, and their
+note, in a "Pinned evidence" section. Other workspaces do not see them.
+
 ## Core concepts
 
 - **Submissions** — one analysis target (file or URL) with a stable `uuid`, a workspace
@@ -207,6 +239,7 @@ Every error inherits from `ThreatZoneError`. HTTP errors additionally inherit fr
 | — | `ConnectionError` | Network-level failure. |
 | — | `AnalysisTimeoutError` | `wait_for_completion()` exceeded its timeout. `.uuid`, `.elapsed`. |
 | 202 | `YaraRulePendingError` | YARA rule generation still in progress. `.retry_after`. |
+| 202 | `PdfReportPendingError` | PDF report not ready (`download_pdf_report(wait=False)`, or the wait reached its timeout). `.retry_after`. |
 
 ```python
 from threatzone import ReportUnavailableError, ThreatZone

@@ -5,7 +5,7 @@ Mirrors the `syscalls.response.dto.ts` DTO in the Threat.Zone Public API.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SyscallsResponse(BaseModel):
@@ -15,3 +15,6 @@ class SyscallsResponse(BaseModel):
 
     items: list[str]
     total: int
+    page: int | None = None
+    limit: int | None = None
+    total_pages: int | None = Field(default=None, alias="totalPages")

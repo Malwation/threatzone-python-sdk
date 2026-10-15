@@ -18,6 +18,8 @@ import pytest
 from pydantic import ValidationError
 
 from threatzone.types import (
+    AiReport,
+    AiReportPending,
     Artifact,
     ArtifactHashes,
     ArtifactsResponse,
@@ -53,11 +55,13 @@ from threatzone.types import (
     NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
+    NetworkExfilRequest,
     NetworkSummary,
     NetworkThreat,
     NetworkThreatTls,
     OverviewSummary,
     PaginatedSubmissions,
+    PdfReportStatus,
     PlanInfo,
     Process,
     ProcessesResponse,
@@ -154,6 +158,38 @@ class TestCommonTypes:
         assert status.type == "dynamic"
         assert status.operating_system is not None
         assert status.operating_system.platform == "windows"
+
+    def test_report_status_accepts_a_fractional_score(self) -> None:
+        status = ReportStatus.model_validate(
+            {"type": "dynamic", "status": "completed", "level": "malicious", "score": 87.5}
+        )
+        assert status.score == 87.5
+
+    def test_report_status_keeps_an_integer_score(self) -> None:
+        status = ReportStatus.model_validate({"type": "static", "status": "completed", "score": 42})
+        assert status.score == 42
+
+    def test_report_status_accepts_an_empty_platform(self) -> None:
+        status = ReportStatus.model_validate(
+            {
+                "type": "dynamic",
+                "status": "completed",
+                "operatingSystem": {"name": "Unknown", "platform": ""},
+            }
+        )
+        assert status.operating_system is not None
+        assert status.operating_system.platform == ""
+
+    def test_report_status_accepts_an_unknown_platform(self) -> None:
+        status = ReportStatus.model_validate(
+            {
+                "type": "dynamic",
+                "status": "completed",
+                "operatingSystem": {"name": "FreeBSD 14", "platform": "freebsd"},
+            }
+        )
+        assert status.operating_system is not None
+        assert status.operating_system.platform == "freebsd"
 
     def test_report_status_optional_fields_nullable(self) -> None:
         status = ReportStatus.model_validate({"type": "static", "status": "in_progress"})
@@ -313,6 +349,14 @@ class TestIndicatorsSurfaceTypes:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.summary is None
 
+    def test_indicator_accepts_a_fractional_score(self, sample_indicator: dict[str, Any]) -> None:
+        indicator = Indicator.model_validate({**sample_indicator, "score": 7.5})
+        assert indicator.score == 7.5
+
+    def test_indicator_keeps_an_integer_score(self, sample_indicator: dict[str, Any]) -> None:
+        indicator = Indicator.model_validate({**sample_indicator, "score": 8})
+        assert indicator.score == 8
+
     def test_indicator_category_is_list(self, sample_indicator: dict[str, Any]) -> None:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.category == ["evasion", "persistence"]
@@ -401,6 +445,9 @@ class TestIndicatorsSurfaceTypes:
             "process_dump",
             "unpacked_file",
             "yara_rule",
+            "email_file",
+            "email_attachment",
+            "embedded_file",
             "unknown",
             "dropped_file",
             "downloaded_file",
@@ -414,9 +461,9 @@ class TestIndicatorsSurfaceTypes:
         assert artifact.type == artifact_type
         assert isinstance(artifact.hashes, ArtifactHashes)
 
-    def test_artifact_rejects_invalid_type(self, sample_artifact: dict[str, Any]) -> None:
-        with pytest.raises(ValidationError):
-            Artifact.model_validate({**sample_artifact, "type": "not-a-real-type"})
+    def test_artifact_keeps_an_unknown_type(self, sample_artifact: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate({**sample_artifact, "type": "future_artifact_type"})
+        assert artifact.type == "future_artifact_type"
 
     def test_artifacts_response(self, sample_artifacts_response: dict[str, Any]) -> None:
         resp = ArtifactsResponse.model_validate(sample_artifacts_response)
@@ -675,6 +722,19 @@ class TestNetworkTypes:
         assert t.tls is not None
         assert t.tls.ja3_hash == "abc123"
 
+    @pytest.mark.parametrize("severity", ["high", "low", "info"])
+    def test_network_threat_accepts_every_known_severity(
+        self, sample_network_threat: dict[str, Any], severity: str
+    ) -> None:
+        t = NetworkThreat.model_validate({**sample_network_threat, "severity": severity})
+        assert t.severity == severity
+
+    def test_network_threat_keeps_an_unknown_severity(
+        self, sample_network_threat: dict[str, Any]
+    ) -> None:
+        t = NetworkThreat.model_validate({**sample_network_threat, "severity": "critical"})
+        assert t.severity == "critical"
+
     def test_network_threat_without_tls(self, sample_network_threat: dict[str, Any]) -> None:
         sample_network_threat["tls"] = None
         t = NetworkThreat.model_validate(sample_network_threat)
@@ -801,6 +861,31 @@ class TestBehaviourTypes:
         second = BehaviourEvent.model_validate(dumped)
         assert second.event_id == 42
 
+    def test_behaviour_event_accepts_a_fractional_timestamp(
+        self, sample_behaviour_event: dict[str, Any]
+    ) -> None:
+        e = BehaviourEvent.model_validate({**sample_behaviour_event, "timestamp": 1790376279.35})
+        assert e.timestamp == 1790376279.35
+
+    def test_behaviour_event_accepts_a_zero_timestamp(
+        self, sample_behaviour_event: dict[str, Any]
+    ) -> None:
+        e = BehaviourEvent.model_validate({**sample_behaviour_event, "timestamp": 0})
+        assert e.timestamp == 0
+
+    def test_behaviour_event_keeps_an_integer_timestamp(
+        self, sample_behaviour_event: dict[str, Any]
+    ) -> None:
+        e = BehaviourEvent.model_validate(sample_behaviour_event)
+        assert e.timestamp == 1700000000
+
+    def test_behaviour_event_without_timestamp(
+        self, sample_behaviour_event: dict[str, Any]
+    ) -> None:
+        payload = {k: v for k, v in sample_behaviour_event.items() if k != "timestamp"}
+        e = BehaviourEvent.model_validate(payload)
+        assert e.timestamp is None
+
 
 class TestSyscallTypes:
     def test_syscalls_response(self, sample_syscalls_response: dict[str, Any]) -> None:
@@ -826,6 +911,30 @@ class TestCdrTypes:
         assert resp.sanitized_file_info.details[0].action == "removed"
         assert resp.elapsed_time == "00:00:43"
         assert resp.metafields is None
+
+    def test_cdr_detail_data_as_a_string_list(self, sample_cdr_response: dict[str, Any]) -> None:
+        sample_cdr_response["sanitizedFileInfo"]["details"] = [
+            {"name": "macro", "action": "removed", "data": ["AutoOpen", "Document_Open"]}
+        ]
+        resp = CdrResponse.model_validate(sample_cdr_response)
+        assert resp.sanitized_file_info is not None
+        assert resp.sanitized_file_info.details[0].data == ["AutoOpen", "Document_Open"]
+
+    def test_cdr_detail_data_as_an_object(self, sample_cdr_response: dict[str, Any]) -> None:
+        sample_cdr_response["sanitizedFileInfo"]["details"] = [
+            {"name": "macro", "action": "removed", "data": {"count": 2}}
+        ]
+        resp = CdrResponse.model_validate(sample_cdr_response)
+        assert resp.sanitized_file_info is not None
+        assert resp.sanitized_file_info.details[0].data == {"count": 2}
+
+    def test_cdr_detail_data_as_a_string(self, sample_cdr_response: dict[str, Any]) -> None:
+        sample_cdr_response["sanitizedFileInfo"]["details"] = [
+            {"name": "macro", "action": "removed", "data": "AutoOpen"}
+        ]
+        resp = CdrResponse.model_validate(sample_cdr_response)
+        assert resp.sanitized_file_info is not None
+        assert resp.sanitized_file_info.details[0].data == "AutoOpen"
 
 
 class TestStaticScanTypes:
@@ -956,6 +1065,18 @@ class TestUrlAnalysisTypes:
         assert report.intel_detections[0].detection_type == "malware_url"
         assert report.metafields == {"timeout": 240, "record_session": True}
         assert report.scored_at is not None
+
+    def test_url_analysis_response_accepts_fractional_scores(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        sample_url_analysis_response["threatScore"] = 72.5
+        sample_url_analysis_response["privacyScore"] = 35.25
+        sample_url_analysis_response["privacyBreakdown"][0]["delta"] = 12.5
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert report.threat_score == 72.5
+        assert report.privacy_score == 35.25
+        assert report.privacy_breakdown is not None
+        assert report.privacy_breakdown[0].delta == 12.5
 
     def test_url_analysis_response_tolerates_an_unscored_report(self) -> None:
         report = UrlAnalysisResponse.model_validate(
@@ -1228,3 +1349,295 @@ class TestApiErrorEnvelope:
                     "code": "NOT_A_REAL_CODE",
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Fields that the API returns (old server payloads omit them)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmissionFileAndTagFields:
+    def test_old_file_info_has_no_extension_facts(self, sample_submission: dict[str, Any]) -> None:
+        sub = Submission.model_validate(sample_submission)
+        assert sub.file is not None
+        assert sub.file.declared_extension is None
+        assert sub.file.real_extension is None
+        assert sub.file.is_mimetype_mismatched is None
+
+    def test_file_info_reads_the_extension_facts(self, sample_submission: dict[str, Any]) -> None:
+        sample_submission["file"] = {
+            **sample_submission["file"],
+            "declaredExtension": "pdf",
+            "realExtension": "exe",
+            "isMimetypeMismatched": True,
+        }
+        sub = Submission.model_validate(sample_submission)
+        assert sub.file is not None
+        assert sub.file.declared_extension == "pdf"
+        assert sub.file.real_extension == "exe"
+        assert sub.file.is_mimetype_mismatched is True
+        dumped = sub.file.model_dump(by_alias=True)
+        assert dumped["declaredExtension"] == "pdf"
+        assert dumped["isMimetypeMismatched"] is True
+
+    def test_old_tag_has_no_origin(self) -> None:
+        tag = Tag.model_validate({"type": "malware", "value": "trojan"})
+        assert tag.origin is None
+
+    def test_tag_reads_the_origin(self) -> None:
+        tag = Tag.model_validate({"type": "malware", "value": "trojan", "origin": "dynamic"})
+        assert tag.origin == "dynamic"
+
+    def test_tag_keeps_a_null_origin(self) -> None:
+        tag = Tag.model_validate({"type": "user", "value": "triage", "origin": None})
+        assert tag.origin is None
+
+    def test_tag_keeps_an_unknown_origin(self) -> None:
+        tag = Tag.model_validate({"type": "malware", "value": "trojan", "origin": "future_engine"})
+        assert tag.origin == "future_engine"
+
+
+class TestIndicatorVerdictFields:
+    def test_old_indicator_has_no_verdict_fields(self, sample_indicator: dict[str, Any]) -> None:
+        indicator = Indicator.model_validate(sample_indicator)
+        assert indicator.why_matched is None
+        assert indicator.in_verdict_chain is None
+
+    def test_indicator_reads_the_verdict_fields(self, sample_indicator: dict[str, Any]) -> None:
+        indicator = Indicator.model_validate(
+            {
+                **sample_indicator,
+                "whyMatched": "The sample opened lsass.exe with PROCESS_VM_READ access.",
+                "inVerdictChain": True,
+            }
+        )
+        assert indicator.why_matched == "The sample opened lsass.exe with PROCESS_VM_READ access."
+        assert indicator.in_verdict_chain is True
+        dumped = indicator.model_dump(by_alias=True)
+        assert dumped["whyMatched"].startswith("The sample opened")
+        assert dumped["inVerdictChain"] is True
+
+
+class TestArtifactProcessAttribution:
+    def test_old_artifact_has_no_process_attribution(self, sample_artifact: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate(sample_artifact)
+        assert artifact.process_attribution is None
+
+    def test_artifact_reads_the_process_attribution(self, sample_artifact: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate({**sample_artifact, "processAttribution": "unknown"})
+        assert artifact.process_attribution == "unknown"
+
+    def test_artifact_keeps_an_unknown_process_attribution(
+        self, sample_artifact: dict[str, Any]
+    ) -> None:
+        artifact = Artifact.model_validate({**sample_artifact, "processAttribution": "sample"})
+        assert artifact.process_attribution == "sample"
+
+
+class TestSyscallPagination:
+    def test_old_syscalls_response_has_no_page_fields(
+        self, sample_syscalls_response: dict[str, Any]
+    ) -> None:
+        resp = SyscallsResponse.model_validate(sample_syscalls_response)
+        assert resp.page is None
+        assert resp.limit is None
+        assert resp.total_pages is None
+
+    def test_syscalls_response_reads_the_page_fields(
+        self, sample_syscalls_response: dict[str, Any]
+    ) -> None:
+        resp = SyscallsResponse.model_validate(
+            {**sample_syscalls_response, "page": 2, "limit": 500, "totalPages": 31}
+        )
+        assert resp.page == 2
+        assert resp.limit == 500
+        assert resp.total_pages == 31
+
+
+class TestNetworkExfilFields:
+    def test_old_network_summary_has_no_exfil_count(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        summary = NetworkSummary.model_validate(sample_network_summary)
+        assert summary.exfil_request_count is None
+
+    def test_network_summary_reads_the_exfil_count(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        summary = NetworkSummary.model_validate({**sample_network_summary, "exfilRequestCount": 2})
+        assert summary.exfil_request_count == 2
+
+    def test_old_network_threat_has_no_capture(self, sample_network_threat: dict[str, Any]) -> None:
+        threat = NetworkThreat.model_validate(sample_network_threat)
+        assert threat.capture is None
+
+    @pytest.mark.parametrize("capture", ["decrypted_https", "offline_scan"])
+    def test_network_threat_reads_every_known_capture(
+        self, sample_network_threat: dict[str, Any], capture: str
+    ) -> None:
+        threat = NetworkThreat.model_validate({**sample_network_threat, "capture": capture})
+        assert threat.capture == capture
+
+    def test_network_threat_keeps_an_unknown_capture(
+        self, sample_network_threat: dict[str, Any]
+    ) -> None:
+        threat = NetworkThreat.model_validate({**sample_network_threat, "capture": "live_tap"})
+        assert threat.capture == "live_tap"
+
+    def test_exfil_request_reads_every_field(
+        self, sample_network_exfil_request: dict[str, Any]
+    ) -> None:
+        entry = NetworkExfilRequest.model_validate(sample_network_exfil_request)
+        assert entry.api == "telegram_bot"
+        assert entry.kind == "send_file"
+        assert entry.api_method == "sendDocument"
+        assert entry.target_id == "123456789"
+        assert entry.masked_target == "/bot123456789:FAKE-TOKEN-FOR-TESTS/sendDocument"
+        assert entry.request_bytes == 1051
+        assert entry.reply_status is None
+        assert entry.request_count == 1
+        assert entry.capture == "decrypted_https"
+        assert entry.first_seen is not None
+        assert entry.first_seen.year == 2026
+        assert entry.score == 80
+        assert entry.tier == "Malicious"
+        assert entry.process_id == 1508
+        assert entry.process_image is not None
+        assert entry.text is not None
+
+    def test_exfil_request_keeps_unknown_enum_values(
+        self, sample_network_exfil_request: dict[str, Any]
+    ) -> None:
+        entry = NetworkExfilRequest.model_validate(
+            {
+                **sample_network_exfil_request,
+                "api": "matrix_bot",
+                "kind": "edit_message",
+                "capture": "offline_scan",
+            }
+        )
+        assert entry.api == "matrix_bot"
+        assert entry.kind == "edit_message"
+        assert entry.capture == "offline_scan"
+
+    def test_exfil_request_accepts_a_sparse_payload(self) -> None:
+        entry = NetworkExfilRequest.model_validate({"api": "discord_webhook"})
+        assert entry.api == "discord_webhook"
+        assert entry.masked_target is None
+        assert entry.first_seen is None
+
+
+class TestPdfReportStatusTypes:
+    def test_queued_status_reads_the_retry_hint(
+        self, sample_pdf_report_status_queued: dict[str, Any]
+    ) -> None:
+        status = PdfReportStatus.model_validate(sample_pdf_report_status_queued)
+        assert status.status == "queued"
+        assert status.retry_after_seconds == 3
+        assert status.message is None
+
+    def test_analysis_in_progress_status_reads_the_message(self) -> None:
+        status = PdfReportStatus.model_validate(
+            {"status": "analysis_in_progress", "message": "V2 report is not committed."}
+        )
+        assert status.message == "V2 report is not committed."
+        assert status.retry_after_seconds is None
+
+    def test_status_keeps_an_unknown_value(self) -> None:
+        status = PdfReportStatus.model_validate({"status": "rendering_pages"})
+        assert status.status == "rendering_pages"
+
+
+class TestAiReportTypes:
+    def test_completed_report_reads_the_content(self, sample_ai_report: dict[str, Any]) -> None:
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.status == "completed"
+        assert report.verdict == "malicious"
+        assert report.family_status == "confirmed"
+        assert report.updated_at is not None
+        content = report.report
+        assert content is not None
+        assert content.summary is not None
+        assert content.summary.engine_verdict == "malicious"
+        assert content.classification is not None
+        assert content.classification.family is not None
+        assert content.classification.family.name == "AgentTesla"
+        assert content.techniques is not None
+        assert content.techniques[0].origin == "engine"
+        assert content.attack_flow is not None
+        assert content.attack_flow.edges is not None
+        assert content.attack_flow.edges[0].from_ == "n1"
+        assert content.screenshots is not None
+        assert content.screenshots[0].threat_relevant is True
+        assert content.ioc_review is not None
+        assert content.ioc_review.summary is not None
+        assert content.ioc_review.summary.reviewed_by_model == 0
+        assert content.ioc_review.candidates is not None
+        assert content.ioc_review.candidates[0].decided_by == "rule"
+
+    def test_edge_dumps_the_from_key(self, sample_ai_report: dict[str, Any]) -> None:
+        report = AiReport.model_validate(sample_ai_report)
+        dumped = report.model_dump(by_alias=True)
+        assert dumped["report"]["attackFlow"]["edges"][0]["from"] == "n1"
+
+    def test_failed_report_has_no_content(self) -> None:
+        report = AiReport.model_validate(
+            {
+                "jobId": None,
+                "status": "failed",
+                "verdict": None,
+                "confidence": None,
+                "agreesWithEngine": None,
+                "family": None,
+                "familyStatus": None,
+                "report": None,
+                "updatedAt": "2026-09-28T10:00:00.000Z",
+            }
+        )
+        assert report.status == "failed"
+        assert report.report is None
+
+    def test_report_without_ioc_review(self, sample_ai_report: dict[str, Any]) -> None:
+        sample_ai_report["report"]["iocReview"] = None
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.report is not None
+        assert report.report.ioc_review is None
+
+    def test_report_keeps_unknown_enum_values(self, sample_ai_report: dict[str, Any]) -> None:
+        sample_ai_report["status"] = "archived"
+        sample_ai_report["verdict"] = "likely_malicious"
+        sample_ai_report["report"]["narrative"][0]["phase"] = "lateral_movement"
+        sample_ai_report["report"]["iocs"][0]["evidence"][0]["source"] = "future_engine"
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.status == "archived"
+        assert report.verdict == "likely_malicious"
+        assert report.report is not None
+        assert report.report.narrative is not None
+        assert report.report.narrative[0].phase == "lateral_movement"
+
+    def test_report_accepts_a_sparse_content(self) -> None:
+        report = AiReport.model_validate(
+            {"status": "stale", "report": {"summary": {"verdict": "benign"}}}
+        )
+        assert report.report is not None
+        assert report.report.iocs is None
+        assert report.updated_at is None
+
+    def test_in_progress_body_reads_the_stage(
+        self, sample_ai_report_in_progress: dict[str, Any]
+    ) -> None:
+        pending = AiReportPending.model_validate(sample_ai_report_in_progress)
+        assert pending.status == "in_progress"
+        assert pending.stage == "writing"
+
+    @pytest.mark.parametrize("status", ["waiting_for_analysis", "queued"])
+    def test_pending_body_has_no_stage(self, status: str) -> None:
+        pending = AiReportPending.model_validate({"status": status})
+        assert pending.status == status
+        assert pending.stage is None
+        assert pending.job_id is None
+
+    def test_pending_body_keeps_unknown_values(self) -> None:
+        pending = AiReportPending.model_validate({"status": "throttled", "stage": "reviewing"})
+        assert pending.status == "throttled"
+        assert pending.stage == "reviewing"

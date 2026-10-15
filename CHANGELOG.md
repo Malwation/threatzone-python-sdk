@@ -50,8 +50,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bundled `FakeThreatZoneAPI` serves the session, restart, and device-preset routes,
   and returns the extended URL-analysis report. The new
   `scenarios.seed_interactive_url_session()` seeds a submission with a running session.
+- `Indicator` adds `why_matched` and `in_verdict_chain`. `Artifact` adds
+  `process_attribution`. `SyscallsResponse` adds `page`, `limit` and `total_pages`.
+  `FileInfo` adds `declared_extension`, `real_extension` and `is_mimetype_mismatched`.
+  `Tag` adds `origin` (new type `TagOrigin`). `NetworkSummary` adds `exfil_request_count`.
+  `NetworkThreat` adds `capture` (new type `NetworkThreatCapture`). The API already sends
+  these fields. Every new field is `None` when an older server omits it.
+- `get_network_exfil_requests(uuid, *, limit, skip)` returns the chat bot and webhook
+  requests of the decrypted HTTPS capture as `NetworkExfilRequest` values.
+  `masked_target` holds the full bot token or webhook secret as sent.
+- `search_by_sha256(sha256, *, page, limit)` reads more than the first page. Without the
+  parameters, the server returns the first 20 rows, as before. The SDK omits unset
+  parameters.
+- `download_stix_report(uuid)` downloads the STIX 2.1 bundle.
+- `get_pdf_report_status(uuid)` returns a `PdfReportStatus` (`status`, `message`,
+  `retry_after_seconds`).
+- `download_pdf_report(uuid, *, wait=True, timeout=600, poll_interval=None)` downloads the
+  PDF report. With `wait=True` it polls `get_pdf_report_status()` until the status is
+  `ready`, and raises `PdfReportPendingError` after `timeout` seconds. With `wait=False` it
+  raises `PdfReportPendingError` when the server answers 202.
+- `get_ai_report(uuid)` returns the AI analyst report as an `AiReport`, or an
+  `AiReportPending` when the server answers 202. New AI report types: `AiReportContent`,
+  `AiReportSummary`, `AiReportClassification`, `AiReportFamily`, `AiReportIoc`,
+  `AiReportTechnique`, `AiReportAttackFlow`, `AiReportFlowNode`, `AiReportFlowEdge`,
+  `AiReportNarrative`, `AiReportScreenshot`, `AiReportEngineAgreement`,
+  `AiReportRecommendation`, `AiReportIocReview`, `AiReportIocCandidate`,
+  `AiReportIocReviewSummary` and `AiReportEvidence`.
+- New exception: `PdfReportPendingError` (HTTP 202, `retry_after`).
+- The docstrings of `download_html_report()` and `download_pdf_report()` state that the
+  report shows the pinned evidence of the caller workspace. The docstrings of
+  `start_url_analysis_session()` and `restart_url_analysis_session()` state that the server
+  returns 409 when the URL report is in `error`.
+- The bundled `FakeThreatZoneAPI` serves the exfil-request, AI report, STIX and PDF routes,
+  pages the SHA-256 search, and returns the new fields.
 
 Every method above is mirrored on `AsyncThreatZone`.
+
+### Changed
+
+- `ReportStatus.score`, `Indicator.score`, `UrlAnalysisResponse.threat_score`,
+  `UrlAnalysisResponse.privacy_score` and `UrlAnalysisPrivacyFactor.delta` change from `int`
+  to `float`. Integer values from the API stay valid. A strict type checker can now report
+  code that uses these fields as `int`.
+- `BehaviourEvent.timestamp` changes from `int` to `float | None`.
+
+### Fixed
+
+- `get_behaviours` no longer fails on Windows V2 events. Their `timestamp` has fractional
+  seconds (for example `1790376279.35`).
+- `get_network_threats` no longer fails on `info` alerts. `ThreatSeverity` adds `info` and
+  keeps unknown values as plain strings.
+- `get_artifacts` no longer fails on EML, Office, PDF, RTF and OneNote submissions.
+  `ArtifactType` adds `email_file`, `email_attachment` and `embedded_file`, and keeps unknown
+  values as plain strings.
+- `get_cdr_results` no longer fails when `CdrSanitizedFileInfoDetail.data` is a list of
+  strings. `data` accepts a list of strings, an object or a string.
+- A fractional score no longer fails the whole call (`ReportStatus.score`, `Indicator.score`,
+  the URL-analysis scores and `UrlAnalysisPrivacyFactor.delta`).
+- `ReportOperatingSystem.platform` accepts an empty string and other values outside
+  `OperatingSystemPlatform`.
 
 ## 1.1.1
 

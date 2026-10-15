@@ -1005,3 +1005,157 @@ def report_unavailable_409_body() -> dict[str, Any]:
             "availableReports": ["static"],
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Network exfil requests, PDF report status, and AI report payloads
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_network_exfil_request() -> dict[str, Any]:
+    return {
+        "api": "telegram_bot",
+        "kind": "send_file",
+        "host": "api.telegram.org",
+        "method": "POST",
+        "apiMethod": "sendDocument",
+        "targetId": "123456789",
+        "maskedTarget": "/bot123456789:FAKE-TOKEN-FOR-TESTS/sendDocument",
+        "requestBytes": 1051,
+        "replyStatus": None,
+        "requestCount": 1,
+        "capture": "decrypted_https",
+        "firstSeen": "2026-10-08T15:12:46.875Z",
+        "score": 80,
+        "tier": "Malicious",
+        "processId": 1508,
+        "processImage": "C:\\Users\\analyst\\AppData\\Local\\Temp\\sample.exe",
+        "text": "A file was uploaded to the Telegram bot 123456789.",
+    }
+
+
+@pytest.fixture
+def sample_pdf_report_status_queued() -> dict[str, Any]:
+    return {"status": "queued", "retryAfterSeconds": 3}
+
+
+@pytest.fixture
+def sample_ai_report_evidence() -> dict[str, Any]:
+    return {"source": "network_dns", "ref": "c2.example.com", "label": "DNS query"}
+
+
+@pytest.fixture
+def sample_ai_report(sample_ai_report_evidence: dict[str, Any]) -> dict[str, Any]:
+    evidence = sample_ai_report_evidence
+    return {
+        "jobId": None,
+        "status": "completed",
+        "verdict": "malicious",
+        "confidence": "high",
+        "agreesWithEngine": True,
+        "family": "AgentTesla",
+        "familyStatus": "confirmed",
+        "report": {
+            "summary": {
+                "verdict": "malicious",
+                "confidence": "high",
+                "text": "The sample drops a stealer payload and contacts a C2 host.",
+                "engineVerdict": "malicious",
+                "agreesWithEngine": True,
+                "disagreementReason": None,
+            },
+            "classification": {
+                "family": {"name": "AgentTesla", "status": "confirmed", "evidence": [evidence]},
+                "category": "stealer",
+                "impersonatedBrand": None,
+            },
+            "iocs": [
+                {
+                    "value": "c2.example.com",
+                    "kind": "domain",
+                    "status": "confirmed",
+                    "reason": "Contacted over HTTP right after execution.",
+                    "evidence": [evidence],
+                }
+            ],
+            "techniques": [
+                {
+                    "id": "T1055",
+                    "name": "Process Injection",
+                    "tactic": "Defense Evasion",
+                    "origin": "engine",
+                    "confidence": "high",
+                    "evidence": [evidence],
+                }
+            ],
+            "attackFlow": {
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "kind": "process",
+                        "label": "sample.exe",
+                        "phase": "execution",
+                        "evidence": evidence,
+                    },
+                    {
+                        "id": "n2",
+                        "kind": "network",
+                        "label": "c2.example.com",
+                        "phase": "c2",
+                        "evidence": evidence,
+                    },
+                ],
+                "edges": [{"from": "n1", "to": "n2", "label": "connects to"}],
+            },
+            "narrative": [
+                {
+                    "phase": "execution",
+                    "text": "The sample starts and injects code into explorer.exe.",
+                    "evidence": [evidence],
+                }
+            ],
+            "screenshots": [
+                {
+                    "ordinal": 1,
+                    "observation": "A fake invoice window is shown.",
+                    "kind": "document",
+                    "threatRelevant": True,
+                }
+            ],
+            "engineAgreement": [
+                {"engine": "dynamic", "reported": "malicious", "agrees": True, "note": None}
+            ],
+            "recommendations": [
+                {"kind": "containment", "text": "Block c2.example.com at the proxy."}
+            ],
+            "iocReview": {
+                "candidates": [
+                    {
+                        "value": "c2.example.com",
+                        "kind": "domain",
+                        "verdict": "valid",
+                        "decidedBy": "rule",
+                        "ruleId": "corroborated",
+                        "reason": "Engine evidence shows this value in network traffic.",
+                        "evidence": [evidence],
+                    }
+                ],
+                "summary": {
+                    "total": 1,
+                    "valid": 1,
+                    "invalid": 0,
+                    "benign": 0,
+                    "unverified": 0,
+                    "reviewedByModel": 0,
+                    "truncated": False,
+                },
+            },
+        },
+        "updatedAt": "2026-09-28T10:00:00.000Z",
+    }
+
+
+@pytest.fixture
+def sample_ai_report_in_progress() -> dict[str, Any]:
+    return {"status": "in_progress", "jobId": None, "stage": "writing"}

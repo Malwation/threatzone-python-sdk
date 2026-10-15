@@ -21,11 +21,14 @@ from threatzone._exceptions import (
     BadRequestError,
     InternalServerError,
     NotFoundError,
+    PdfReportPendingError,
     PermissionDeniedError,
     ReportUnavailableError,
     YaraRulePendingError,
 )
 from threatzone.types import (
+    AiReport,
+    AiReportPending,
     Artifact,
     ArtifactsResponse,
     BehavioursResponse,
@@ -45,10 +48,12 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     NetworkConfigListItem,
+    NetworkExfilRequest,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
+    PdfReportStatus,
     ProcessesResponse,
     ProcessTreeResponse,
     SignatureCheckResponse,
@@ -1790,3 +1795,193 @@ class TestAsyncDeletedMethods:
         assert not hasattr(AsyncThreatZone, name), (
             f"Deleted method {name!r} unexpectedly present on AsyncThreatZone"
         )
+
+
+# ---------------------------------------------------------------------------
+# Fields and routes that the API already returns
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncSearchBySha256Paging:
+    async def test_sends_page_and_limit(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, [sample_submission]))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.search_by_sha256("abc", page=2, limit=100)
+        assert _call_params(mock) == {"page": 2, "limit": 100}
+
+    async def test_omits_unset_page_and_limit(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, [sample_submission]))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.search_by_sha256("abc", page=3)
+        assert _call_params(mock) == {"page": 3}
+
+    async def test_sends_no_params_by_default(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, [sample_submission]))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.search_by_sha256("abc")
+        assert _call_params(mock) == {}
+
+
+class TestAsyncNetworkExfilRequests:
+    async def test_happy(self, api_key: str, sample_network_exfil_request: dict[str, Any]) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, [sample_network_exfil_request]))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                entries = await client.get_network_exfil_requests("sub-789")
+        assert all(isinstance(e, NetworkExfilRequest) for e in entries)
+        assert entries[0].api_method == "sendDocument"
+        assert _call_url(mock).endswith("/submissions/sub-789/network/exfil-requests")
+        assert _call_params(mock) == {}
+
+    async def test_sends_limit_and_skip(
+        self, api_key: str, sample_network_exfil_request: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, [sample_network_exfil_request]))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_network_exfil_requests("sub-789", limit=10, skip=20)
+        assert _call_params(mock) == {"limit": 10, "skip": 20}
+
+    async def test_409(self, api_key: str) -> None:
+        ctx, _ = _patched_async_client(_make_response(409, _409_body()))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ReportUnavailableError):
+                    await client.get_network_exfil_requests("sub-789")
+
+
+class TestAsyncAiReport:
+    async def test_200_returns_the_report(
+        self, api_key: str, sample_ai_report: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_ai_report))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                report = await client.get_ai_report("sub-789")
+        assert isinstance(report, AiReport)
+        assert report.family == "AgentTesla"
+        assert _call_url(mock).endswith("/submissions/sub-789/ai-report")
+
+    async def test_202_returns_a_pending_model(
+        self, api_key: str, sample_ai_report_in_progress: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_async_client(_make_response(202, sample_ai_report_in_progress))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                report = await client.get_ai_report("sub-789")
+        assert isinstance(report, AiReportPending)
+        assert report.stage == "writing"
+
+    async def test_403(self, api_key: str) -> None:
+        ctx, _ = _patched_async_client(_make_response(403, {"message": "no"}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(PermissionDeniedError):
+                    await client.get_ai_report("sub-789")
+
+
+def _patched_async_streams(*responses: httpx.Response) -> tuple[Any, MagicMock]:
+    mock = MagicMock(side_effect=[_AsyncStreamCtx(r) for r in responses])
+    return patch.object(httpx.AsyncClient, "stream", mock), mock
+
+
+def _pdf_pending_response() -> httpx.Response:
+    return _make_response(
+        202,
+        {
+            "status": "accepted",
+            "message": "PDF report generation is in progress.",
+            "retryAfter": 3,
+        },
+    )
+
+
+class TestAsyncStixAndPdfReports:
+    async def test_download_stix_report_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b'{"type": "bundle"}')
+        ctx, mock = _patched_async_stream(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                res = await client.download_stix_report("sub-789")
+                assert await res.read() == b'{"type": "bundle"}'
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/download/stix-2.1-report")
+
+    async def test_get_pdf_report_status(
+        self, api_key: str, sample_pdf_report_status_queued: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_pdf_report_status_queued))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                status = await client.get_pdf_report_status("sub-789")
+        assert isinstance(status, PdfReportStatus)
+        assert status.status == "queued"
+        assert _call_url(mock).endswith("/submissions/sub-789/download/pdf-report/status")
+
+    async def test_download_pdf_report_without_wait_returns_the_file(self, api_key: str) -> None:
+        ctx, mock = _patched_async_stream(_make_response(200, content=b"%PDF-1.4"))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                res = await client.download_pdf_report("sub-789", wait=False)
+                assert await res.read() == b"%PDF-1.4"
+        assert mock.call_args.args[1].endswith("/submissions/sub-789/download/pdf-report")
+
+    async def test_download_pdf_report_without_wait_raises_on_202(self, api_key: str) -> None:
+        ctx, _ = _patched_async_stream(_pdf_pending_response())
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(PdfReportPendingError) as exc_info:
+                    await client.download_pdf_report("sub-789", wait=False)
+        assert exc_info.value.retry_after == 3.0
+
+    async def test_download_pdf_report_polls_the_status_until_ready(self, api_key: str) -> None:
+        statuses = [
+            _make_response(200, {"status": "queued", "retryAfterSeconds": 3}),
+            _make_response(200, {"status": "ready"}),
+        ]
+        stream_ctx, stream_mock = _patched_async_streams(
+            _pdf_pending_response(), _make_response(200, content=b"%PDF-1.4")
+        )
+        statuses.append(_make_response(200, {"status": "ready"}))
+        request_mock = AsyncMock(side_effect=statuses)
+        with stream_ctx, patch.object(httpx.AsyncClient, "request", new=request_mock):
+            async with AsyncThreatZone(api_key=api_key) as client:
+                res = await client.download_pdf_report("sub-789", poll_interval=0)
+                assert await res.read() == b"%PDF-1.4"
+        assert request_mock.call_count == 3
+        assert stream_mock.call_count == 2
+
+    async def test_download_pdf_report_raises_when_generation_failed(self, api_key: str) -> None:
+        ctx, _ = _patched_async_client(_make_response(200, {"status": "failed", "message": "boom"}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(InternalServerError):
+                    await client.download_pdf_report("sub-789", poll_interval=0)
+
+    async def test_download_pdf_report_stops_at_the_timeout(self, api_key: str) -> None:
+        ctx, _ = _patched_async_client(_make_response(200, {"status": "generating"}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(PdfReportPendingError):
+                    await client.download_pdf_report("sub-789", timeout=0)
+
+
+class TestAsyncUrlSessionConflict:
+    async def test_start_url_analysis_session_409_on_an_errored_report(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = _409_body("URL_ANALYSIS_REPORT_UNAVAILABLE", required_report="url_analysis")
+        ctx, _ = _patched_async_client(_make_response(409, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ReportUnavailableError):
+                    await client.start_url_analysis_session(submission_uuid)

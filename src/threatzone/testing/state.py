@@ -90,6 +90,7 @@ class SubmissionState:
     session_device_preset_name: str | None = None
     session_network_config_id: str | None = None
     session_duration_seconds: int | None = None
+    pdf_report_ready: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

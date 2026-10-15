@@ -12,6 +12,20 @@ ReportStatusValue = Literal[
 ]
 ThreatLevel = Literal["unknown", "benign", "suspicious", "malicious"]
 OperatingSystemPlatform = Literal["windows", "linux", "android", "macos"]
+TagOrigin = (
+    Literal[
+        "dynamic",
+        "network",
+        "static",
+        "yara",
+        "config_extractor",
+        "signature",
+        "email",
+        "url",
+        "import",
+    ]
+    | str
+)
 
 
 class Message(BaseModel):
@@ -59,6 +73,9 @@ class FileInfo(BaseModel):
     extension: str
     mimetype: str
     is_mimetype_checked: bool = Field(alias="isMimetypeChecked")
+    declared_extension: str | None = Field(default=None, alias="declaredExtension")
+    real_extension: str | None = Field(default=None, alias="realExtension")
+    is_mimetype_mismatched: bool | None = Field(default=None, alias="isMimetypeMismatched")
     entrypoint: FileEntrypoint | None = None
     source: FileSource
 
@@ -70,6 +87,7 @@ class Tag(BaseModel):
 
     type: str
     value: str
+    origin: TagOrigin | None = None
 
 
 class ReportOperatingSystem(BaseModel):
@@ -78,7 +96,7 @@ class ReportOperatingSystem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str
-    platform: OperatingSystemPlatform
+    platform: OperatingSystemPlatform | str
 
 
 class ReportStatus(BaseModel):
@@ -89,7 +107,7 @@ class ReportStatus(BaseModel):
     type: ReportType
     status: ReportStatusValue
     level: ThreatLevel | None = None
-    score: int | None = None
+    score: float | None = None
     duration: float | None = None
     format: str | None = None
     operating_system: ReportOperatingSystem | None = Field(default=None, alias="operatingSystem")

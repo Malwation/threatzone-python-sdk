@@ -152,6 +152,33 @@ class YaraRulePendingError(APIError):
         return base
 
 
+class PdfReportPendingError(APIError):
+    """Raised when the PDF report is not ready (HTTP 202).
+
+    ``download_pdf_report(wait=False)`` raises it when the server answers 202.
+    ``download_pdf_report(wait=True)`` raises it when the report is not ready
+    before the timeout.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 202,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        retry_after: float | None = None,
+    ) -> None:
+        self.retry_after = retry_after
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
 class InternalServerError(APIError):
     """Raised when a server error occurs (HTTP 5xx)."""
 

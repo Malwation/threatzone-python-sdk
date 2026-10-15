@@ -91,6 +91,11 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/threats$"),
     ),
     (
+        "get_network_exfil_requests",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/exfil-requests$"),
+    ),
+    ("get_ai_report", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/ai-report$")),
+    (
         "download_pcap",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/pcap$"),
     ),
@@ -109,6 +114,18 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
     (
         "download_html_report",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/html-report$"),
+    ),
+    (
+        "download_stix_report",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/stix-2\.1-report$"),
+    ),
+    (
+        "get_pdf_report_status",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/pdf-report/status$"),
+    ),
+    (
+        "download_pdf_report",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/pdf-report$"),
     ),
     (
         "download_cdr",
