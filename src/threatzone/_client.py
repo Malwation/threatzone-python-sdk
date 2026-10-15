@@ -213,6 +213,14 @@ class SyncHTTPClient(BaseClient):
         finally:
             self._cleanup_files()
 
+    def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
+        """Make a PUT request."""
+        return self._request("PUT", path, json=json)
+
+    def delete(self, path: str) -> httpx.Response:
+        """Make a DELETE request without a body."""
+        return self._request("DELETE", path)
+
     def get_stream(
         self,
         path: str,
@@ -356,6 +364,14 @@ class AsyncHTTPClient(BaseClient):
             return await self._request("POST", path, json=json, data=data, files=files)
         finally:
             self._cleanup_files()
+
+    async def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
+        """Make a PUT request."""
+        return await self._request("PUT", path, json=json)
+
+    async def delete(self, path: str) -> httpx.Response:
+        """Make a DELETE request without a body."""
+        return await self._request("DELETE", path)
 
     async def get_stream(
         self,

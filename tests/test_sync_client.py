@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -24,6 +24,9 @@ from threatzone._exceptions import (
     AnalysisTimeoutError,
     AuthenticationError,
     BadRequestError,
+    BehaviourIndexingError,
+    BehaviourTooLargeError,
+    BehaviourUnreadableError,
     InternalServerError,
     NotFoundError,
     PdfReportPendingError,
@@ -36,9 +39,13 @@ from threatzone.types import (
     AiReport,
     AiReportPending,
     AiReportRegenerateResult,
+    Annotations,
     Artifact,
+    ArtifactJob,
     ArtifactsResponse,
+    BehaviourFacets,
     BehavioursResponse,
+    BehaviourSummary,
     CdrResponse,
     Connection,
     DevicePresetOption,
@@ -49,28 +56,44 @@ from threatzone.types import (
     HttpRequest,
     IndicatorsResponse,
     IoCsResponse,
+    Killchain,
     MediaFile,
     Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
     NetworkConfigListItem,
+    NetworkEndpoints,
     NetworkExfilRequest,
+    NetworkFlowPackets,
+    NetworkHostFlows,
+    NetworkHttpPackets,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
     PdfReportStatus,
+    PreviousRun,
     ProcessesResponse,
     ProcessTreeResponse,
+    RunComparison,
+    RunNotes,
     SignatureCheckResponse,
     StaticScanResponse,
+    StringFacts,
+    StringsPage,
     Submission,
     SubmissionCreated,
+    SyscallSearchResult,
     SyscallsResponse,
+    TotalCountList,
+    UrlAnalysisBrowserSection,
+    UrlAnalysisIndicatorEvidence,
+    UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UserInfo,
+    Verdict,
     YaraRulesResponse,
 )
 
@@ -928,6 +951,71 @@ class TestIndicatorsSurface:
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(InternalServerError):
             client.get_artifacts("sub-789")
 
+    def test_get_artifacts_sends_no_source_by_default(
+        self, api_key: str, sample_artifacts_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_artifacts_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_artifacts("sub-789")
+        assert _call_params(mock) == {}
+
+    def test_get_artifacts_with_source(
+        self, api_key: str, sample_artifact_v2: dict[str, Any]
+    ) -> None:
+        body = {"items": [sample_artifact_v2], "total": 1}
+        ctx, mock = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            artifacts = client.get_artifacts("sub-789", source="dynamic_report")
+        assert _call_params(mock) == {"source": "dynamic_report"}
+        assert artifacts.items[0].analysis_status == "skipped"
+        assert artifacts.items[0].download_link is not None
+
+    def test_get_artifacts_unknown_source_400(self, api_key: str) -> None:
+        body = {
+            "statusCode": 400,
+            "error": "Bad Request",
+            "message": "source must be one of the following values",
+            "code": "INVALID_QUERY_PARAM",
+        }
+        ctx, _ = _patched_client(_make_response(400, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
+            client.get_artifacts("sub-789", source="nope")
+
+    def test_get_artifact_jobs_happy(
+        self, api_key: str, sample_artifact_jobs_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_artifact_jobs_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            jobs = client.get_artifact_jobs("sub-789", "507f1f77bcf86cd799439015")
+        assert all(isinstance(job, ArtifactJob) for job in jobs)
+        assert [job.error_code for job in jobs] == [None, "JOB_DEAD_LETTERED", "JOB_SKIPPED"]
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/artifacts/507f1f77bcf86cd799439015/jobs"
+        )
+
+    def test_get_artifact_jobs_empty(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(200, {"items": []}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            assert client.get_artifact_jobs("sub-789", "507f1f77bcf86cd799439015") == []
+
+    def test_get_artifact_jobs_404(self, api_key: str) -> None:
+        body = {
+            "statusCode": 404,
+            "error": "Not Found",
+            "message": "Artifact not found for the given submission.",
+            "code": "ARTIFACT_NOT_FOUND",
+        }
+        ctx, _ = _patched_client(_make_response(404, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(NotFoundError) as exc_info,
+        ):
+            client.get_artifact_jobs("sub-789", "507f1f77bcf86cd799439015")
+        assert exc_info.value.body is not None
+        assert exc_info.value.body["code"] == "ARTIFACT_NOT_FOUND"
+
     def test_get_eml_analysis_returns_list(
         self, api_key: str, sample_eml_analysis_list: list[dict[str, Any]]
     ) -> None:
@@ -952,6 +1040,19 @@ class TestIndicatorsSurface:
         assert isinstance(mitre, MitreResponse)
         assert mitre.total == 2
         assert _call_url(mock).endswith("/submissions/sub-789/mitre")
+
+    def test_get_mitre_techniques_items(
+        self, api_key: str, sample_mitre_response_with_items: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_mitre_response_with_items))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            mitre = client.get_mitre_techniques("sub-789")
+        assert mitre.items is not None
+        assert [item.technique_id for item in mitre.items] == ["T1055", "T1547.001"]
+        assert mitre.items[0].indicator_ids == [
+            "665f1c2e9b1d4a0012ab34cd",
+            "665f1c2e9b1d4a0012ab34ce",
+        ]
 
     def test_get_mitre_techniques_404(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(404, {"message": "no"}))
@@ -1023,6 +1124,73 @@ class TestReportEnvelopes:
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(InternalServerError):
             client.get_cdr_results("sub-789")
 
+    def test_get_cdr_results_nested_details(
+        self, api_key: str, sample_cdr_nested_response: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_cdr_nested_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.get_cdr_results("sub-789")
+        assert res.sanitized_file_info is not None
+        [member] = res.sanitized_file_info.details
+        assert member.file_name == "invoice.docx"
+        assert member.details[0].name == "Macros"
+
+    def test_get_static_scan_string_facts_happy(
+        self, api_key: str, sample_string_facts: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_string_facts))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.get_static_scan_string_facts("sub-789")
+        assert isinstance(res, StringFacts)
+        assert res.observables[0].secret is True
+        assert res.observables[0].display == sample_string_facts["observables"][0]["value"]
+        assert _call_url(mock).endswith("/submissions/sub-789/static-scan/string-facts")
+
+    def test_get_static_scan_string_facts_409(self, api_key: str) -> None:
+        body = _409_body(code="STATIC_REPORT_UNAVAILABLE", required_report="static")
+        ctx, _ = _patched_client(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_static_scan_string_facts("sub-789")
+
+    def test_get_static_scan_string_facts_429(self, api_key: str) -> None:
+        ctx, _ = _patched_client(
+            _make_response(429, {"message": "Too Many Requests"}, headers={"Retry-After": "12"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(RateLimitError):
+            client.get_static_scan_string_facts("sub-789")
+
+    def test_get_static_scan_strings_page_params(
+        self, api_key: str, sample_strings_page: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_strings_page))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.get_static_scan_strings_page("sub-789", start=0, end=2, search="kernel")
+        assert isinstance(res, StringsPage)
+        assert res.items_count == 1423
+        assert res.items[0].from_source == "ascii"
+        assert _call_url(mock).endswith("/submissions/sub-789/static-scan/strings/items")
+        assert _call_params(mock) == {"start": 0, "end": 2, "search": "kernel"}
+
+    def test_get_static_scan_strings_page_defaults(
+        self, api_key: str, sample_strings_page: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_strings_page))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_static_scan_strings_page("sub-789")
+        assert _call_params(mock) == {}
+
+    def test_get_static_scan_strings_page_400(self, api_key: str) -> None:
+        ctx, _ = _patched_client(
+            _make_response(400, {"message": "bad window", "code": "INVALID_QUERY_PARAM"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
+            client.get_static_scan_strings_page("sub-789", start=0, end=5000)
+
+    def test_get_static_scan_strings_page_404(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(404, {"message": "no", "code": "NOT_FOUND"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_static_scan_strings_page("sub-789")
+
     def test_get_signature_check_results_happy(
         self, api_key: str, sample_signature_check_response: dict[str, Any]
     ) -> None:
@@ -1088,6 +1256,35 @@ class TestDynamicReport:
         ctx, _ = _patched_client(_make_response(409, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
             client.get_process_tree("sub-789")
+
+    def test_get_killchain_happy(self, api_key: str, sample_killchain: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_killchain))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            killchain = client.get_killchain("sub-789")
+        assert isinstance(killchain, Killchain)
+        assert _call_url(mock).endswith("/submissions/sub-789/killchain")
+        assert killchain.dropped_files[0].files[0].artifact_id == "65f0aa000000000000000001"
+        assert killchain.mem_dumps[0].regions[0].dumps[0].file_size == 4096
+
+    def test_get_killchain_409(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(409, _409_body()))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_killchain("sub-789")
+
+    def test_get_killchain_rate_limited(self, api_key: str) -> None:
+        response = _make_response(
+            429,
+            {"statusCode": 429, "message": "Heavy route rate limit exceeded", "retryAfter": 12},
+            headers={"Retry-After": "12"},
+        )
+        ctx, _ = _patched_client(response)
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(RateLimitError) as exc_info,
+        ):
+            client.get_killchain("sub-789")
+        assert exc_info.value.retry_after == 12.0
 
     def test_get_behaviours_happy(
         self, api_key: str, sample_behaviours_response: dict[str, Any]
@@ -1181,6 +1378,193 @@ class TestDynamicReport:
             client.get_syscalls("sub-789")
 
 
+class TestBehaviourIndexAndSyscallSearch:
+    def test_get_behaviours_sends_every_index_filter(
+        self, api_key: str, sample_indexed_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_indexed_behaviours_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            resp = client.get_behaviours(
+                "sub-789",
+                event_ids=[1024, 1025],
+                pids=[1508, 2044],
+                parent_pids=[800],
+                types=["file", "registry"],
+                operations=["writefile", "RegSetValue"],
+                statuses=["success"],
+                process_name_contains="payload",
+                from_timestamp=1712345678.5,
+                to_timestamp=1712345690,
+                syscall_line_from=15000,
+                syscall_line_to=16000,
+                text="payload.dll",
+                fields={"path": "temp", "key": ["run", "runonce"]},
+                sort="time",
+            )
+        assert _call_url(mock).endswith("/submissions/sub-789/behaviours")
+        assert _call_params(mock) == {
+            "eventIds": "1024,1025",
+            "pids": "1508,2044",
+            "parentPids": "800",
+            "types": "file,registry",
+            "operations": "writefile,RegSetValue",
+            "statuses": "success",
+            "processNameContains": "payload",
+            "fromTimestamp": 1712345678.5,
+            "toTimestamp": 1712345690,
+            "syscallLineFrom": 15000,
+            "syscallLineTo": 16000,
+            "text": "payload.dll",
+            "field.path": "temp",
+            "field.key": ["run", "runonce"],
+            "sort": "time",
+        }
+        assert resp.sorted_by == "time"
+        assert resp.items[0].subject == "C:\\evil.dll"
+
+    def test_get_behaviours_omits_unset_index_filters(
+        self, api_key: str, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviours_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_behaviours("sub-789", page=1)
+        assert _call_params(mock) == {"page": 1}
+
+    def test_get_behaviours_indexing_409(self, api_key: str) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "The behaviour index of this submission is not ready.",
+            "code": "BEHAVIOUR_INDEXING",
+            "details": {"retryAfterSeconds": 60},
+        }
+        ctx, _ = _patched_client(_make_response(409, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(BehaviourIndexingError) as exc_info,
+        ):
+            client.get_behaviours("sub-789", pids=[1508])
+        assert exc_info.value.retry_after == 60.0
+
+    def test_get_behaviours_too_large_413(self, api_key: str) -> None:
+        body = {
+            "statusCode": 413,
+            "error": "Payload Too Large",
+            "message": "The behaviour file is too large.",
+            "code": "BEHAVIOUR_TOO_LARGE",
+            "details": {"sizeBytes": 98566144, "maxBytes": 67108864},
+        }
+        ctx, _ = _patched_client(_make_response(413, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(BehaviourTooLargeError) as exc_info,
+        ):
+            client.get_behaviours("sub-789")
+        assert exc_info.value.size_bytes == 98566144
+
+    def test_get_behaviours_unreadable_502(self, api_key: str) -> None:
+        body = {"statusCode": 502, "message": "not valid", "code": "BEHAVIOUR_UNREADABLE"}
+        ctx, _ = _patched_client(_make_response(502, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BehaviourUnreadableError):
+            client.get_behaviours("sub-789")
+
+    def test_get_behaviour_summary(
+        self, api_key: str, sample_behaviour_summary_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviour_summary_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            summary = client.get_behaviour_summary("sub-789")
+        assert isinstance(summary, BehaviourSummary)
+        assert summary.total_count == 1337
+        assert _call_url(mock).endswith("/submissions/sub-789/behaviours/summary")
+
+    def test_get_behaviour_summary_rate_limited(self, api_key: str) -> None:
+        response = _make_response(
+            429,
+            {"statusCode": 429, "message": "Heavy route rate limit exceeded", "retryAfter": 12},
+            headers={"Retry-After": "12"},
+        )
+        ctx, _ = _patched_client(response)
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(RateLimitError) as exc_info,
+        ):
+            client.get_behaviour_summary("sub-789")
+        assert exc_info.value.retry_after == 12.0
+
+    def test_get_behaviour_facets(
+        self, api_key: str, sample_behaviour_facets_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviour_facets_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            facets = client.get_behaviour_facets(
+                "sub-789", "operation", contains="reg", first=50, pids=[1508]
+            )
+        assert isinstance(facets, BehaviourFacets)
+        assert facets.complete is False
+        assert _call_url(mock).endswith("/submissions/sub-789/behaviours/facets")
+        assert _call_params(mock) == {
+            "field": "operation",
+            "contains": "reg",
+            "first": 50,
+            "pids": "1508",
+        }
+
+    def test_get_behaviour_facets_sends_only_the_field(
+        self, api_key: str, sample_behaviour_facets_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_behaviour_facets_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_behaviour_facets("sub-789", "processName")
+        assert _call_params(mock) == {"field": "processName"}
+
+    def test_get_syscalls_reads_first_line(
+        self, api_key: str, sample_syscalls_response: dict[str, Any]
+    ) -> None:
+        payload = {**sample_syscalls_response, "firstLine": 501}
+        ctx, _ = _patched_client(_make_response(200, payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            syscalls = client.get_syscalls("sub-789", page=2)
+        assert syscalls.first_line == 501
+
+    def test_search_syscalls(
+        self, api_key: str, sample_syscall_search_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_syscall_search_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.search_syscalls(
+                "sub-789",
+                query="NtCreateFile",
+                pids=[3568, 4128],
+                failed_only=True,
+                apis=["NtCreateFile", "ntdll!NtWriteFile"],
+                after_line=0,
+                limit=50,
+            )
+        assert isinstance(result, SyscallSearchResult)
+        assert result.lines[0].line == 3000
+        assert _call_url(mock).endswith("/submissions/sub-789/syscalls/search")
+        assert _call_params(mock) == {
+            "query": "NtCreateFile",
+            "pids": "3568,4128",
+            "failedOnly": "true",
+            "apis": "NtCreateFile,ntdll!NtWriteFile",
+            "afterLine": 0,
+            "limit": 50,
+        }
+
+    def test_search_syscalls_sends_only_the_query(
+        self, api_key: str, sample_syscall_search_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_syscall_search_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.search_syscalls("sub-789", query="NtCreateFile", failed_only=False)
+        assert _call_params(mock) == {"query": "NtCreateFile", "failedOnly": "false"}
+
+
 # ---------------------------------------------------------------------------
 # URL analysis
 # ---------------------------------------------------------------------------
@@ -1272,6 +1656,148 @@ class TestUrlAnalysis:
         assert _call_method(mock) == "POST"
         assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/restart/url_analysis")
         assert "restart" in result.message
+
+
+class TestUrlAnalysisScoreExplanation:
+    def test_get_url_analysis_indicators(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_indicators_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, url_analysis_indicators_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.get_url_analysis_indicators(submission_uuid)
+        assert isinstance(result, UrlAnalysisIndicators)
+        assert result.snapshot is not None
+        assert result.snapshot.indicators[0].id == "domain-age"
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/indicators")
+
+    def test_get_url_analysis_indicators_409(self, api_key: str, submission_uuid: str) -> None:
+        body = _409_body("URL_ANALYSIS_REPORT_UNAVAILABLE", required_report="url_analysis")
+        ctx, _ = _patched_client(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_url_analysis_indicators(submission_uuid)
+
+    def test_get_url_analysis_indicator_evidence_sends_the_selector(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_evidence_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, url_analysis_evidence_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            evidence = client.get_url_analysis_indicator_evidence(
+                submission_uuid,
+                "domain/age",
+                "whois",
+                job_id="6710a3f2c1d2e3f4a5b6c7d8",
+                scored_at="2026-10-01T09:30:00.000Z",
+            )
+        assert isinstance(evidence, UrlAnalysisIndicatorEvidence)
+        assert evidence.state == "available"
+        assert mock.call_count == 1
+        assert _call_url(mock).endswith(
+            f"/submissions/{submission_uuid}/url-analysis/indicators/domain%2Fage/evidence/whois"
+        )
+        assert _call_params(mock) == {
+            "jobId": "6710a3f2c1d2e3f4a5b6c7d8",
+            "scoredAt": "2026-10-01T09:30:00.000Z",
+        }
+
+    def test_get_url_analysis_indicator_evidence_reads_the_snapshot_first(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_indicators_payload: dict[str, Any],
+        url_analysis_evidence_payload: dict[str, Any],
+    ) -> None:
+        mock = MagicMock(
+            side_effect=[
+                _make_response(200, url_analysis_indicators_payload),
+                _make_response(200, url_analysis_evidence_payload),
+            ]
+        )
+        with patch.object(httpx.Client, "request", mock), ThreatZone(api_key=api_key) as client:
+            evidence = client.get_url_analysis_indicator_evidence(
+                submission_uuid, "domain-age", "whois"
+            )
+        assert evidence.state == "available"
+        assert mock.call_count == 2
+        assert str(mock.call_args_list[0].args[1]).endswith("/url-analysis/indicators")
+        assert _call_params(mock) == {
+            "jobId": "6710a3f2c1d2e3f4a5b6c7d8",
+            "scoredAt": "2026-10-01T09:30:00.000Z",
+        }
+
+    def test_get_url_analysis_indicator_evidence_keeps_a_given_value(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_indicators_payload: dict[str, Any],
+        url_analysis_evidence_payload: dict[str, Any],
+    ) -> None:
+        mock = MagicMock(
+            side_effect=[
+                _make_response(200, url_analysis_indicators_payload),
+                _make_response(200, url_analysis_evidence_payload),
+            ]
+        )
+        with patch.object(httpx.Client, "request", mock), ThreatZone(api_key=api_key) as client:
+            client.get_url_analysis_indicator_evidence(
+                submission_uuid, "domain-age", "whois", job_id="aaaaaaaaaaaaaaaaaaaaaaaa"
+            )
+        assert _call_params(mock) == {
+            "jobId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+            "scoredAt": "2026-10-01T09:30:00.000Z",
+        }
+
+    def test_get_url_analysis_indicator_evidence_404(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 404,
+            "error": "Not Found",
+            "message": "The indicator or the evidence reference does not exist.",
+            "code": "URL_SCORE_EVIDENCE_NOT_FOUND",
+        }
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_url_analysis_indicator_evidence(
+                submission_uuid,
+                "ghost",
+                "whois",
+                job_id="6710a3f2c1d2e3f4a5b6c7d8",
+                scored_at="2026-10-01T09:30:00.000Z",
+            )
+
+    def test_get_url_analysis_browser_section(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_browser_section_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, url_analysis_browser_section_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            section = client.get_url_analysis_browser_section(submission_uuid, "tls")
+        assert isinstance(section, UrlAnalysisBrowserSection)
+        assert section.data["tls"]["issuer"] == "Example CA"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/browser/tls")
+
+    def test_get_url_analysis_browser_section_unknown_name_404(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 404,
+            "error": "Not Found",
+            "message": "Unknown browser section.",
+            "code": "URL_BROWSER_SECTION_NOT_FOUND",
+        }
+        ctx, mock = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_url_analysis_browser_section(submission_uuid, "cookies")
+        assert _call_url(mock).endswith("/url-analysis/browser/cookies")
 
 
 # ---------------------------------------------------------------------------
@@ -1502,6 +2028,49 @@ class TestDownloads:
         ctx, _ = _patched_stream(response)
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.download_pcap("ghost")
+
+    def test_download_https_pcap_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b"HTTPS-PCAP")
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            res = client.download_https_pcap("sub-789")
+            assert res.read() == b"HTTPS-PCAP"
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/download/pcap-https")
+
+    def test_download_https_pcap_403(self, api_key: str) -> None:
+        response = _make_response(403, {"message": "no permission", "code": "FORBIDDEN"})
+        ctx, _ = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.download_https_pcap("sub-789")
+
+    def test_download_behaviour_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b"[]")
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.download_behaviour("sub-789")
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/download/behaviour")
+
+    def test_download_behaviour_403(self, api_key: str) -> None:
+        response = _make_response(403, {"message": "no permission", "code": "FORBIDDEN"})
+        ctx, _ = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.download_behaviour("sub-789")
+
+    def test_download_syscalls_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b"line 1\nline 2")
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.download_syscalls("sub-789")
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/download/syscalls")
+
+    def test_download_syscalls_404(self, api_key: str) -> None:
+        response = _make_response(404, {"message": "no"})
+        ctx, _ = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.download_syscalls("sub-789")
 
     def test_download_yara_rule_happy(self, api_key: str) -> None:
         response = _make_response(200, content=b"rule X {}")
@@ -1976,3 +2545,391 @@ class TestUrlSessionConflict:
         ctx, _ = _patched_client(_make_response(409, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
             client.restart_url_analysis_session(submission_uuid)
+
+
+class TestNetworkListTotals:
+    def test_list_reads_the_total_count_header(
+        self, api_key: str, sample_tcp_connections: list[dict[str, Any]]
+    ) -> None:
+        response = _make_response(200, sample_tcp_connections, headers={"X-Total-Count": "128"})
+        ctx, _ = _patched_client(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = client.get_tcp_connections("sub-789", limit=1, skip=0)
+        assert isinstance(page, TotalCountList)
+        assert isinstance(page, list)
+        assert all(isinstance(c, Connection) for c in page)
+        assert page.total_count == 128
+
+    def test_total_count_is_none_without_the_header(
+        self, api_key: str, sample_dns_queries: list[dict[str, Any]]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_dns_queries))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = client.get_dns_queries("sub-789")
+        assert page.total_count is None
+        assert len(page) == 2
+
+    def test_total_count_is_none_for_a_bad_header(
+        self, api_key: str, sample_network_threats: list[dict[str, Any]]
+    ) -> None:
+        response = _make_response(200, sample_network_threats, headers={"X-Total-Count": "many"})
+        ctx, _ = _patched_client(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = client.get_network_threats("sub-789")
+        assert page.total_count is None
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "get_dns_queries",
+            "get_http_requests",
+            "get_tcp_connections",
+            "get_udp_connections",
+            "get_network_threats",
+            "get_network_exfil_requests",
+        ],
+    )
+    def test_every_list_returns_the_total(self, api_key: str, method: str) -> None:
+        ctx, _ = _patched_client(_make_response(200, [], headers={"X-Total-Count": "0"}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = getattr(client, method)("sub-789")
+        assert page == []
+        assert page.total_count == 0
+
+
+class TestNetworkPackets:
+    def test_http_request_packets(
+        self, api_key: str, sample_http_request_packets: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_http_request_packets))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            packets = client.get_http_request_packets("sub-789", "507f1f77bcf86cd799439012")
+        assert isinstance(packets, NetworkHttpPackets)
+        assert packets.items[0].body is not None
+        assert packets.items[0].body.data == b"test"
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/network/http/507f1f77bcf86cd799439012/packets"
+        )
+
+    def test_tcp_connection_packets(
+        self, api_key: str, sample_tcp_connection_packets: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_tcp_connection_packets))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            packets = client.get_tcp_connection_packets("sub-789", "507f1f77bcf86cd799439013")
+        assert isinstance(packets, NetworkFlowPackets)
+        assert packets.items[0].data is not None
+        assert packets.items[0].data.data == b"\x16\x03\x01\x00\x01"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/network/tcp/507f1f77bcf86cd799439013/packets"
+        )
+
+    def test_udp_connection_packets(
+        self, api_key: str, sample_tcp_connection_packets: dict[str, Any]
+    ) -> None:
+        payload = {**sample_tcp_connection_packets, "protocol": "udp"}
+        ctx, mock = _patched_client(_make_response(200, payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            packets = client.get_udp_connection_packets("sub-789", "507f1f77bcf86cd799439014")
+        assert packets.protocol == "udp"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/network/udp/507f1f77bcf86cd799439014/packets"
+        )
+
+    def test_eve_request_id_is_kept_in_the_path(
+        self, api_key: str, sample_http_request_packets: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_http_request_packets))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_http_request_packets("sub-789", "eve-42")
+        assert _call_url(mock).endswith("/submissions/sub-789/network/http/eve-42/packets")
+
+    def test_row_of_another_submission_raises_not_found(self, api_key: str) -> None:
+        body = {
+            "statusCode": 404,
+            "error": "Not Found",
+            "message": "No TCP connection with this ID exists on this submission",
+            "code": "NETWORK_ROW_NOT_FOUND",
+        }
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_tcp_connection_packets("sub-789", "507f1f77bcf86cd799439013")
+
+    def test_packets_409(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(409, _409_body()))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_udp_connection_packets("sub-789", "507f1f77bcf86cd799439013")
+
+
+class TestNetworkEndpoints:
+    def test_endpoints(self, api_key: str, sample_network_endpoints: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_network_endpoints))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            endpoints = client.get_network_endpoints("sub-789")
+        assert isinstance(endpoints, NetworkEndpoints)
+        assert endpoints.items[0].key == "malware-c2.example.com"
+        assert _call_url(mock).endswith("/submissions/sub-789/network/endpoints")
+        assert _call_params(mock) == {}
+
+    def test_endpoints_send_attribution_and_limit(
+        self, api_key: str, sample_network_endpoints: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_network_endpoints))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_network_endpoints(
+                "sub-789", attribution=["sample", "sample_child"], limit=100
+            )
+        assert _call_params(mock) == {"attribution": "sample,sample_child", "limit": 100}
+
+    def test_endpoints_429(self, api_key: str) -> None:
+        body = {
+            "statusCode": 429,
+            "error": "Too Many Requests",
+            "message": "Too many heavy-route requests",
+            "code": "RATE_LIMIT_EXCEEDED",
+        }
+        ctx, _ = _patched_client(_make_response(429, body, headers={"Retry-After": "12"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(RateLimitError):
+            client.get_network_endpoints("sub-789")
+
+    def test_host_flows(self, api_key: str, sample_network_host_flows: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_network_host_flows))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = client.get_network_host_flows("sub-789", "malware-c2.example.com")
+        assert isinstance(page, NetworkHostFlows)
+        assert page.alerts[0].signature == "ET MALWARE Test beacon"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/network/endpoints/malware-c2.example.com/flows"
+        )
+        assert _call_params(mock) == {}
+
+    def test_host_flows_encode_the_host_and_send_the_cursor(
+        self, api_key: str, sample_network_host_flows: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_network_host_flows))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_network_host_flows(
+                "sub-789",
+                "fe80::1%eth0",
+                attribution=["sample"],
+                first=20,
+                after="aGYxOjI",
+            )
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/network/endpoints/fe80%3A%3A1%25eth0/flows"
+        )
+        assert _call_params(mock) == {"attribution": "sample", "first": 20, "after": "aGYxOjI"}
+
+    def test_host_flows_400(self, api_key: str) -> None:
+        body = {
+            "statusCode": 400,
+            "error": "Bad Request",
+            "message": "after must be the pageInfo.endCursor of a previous page",
+            "code": "INVALID_QUERY_PARAM",
+        }
+        ctx, _ = _patched_client(_make_response(400, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
+            client.get_network_host_flows("sub-789", "c2.example.com", after="x")
+
+
+def _call_json(mock: MagicMock) -> Any:
+    _, kwargs = mock.call_args
+    return kwargs.get("json")
+
+
+class TestSearchBySha256Scope:
+    @pytest.mark.parametrize("scope", ["workspace", "public"])
+    def test_sends_scope(
+        self, api_key: str, sample_submission: dict[str, Any], scope: Literal["workspace", "public"]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, [sample_submission]))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.search_by_sha256("abc", scope=scope)
+        assert _call_params(mock) == {"scope": scope}
+
+    def test_invalid_scope_400(self, api_key: str) -> None:
+        body = {"statusCode": 400, "message": "scope", "code": "INVALID_QUERY_PARAM"}
+        ctx, _ = _patched_client(_make_response(400, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
+            client.search_by_sha256("abc", scope="public")
+
+
+class TestVerdictAndRun:
+    def test_get_verdict(self, api_key: str, sample_verdict: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_verdict))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            verdict = client.get_verdict("sub-789")
+        assert isinstance(verdict, Verdict)
+        assert verdict.tier == "Suspicious"
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith("/submissions/sub-789/verdict")
+
+    def test_get_verdict_legacy(self, api_key: str, sample_verdict_legacy: dict[str, Any]) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_verdict_legacy))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            verdict = client.get_verdict("sub-789")
+        assert verdict.story is None
+
+    def test_get_verdict_409(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(409, _409_body()))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ReportUnavailableError) as exc_info,
+        ):
+            client.get_verdict("sub-789")
+        assert exc_info.value.code == "DYNAMIC_REPORT_UNAVAILABLE"
+
+    def test_get_verdict_404(self, api_key: str) -> None:
+        body = {"statusCode": 404, "message": "Not found", "code": "NOT_FOUND"}
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_verdict("sub-789")
+
+    def test_get_run(self, api_key: str, sample_run_notes: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_run_notes))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            notes = client.get_run("sub-789")
+        assert isinstance(notes, RunNotes)
+        assert notes.java_output is not None
+        assert notes.java_output.text == sample_run_notes["javaOutput"]["text"]
+        assert _call_url(mock).endswith("/submissions/sub-789/run")
+
+    def test_get_run_409(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(409, _409_body()))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_run("sub-789")
+
+
+class TestAnnotations:
+    def test_get_annotations(self, api_key: str, sample_annotations: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_annotations))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            annotations = client.get_annotations("sub-789")
+        assert isinstance(annotations, Annotations)
+        assert annotations.pins[0].ref == "process:pid-4120"
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith("/submissions/sub-789/annotations")
+
+    def test_pin_evidence_posts_the_body(
+        self, api_key: str, sample_annotations: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_annotations))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            annotations = client.pin_evidence(
+                "sub-789", kind="process", ref="process:pid-4120", label="payload.exe"
+            )
+        assert isinstance(annotations, Annotations)
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith("/submissions/sub-789/annotations/pins")
+        assert _call_json(mock) == {
+            "kind": "process",
+            "ref": "process:pid-4120",
+            "label": "payload.exe",
+        }
+
+    def test_pin_limit_400(self, api_key: str) -> None:
+        body = {
+            "statusCode": 400,
+            "message": "Pin limit",
+            "code": "ANNOTATION_PIN_LIMIT_REACHED",
+            "details": {"limit": 200},
+        }
+        ctx, _ = _patched_client(_make_response(400, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(BadRequestError) as exc_info,
+        ):
+            client.pin_evidence("sub-789", kind="technique", ref="technique:T1055", label="T1055")
+        assert exc_info.value.body is not None
+        assert exc_info.value.body["code"] == "ANNOTATION_PIN_LIMIT_REACHED"
+
+    def test_unpin_evidence_sends_delete_without_body(
+        self, api_key: str, sample_annotations: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, {**sample_annotations, "pins": []}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            annotations = client.unpin_evidence("sub-789", "c1c2c3c4-e5f6-4789-abcd-ef1234567892")
+        assert annotations.pins == []
+        assert _call_method(mock) == "DELETE"
+        assert _call_url(mock).endswith(
+            "/submissions/sub-789/annotations/pins/c1c2c3c4-e5f6-4789-abcd-ef1234567892"
+        )
+        assert _call_json(mock) is None
+
+    def test_unpin_unknown_pin_404(self, api_key: str) -> None:
+        body = {"statusCode": 404, "message": "No pin", "code": "ANNOTATION_PIN_NOT_FOUND"}
+        ctx, _ = _patched_client(_make_response(404, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(NotFoundError) as exc_info,
+        ):
+            client.unpin_evidence("sub-789", "c1c2c3c4-e5f6-4789-abcd-ef1234567892")
+        assert exc_info.value.body is not None
+        assert exc_info.value.body["code"] == "ANNOTATION_PIN_NOT_FOUND"
+
+    def test_set_note_puts_the_text(self, api_key: str, sample_annotations: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_annotations))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            annotations = client.set_note("sub-789", "The sample drops a second stage.")
+        assert annotations.note is not None
+        assert _call_method(mock) == "PUT"
+        assert _call_url(mock).endswith("/submissions/sub-789/annotations/note")
+        assert _call_json(mock) == {"text": "The sample drops a second stage."}
+
+    def test_set_empty_note_removes_it(
+        self, api_key: str, sample_annotations: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, {**sample_annotations, "note": None}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            annotations = client.set_note("sub-789", "")
+        assert annotations.note is None
+        assert _call_json(mock) == {"text": ""}
+
+
+class TestRunCompare:
+    def test_get_previous_run(self, api_key: str) -> None:
+        payload = {"previousRunUuid": "b1b2c3d4-e5f6-4789-abcd-ef1234567891"}
+        ctx, mock = _patched_client(_make_response(200, payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            previous = client.get_previous_run("sub-789")
+        assert isinstance(previous, PreviousRun)
+        assert previous.previous_run_uuid == "b1b2c3d4-e5f6-4789-abcd-ef1234567891"
+        assert _call_url(mock).endswith("/submissions/sub-789/previous-run")
+
+    def test_compare_runs(self, api_key: str, sample_run_comparison: dict[str, Any]) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_run_comparison))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            comparison = client.compare_runs("sub-789", "sub-123")
+        assert isinstance(comparison, RunComparison)
+        assert comparison.techniques.added == ["T1059"]
+        assert _call_url(mock).endswith("/submissions/sub-789/compare/sub-123")
+
+    def test_compare_runs_404(self, api_key: str) -> None:
+        body = {"statusCode": 404, "message": "Not found", "code": "NOT_FOUND"}
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.compare_runs("sub-789", "private-run")
+
+
+class TestIocExport:
+    @pytest.mark.parametrize("export_format", ["csv", "text", "stix", "misp"])
+    def test_download_iocs_sends_the_format(
+        self, api_key: str, export_format: Literal["csv", "text", "stix", "misp"]
+    ) -> None:
+        response = _make_response(200, content=b"type,value,defanged,sources\n")
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            download = client.download_iocs("sub-789", format=export_format)
+            assert download.read() == b"type,value,defanged,sources\n"
+        assert mock.call_args.args[1].endswith("/submissions/sub-789/download/iocs")
+        assert mock.call_args.kwargs["params"] == {"format": export_format}
+
+    def test_download_iocs_403_without_stix_permission(self, api_key: str) -> None:
+        body = {"statusCode": 403, "message": "Forbidden", "code": "FORBIDDEN"}
+        ctx, _ = _patched_stream(_make_response(403, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.download_iocs("sub-789", format="misp")

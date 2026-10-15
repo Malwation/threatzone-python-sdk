@@ -47,11 +47,23 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/extracted-configs$"),
     ),
     ("get_artifacts", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/artifacts$")),
+    (
+        "get_artifact_jobs",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/artifacts/(?P<artifact_id>[^/]+)/jobs$"),
+    ),
     ("get_eml_analysis", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/eml-analysis$")),
     ("get_mitre", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/mitre$")),
     (
         "get_static_scan_strings",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan/strings$"),
+    ),
+    (
+        "get_static_scan_strings_items",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan/strings/items$"),
+    ),
+    (
+        "get_static_scan_string_facts",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan/string-facts$"),
     ),
     ("get_static_scan", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/static-scan$")),
     ("get_cdr", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/cdr$")),
@@ -64,8 +76,21 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/processes/tree$"),
     ),
     ("get_processes", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/processes$")),
+    ("get_killchain", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/killchain$")),
     ("get_behaviours", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/behaviours$")),
     ("get_syscalls", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/syscalls$")),
+    (
+        "get_behaviour_summary",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/behaviours/summary$"),
+    ),
+    (
+        "get_behaviour_facets",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/behaviours/facets$"),
+    ),
+    (
+        "search_syscalls",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/syscalls/search$"),
+    ),
     (
         "get_network_summary",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/summary$"),
@@ -94,10 +119,54 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         "get_network_exfil_requests",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/exfil-requests$"),
     ),
+    (
+        "get_http_request_packets",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/http/(?P<row_id>[^/]+)/packets$"),
+    ),
+    (
+        "get_tcp_connection_packets",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/tcp/(?P<row_id>[^/]+)/packets$"),
+    ),
+    (
+        "get_udp_connection_packets",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/udp/(?P<row_id>[^/]+)/packets$"),
+    ),
+    (
+        "get_network_endpoints",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/endpoints$"),
+    ),
+    (
+        "get_network_host_flows",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/network/endpoints/(?P<host>[^/]+)/flows$"),
+    ),
     ("get_ai_report", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/ai-report$")),
+    ("get_verdict", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/verdict$")),
+    ("get_run", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/run$")),
+    ("get_annotations", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/annotations$")),
+    ("get_previous_run", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/previous-run$")),
+    (
+        "compare_runs",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/compare/(?P<other_uuid>[^/]+)$"),
+    ),
+    (
+        "download_iocs",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/iocs$"),
+    ),
     (
         "download_pcap",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/pcap$"),
+    ),
+    (
+        "download_https_pcap",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/pcap-https$"),
+    ),
+    (
+        "download_behaviour",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/behaviour$"),
+    ),
+    (
+        "download_syscalls",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/syscalls$"),
     ),
     (
         "download_sample",
@@ -140,6 +209,21 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis$"),
     ),
     (
+        "get_url_analysis_indicators",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/indicators$"),
+    ),
+    (
+        "get_url_analysis_indicator_evidence",
+        re.compile(
+            rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/indicators/(?P<indicator_id>[^/]+)"
+            r"/evidence/(?P<reference_id>[^/]+)$"
+        ),
+    ),
+    (
+        "get_url_analysis_browser_section",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/browser/(?P<section>[^/]+)$"),
+    ),
+    (
         "get_screenshot",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/screenshot$"),
     ),
@@ -174,7 +258,31 @@ _ROUTES_POST: list[tuple[str, re.Pattern[str]]] = [
         "regenerate_ai_report",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/ai-report/regenerate$"),
     ),
+    (
+        "pin_evidence",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/annotations/pins$"),
+    ),
 ]
+
+
+_ROUTES_PUT: list[tuple[str, re.Pattern[str]]] = [
+    ("set_note", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/annotations/note$")),
+]
+
+
+_ROUTES_DELETE: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "unpin_evidence",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/annotations/pins/(?P<pin_id>[^/]+)$"),
+    ),
+]
+
+_ROUTES_BY_METHOD: dict[str, list[tuple[str, re.Pattern[str]]]] = {
+    "GET": _ROUTES_GET,
+    "POST": _ROUTES_POST,
+    "PUT": _ROUTES_PUT,
+    "DELETE": _ROUTES_DELETE,
+}
 
 
 def match_route(method: str, path: str) -> RouteMatch | None:
@@ -183,11 +291,8 @@ def match_route(method: str, path: str) -> RouteMatch | None:
     Returns a RouteMatch with the named-group params, or None when no
     route matches the given (method, path).
     """
-    if method == "GET":
-        candidates = _ROUTES_GET
-    elif method == "POST":
-        candidates = _ROUTES_POST
-    else:
+    candidates = _ROUTES_BY_METHOD.get(method)
+    if candidates is None:
         return None
 
     for name, pattern in candidates:

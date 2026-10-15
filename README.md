@@ -156,6 +156,47 @@ Scoring fields (`threat_score`, `risk_level`, `privacy_score`, `privacy_risk_lev
 `completeness`, `intel_detections`, `metafields`, `scored_at`) are `None` or empty until
 scoring finishes. Read them after the report reaches `completed`.
 
+`report.job_id` identifies the analysis run. A restart starts a new run with a new
+`job_id`. `session.session_config.network_config_source` (`"submit"` or
+`"admin-default"`) and `network_config_name` tell where the network choice came from.
+
+Score explanation, evidence and browser sections (all plans):
+
+```python
+explanation = client.get_url_analysis_indicators(created.uuid)
+if explanation.snapshot is not None:
+    for indicator in explanation.snapshot.indicators:
+        print(indicator.rule_id, indicator.weighted_points, indicator.disposition)
+        for ref in indicator.evidence_refs:
+            if ref.available:
+                evidence = client.get_url_analysis_indicator_evidence(
+                    created.uuid,
+                    indicator.id,
+                    ref.id,
+                    job_id=explanation.snapshot.job_id,
+                    scored_at=explanation.snapshot.scored_at,
+                )
+                print(evidence.text)  # pretty-printed JSON, 8192 characters or fewer
+
+tls = client.get_url_analysis_browser_section(created.uuid, "tls")
+print(tls.revision, tls.data)
+```
+
+- `get_url_analysis_indicators(uuid)` returns `state` (`"available"`, `"pending"` or
+  `"unavailable"`) and the `snapshot`. `unavailable_reason` is `"legacy"`, `"size_limit"`
+  or `"scoring_error"`. Indicator `title` and `reason` are display text that can change;
+  use `id` and `rule_id` in automation.
+- `get_url_analysis_indicator_evidence(uuid, indicator_id, reference_id, *, job_id=None,
+  scored_at=None)` returns one evidence item. When `job_id` or `scored_at` is `None`, the SDK
+  reads the explanation first and uses the snapshot values. `state` is `"unavailable"` when
+  the selector is not current: read the explanation again. An unknown indicator or reference
+  raises `NotFoundError` (`URL_SCORE_EVIDENCE_NOT_FOUND`).
+- `get_url_analysis_browser_section(uuid, section)` accepts `"overview"`, `"findings"`,
+  `"tls"` or `"network-summary"` (redirects, hosts and IP addresses). Another name raises
+  `NotFoundError` (`URL_BROWSER_SECTION_NOT_FOUND`). A run without browser data raises
+  `NotFoundError` (`URL_BROWSER_SECTION_UNAVAILABLE`). The API never returns cookies, full
+  network entries, or request and response bodies.
+
 Media from the session:
 
 ```python
@@ -173,6 +214,173 @@ with neither report returns 409.
 See [recipe 2](./docs/RECIPES.md#2-submit-a-url-and-get-the-url-analysis-report) for the
 full flow.
 
+## Indicators and artifacts
+
+```python
+uuid = completed.uuid
+
+for row in client.get_indicators(uuid).items:
+    # Windows V2 rows carry the analyst text, the acting process and the related events.
+    # These fields are None on legacy rows.
+    print(row.name, row.rule_source, row.what_happened)
+    if row.actor is not None:
+        print(row.actor.image, row.actor.pid, row.actor.pid_gen)
+    for event in row.related or []:
+        print(event.event_id, event.t_offset_s, event.text)
+    # Overview rows have an empty id. finding_source names the job that produced them.
+    if not row.id:
+        print(row.finding_source, row.artifacts)
+
+for ioc in client.get_iocs(uuid).items:
+    print(ioc.type, ioc.raw_type, ioc.value)  # raw_type: the type text as stored
+
+# Filter by the stored source value; an unknown value raises BadRequestError.
+for artifact in client.get_artifacts(uuid, source="dynamic_report").items:
+    print(artifact.filename, artifact.analysis_status, artifact.analysis_reason)
+    # The engine jobs of the artifact, oldest first.
+    for job in client.get_artifact_jobs(uuid, artifact.id):
+        print(job.engine_type, job.status, job.error_code)  # error_code: JOB_FAILED, ...
+```
+
+`ArtifactJob.error_code` is a fixed code (`JOB_FAILED`, `JOB_DEAD_LETTERED`, `JOB_SKIPPED`).
+The API never returns the platform error text. `Artifact.download_link` is the path of the
+artifact download route; `download_artifact()` needs the `downloadSample` plan permission.
+
+## Static scan, strings and CDR
+
+```python
+uuid = completed.uuid
+
+report = client.get_static_scan_results(uuid)
+if report.file_info is not None:
+    # NSRL (National Software Reference Library) match; None when the engine has no value.
+    print(report.file_info.real_filename, report.file_info.real_sha256)
+for embedded in report.one_note_embedded_files or []:  # onenote reports only
+    print(embedded.embedded_file_name, embedded.source_filepath, embedded.entropy)
+
+# Observables and facts of the extracted strings. Values come in full; secret is a label.
+facts = client.get_static_scan_string_facts(uuid)
+for observable in facts.observables:
+    if observable.secret:
+        print(observable.kind, observable.value, observable.source)
+for fact in facts.facts:
+    print(fact.code, fact.capability, fact.matches)
+
+# One window of the extracted strings: search first, then start/end (at most 1000 rows).
+page = client.get_static_scan_strings_page(uuid, start=0, end=500, search="telegram")
+print(page.items_count, [item.value for item in page.items])
+
+# CDR details nest for inner files, for example archive members.
+cdr = client.get_cdr_results(uuid)
+for detail in (cdr.sanitized_file_info.details if cdr.sanitized_file_info else []):
+    print(detail.name, detail.action, detail.count, detail.file_name)
+    for nested in detail.details:
+        print("  ", nested.name, nested.action, nested.sha256)
+```
+
+`get_static_scan_string_facts()` and `get_static_scan_strings_page()` are heavy routes. Each API
+token can send 30 heavy-route requests each minute; above the limit the call raises
+`RateLimitError`. The API and the SDK never mask, cut or hide secret values.
+
+## Processes, behaviours and syscalls
+
+```python
+uuid = completed.uuid
+
+# (pid, pid_gen) identifies one process when the OS reuses a pid. Each field is None on
+# reports that do not record it.
+for process in client.get_processes(uuid).items:
+    print(process.pid, process.pid_gen, process.origin, process.image, process.exit_timestamp)
+
+# Kill chain: process starts, dropped files and memory dumps, as in the web UI.
+killchain = client.get_killchain(uuid)
+for group in killchain.dropped_files:
+    for dropped in group.files:
+        if dropped.artifact_id is not None:  # None: no stored copy of this file
+            client.download_artifact(uuid, dropped.artifact_id).save(f"{dropped.artifact_id}.bin")
+
+# Index filters: the same server-side filters and counts as the web UI.
+page = client.get_behaviours(
+    uuid,
+    pids=[1508],
+    operations=["regsetvalue"],          # any of, case-insensitive
+    fields={"key": ["run", "runonce"]},  # sent as field.key; text the detail contains
+    sort="time",
+)
+print(page.total, page.sorted_by, [event.subject for event in page.items])
+
+summary = client.get_behaviour_summary(uuid)  # totals, by type / operation / process, exits
+facets = client.get_behaviour_facets(uuid, "operation", contains="reg", first=20)
+
+# Search the raw syscall log page by page.
+result = client.search_syscalls(uuid, query="NtCreateFile", failed_only=True)
+while True:
+    for hit in result.lines:
+        print(hit.line, hit.raw)
+    if result.next_from_line is None:
+        break
+    result = client.search_syscalls(
+        uuid, query="NtCreateFile", failed_only=True, after_line=result.next_from_line
+    )
+
+# Raw files (the plan needs the downloadReport permission).
+client.download_behaviour(uuid).save("behaviour.json")
+client.download_syscalls(uuid).save("syscalls.txt")
+```
+
+The index parameters (`pids` to `sort`) and the summary and facet routes read the behaviour
+index. The public API never builds the index; the index is built when the Behaviour view of
+the report is opened. Without a current index these calls raise `BehaviourIndexingError`.
+`get_behaviours()` without the index parameters (`event_ids` is allowed) reads the behaviour
+file and does not need the index. `get_behaviour_summary()`, `get_behaviour_facets()` and
+`search_syscalls()` and `get_killchain()` are heavy routes: each API token can send a limited
+number of requests per minute, and `RateLimitError.retry_after` gives the seconds to wait.
+`get_killchain()` returns `artifact_id` instead of a download link. `dump_collector_active` is
+`False` when the memory dump collector did not run; then an empty `mem_dumps` does not tell that
+no dump was possible.
+
+## Network
+
+```python
+uuid = completed.uuid
+
+# Every network list is a plain list with total_count (the X-Total-Count header).
+page = client.get_tcp_connections(uuid, limit=100, skip=0)
+print(f"{len(page)} of {page.total_count} TCP rows")
+for row in page:
+    print(row.destination_ip, row.domain, row.ptr_domain, row.app_proto, row.bytes_to_server)
+
+# Packet payloads of one row, as bytes. The payloads are not masked.
+http_row = client.get_http_requests(uuid)[0]
+for pair in client.get_http_request_packets(uuid, http_row.id).items:
+    print(pair.method, pair.url, pair.body.data if pair.body else None)
+tcp_packets = client.get_tcp_connection_packets(uuid, page[0].id)  # also: UDP
+
+# The network map: endpoints, then the flows and alerts of one host, page by page.
+endpoints = client.get_network_endpoints(uuid, attribution=["sample", "sample_child"])
+host = endpoints.items[0].key
+flows = client.get_network_host_flows(uuid, host, attribution=["sample", "sample_child"])
+while True:
+    for flow in flows.flows:
+        print(flow.protocol, flow.remote_ip, flow.remote_port, flow.count)
+    if not flows.page_info.has_next_page:
+        break
+    flows = client.get_network_host_flows(
+        uuid, host, attribution=["sample", "sample_child"], after=flows.page_info.end_cursor
+    )
+for alert in flows.alerts:
+    print(alert.signature, alert.severity, alert.count)
+
+# Decrypted HTTPS capture (the plan needs the downloadReport permission).
+if client.get_network_summary(uuid).https_pcap_available:
+    client.download_https_pcap(uuid).save("https.pcap")
+```
+
+`get_network_endpoints()` and `get_network_host_flows()` are heavy routes, with the same
+per-token limit as the other heavy routes. Send the same `attribution` to both, so the flows
+match the rows of the endpoint. An unknown host returns an empty page. A packet route raises
+`NotFoundError` (`NETWORK_ROW_NOT_FOUND`) when the row ID does not belong to the submission.
+
 ## Reports and exports
 
 ```python
@@ -186,6 +394,11 @@ status = client.get_pdf_report_status(uuid)  # analysis_in_progress / queued / g
 
 client.download_stix_report(uuid).save("bundle.json")  # STIX 2.1 bundle
 client.download_html_report(uuid).save("report.html")
+
+# IP, domain, URL and SHA-256 indicators as one file: csv, text, stix or misp.
+# stix and misp need the stixReport plan permission; without it the call raises
+# PermissionDeniedError. The values are not masked.
+client.download_iocs(uuid, format="csv").save("iocs.csv")
 
 # AI analyst report: AiReport (HTTP 200) or AiReportPending (HTTP 202).
 from threatzone import AiReportPending
@@ -214,10 +427,59 @@ for entry in client.get_network_exfil_requests(uuid):
 
 # The SHA-256 search returns one page (server default: 20 rows).
 matches = client.search_by_sha256("<sha256>", page=2, limit=100)
+# scope="public": only public submissions of all workspaces, also URL submissions whose
+# downloaded payload has this SHA-256. The default scope is "workspace".
+public_matches = client.search_by_sha256("<sha256>", scope="public")
 ```
 
 The HTML and PDF reports show the items that analysts in your workspace pinned, and their
 note, in a "Pinned evidence" section. Other workspaces do not see them.
+
+## Verdict, run notes, annotations and run compare
+
+```python
+# The Windows V2 verdict with its narrative and story, as the web report shows it.
+verdict = client.get_verdict(uuid)  # every field is None for a legacy report
+if verdict.story is not None:
+    for step in verdict.story.steps:
+        print(step.t_offset_s, step.process.image, step.text)
+
+# How the run went: Java console output (full stored text), cut-short facts and notes.
+run = client.get_run(uuid)
+if run.java_output is not None:
+    print(run.java_output.text)
+for note in run.run_notes:
+    print(note.code, note.text)
+
+# Evidence pins and the note of your workspace. Each write returns the full view.
+annotations = client.pin_evidence(uuid, kind="technique", ref="technique:T1055", label="Injection")
+client.set_note(uuid, "The sample drops a second stage.")
+client.unpin_evidence(uuid, annotations.pins[0].id)
+client.set_note(uuid, "")  # an empty text removes the note
+
+# The previous run of the same sample, then the difference between the two runs.
+previous = client.get_previous_run(uuid).previous_run_uuid
+if previous is not None:
+    diff = client.compare_runs(uuid, previous)
+    print(diff.techniques.added, diff.iocs.removed_total)
+```
+
+`get_verdict()` and `get_run()` need a dynamic report; without it they raise
+`ReportUnavailableError`. The framework writes the verdict, story and note text. The text can
+change between releases: show it, do not parse it.
+
+Pins and the note belong to the workspace of the API token. Your workspace can annotate every
+submission that it can see, also a public submission of another workspace. The annotations
+stay in your workspace: a caller never reads or changes the annotations of another workspace.
+A private submission of another workspace raises `NotFoundError`. `pin_evidence()` raises
+`BadRequestError` with code `ANNOTATION_PIN_LIMIT_REACHED` when your workspace has 200 pins on
+the submission. `unpin_evidence()` raises `NotFoundError` with code `ANNOTATION_PIN_NOT_FOUND`
+for an unknown pin ID. The web UI and the HTML and PDF reports of your workspace show the pins
+and the note.
+
+`compare_runs()` reads only runs that your workspace can open. `added` items are in `uuid`
+only; `removed` items are in `other_uuid` only. Each list holds at most 200 items;
+`added_total` and `removed_total` count the items before that cap.
 
 ## Core concepts
 
@@ -268,7 +530,10 @@ Every error inherits from `ThreatZoneError`. HTTP errors additionally inherit fr
 | 403 | `PermissionDeniedError` | Cross-workspace private read, or module not enabled. |
 | 404 | `NotFoundError` | Submission, artifact, or media missing. |
 | 409 | `ReportUnavailableError` | Required report not yet available. Carries `.code`, `.submission_uuid`, `.required_report`, `.current_status`, `.available_reports`. |
-| 429 | `RateLimitError` | API quota exceeded. Has `.retry_after`. |
+| 409 | `BehaviourIndexingError` | `BEHAVIOUR_INDEXING`: the behaviour index is not ready. Subclass of `ReportUnavailableError`. Has `.retry_after`. |
+| 413 | `BehaviourTooLargeError` | `BEHAVIOUR_TOO_LARGE`: the behaviour file or the index scan is above the read limit. `.size_bytes`, `.max_bytes`, `.download_route`. |
+| 429 | `RateLimitError` | API quota or heavy-route limit exceeded. Has `.retry_after`. |
+| 502 | `BehaviourUnreadableError` | `BEHAVIOUR_UNREADABLE`: the stored behaviour file is not valid. Subclass of `InternalServerError`. |
 | 5xx | `InternalServerError` | Server-side failure. |
 | — | `TimeoutError` | HTTP request timed out. |
 | — | `ConnectionError` | Network-level failure. |

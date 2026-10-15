@@ -1,7 +1,7 @@
 """Indicator surface type definitions.
 
 Mirrors the `indicators.response.dto.ts` DTO in the Threat.Zone Public API.
-Covers: indicators, IoCs, YARA rules, extracted configs, artifacts, and the
+Covers: indicators, IoCs, YARA rules, extracted configs, artifacts, artifact jobs, and the
 overview /summary endpoint.
 """
 
@@ -27,6 +27,50 @@ class IndicatorLevels(BaseModel):
     benign: int
 
 
+class IndicatorRelatedActor(BaseModel):
+    """Process that caused a related behaviour event."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    image: str
+    pid: int | None = None
+
+
+class IndicatorRelated(BaseModel):
+    """A behaviour event related to an indicator row."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    event_id: int | None = Field(default=None, alias="eventId")
+    """Behaviour event ID. ``None`` when the event has no behaviour event."""
+    signal_id: str = Field(alias="signalId")
+    text: str
+    t_offset_s: float | None = Field(default=None, alias="tOffsetS")
+    """Seconds from the sample start. ``None`` on rows stored before the time was recorded."""
+    actor: IndicatorRelatedActor | None = None
+
+
+class IndicatorActor(BaseModel):
+    """Process that did the behaviour of an indicator row."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    image: str
+    pid: int | None = None
+    pid_gen: int | None = Field(default=None, alias="pidGen")
+    """PID generation. Use ``pid`` and ``pid_gen`` together to identify one process."""
+    lineage: str | None = None
+
+
+class IndicatorTarget(BaseModel):
+    """Object that the behaviour of an indicator row acted on."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    kind: str | None = None
+    value: str | None = None
+
+
 class Indicator(BaseModel):
     """A behavioural indicator emitted by the dynamic report."""
 
@@ -47,6 +91,29 @@ class Indicator(BaseModel):
     event_ids: list[int] = Field(alias="eventIds")
     syscall_line_numbers: list[int] = Field(alias="syscallLineNumbers")
     author: IndicatorAuthor
+    pid_gens: list[int] | None = Field(default=None, alias="pidGens")
+    """PID generation of each entry in ``pids``, in the same order."""
+    rule_source: str | None = Field(default=None, alias="ruleSource")
+    what_happened: str | None = Field(default=None, alias="whatHappened")
+    why_it_matters: str | None = Field(default=None, alias="whyItMatters")
+    why_this_tier: str | None = Field(default=None, alias="whyThisTier")
+    not_observed: list[str] | None = Field(default=None, alias="notObserved")
+    outcome: str | None = None
+    score_note: str | None = Field(default=None, alias="scoreNote")
+    """Score note as stored. The text can change; read the ``score_*`` fields for machine use."""
+    score_factors: list[str] | None = Field(default=None, alias="scoreFactors")
+    score_result: float | None = Field(default=None, alias="scoreResult")
+    score_cap: float | None = Field(default=None, alias="scoreCap")
+    related: list[IndicatorRelated] | None = None
+    actor: IndicatorActor | None = None
+    target: IndicatorTarget | None = None
+    t_offset_s: float | None = Field(default=None, alias="tOffsetS")
+    span_s: float | None = Field(default=None, alias="spanS")
+    occurrences: int | None = None
+    finding_source: str | None = Field(default=None, alias="findingSource")
+    """Analysis job that produced an overview row (a row with an empty ``id``)."""
+    artifacts: list[str] | None = None
+    dynamic_indicator_id: str | None = Field(default=None, alias="dynamicIndicatorId")
 
 
 class IndicatorsResponse(BaseModel):
@@ -85,6 +152,8 @@ class IoC(BaseModel):
     type: IoCType
     value: str
     artifacts: list[str]
+    raw_type: str | None = Field(default=None, alias="rawType")
+    """Type text as the extractor stored it, before the API maps it to ``type``."""
 
 
 class IoCsResponse(BaseModel):
@@ -171,6 +240,24 @@ ArtifactType = (
 
 ArtifactProcessAttribution = Literal["unknown"] | str
 
+ArtifactSource = (
+    Literal[
+        "dynamic_report",
+        "static_report",
+        "url_report",
+        "unpacker",
+        "config_extractor",
+        "yara_generator",
+        "user_upload",
+        "manual",
+    ]
+    | str
+)
+
+ArtifactAnalysisStatus = Literal["not_analyzed", "analyzing", "analyzed", "failed", "skipped"] | str
+
+ArtifactAnalysisTrigger = Literal["auto", "manual"] | str
+
 
 class ArtifactHashes(BaseModel):
     """Hash digests for an artifact."""
@@ -191,12 +278,17 @@ class Artifact(BaseModel):
     filename: str
     size: int
     type: ArtifactType
-    source: str
+    source: ArtifactSource
     hashes: ArtifactHashes
     tags: list[str]
     process_attribution: ArtifactProcessAttribution | None = Field(
         default=None, alias="processAttribution"
     )
+    analysis_status: ArtifactAnalysisStatus | None = Field(default=None, alias="analysisStatus")
+    analysis_trigger: ArtifactAnalysisTrigger | None = Field(default=None, alias="analysisTrigger")
+    analysis_reason: str | None = Field(default=None, alias="analysisReason")
+    download_link: str | None = Field(default=None, alias="downloadLink")
+    """Path of the artifact download route. The route needs the ``downloadSample`` permission."""
 
 
 class ArtifactsResponse(BaseModel):
@@ -206,6 +298,49 @@ class ArtifactsResponse(BaseModel):
 
     items: list[Artifact]
     total: int
+
+
+ArtifactJobEngineType = (
+    Literal[
+        "ioc_extractor",
+        "yara_scanner",
+        "config_extractor",
+        "dynamic_scan",
+        "static_scan",
+        "signature_checker",
+        "cdr",
+        "eml_analyzer",
+        "url_analysis",
+    ]
+    | str
+)
+
+ArtifactJobStatus = (
+    Literal[
+        "pending",
+        "queued",
+        "running",
+        "waiting_callback",
+        "success",
+        "retrying",
+        "failed",
+        "skipped",
+    ]
+    | str
+)
+
+ArtifactJobErrorCode = Literal["JOB_FAILED", "JOB_DEAD_LETTERED", "JOB_SKIPPED"] | str
+
+
+class ArtifactJob(BaseModel):
+    """One engine analysis job of an artifact."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    engine_type: ArtifactJobEngineType = Field(alias="engineType")
+    status: ArtifactJobStatus
+    error_code: ArtifactJobErrorCode | None = Field(default=None, alias="errorCode")
+    """Fixed code for a failed or skipped job. The API never returns the platform error text."""
 
 
 class SummaryIndicatorLevels(BaseModel):

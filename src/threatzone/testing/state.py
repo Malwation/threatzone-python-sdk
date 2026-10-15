@@ -96,6 +96,15 @@ class SubmissionState:
     report_metafields: dict[str, dict[str, str]] = field(default_factory=dict)
     ai_report_reason: str = "finalized"
     ai_report_queued: bool = False
+    behaviour_index_ready: bool = True
+    download_report_allowed: bool = True
+    https_pcap_available: bool = True
+    stix_report_allowed: bool = True
+    dropped_files: list[tuple[str, str | None]] = field(
+        default_factory=lambda: [("C:\\Users\\test\\dropped.exe", f"{0:064x}")]
+    )
+    annotation_pins: list[dict[str, Any]] = field(default_factory=list)
+    annotation_note: dict[str, Any] | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

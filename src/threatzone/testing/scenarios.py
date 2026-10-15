@@ -34,7 +34,7 @@ def seed_malicious_pe(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> 
         ],
         iocs=[
             ("domain", "malware-c2.example.com"),
-            ("ip", "192.0.2.10"),
+            ("IP", "192.0.2.10"),
             ("sha256", "b" * 64),
         ],
         mitre_techniques=["T1055", "T1547.001", "T1112", "T1059.001"],

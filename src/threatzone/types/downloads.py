@@ -10,6 +10,10 @@ PdfReportStatusValue = (
     Literal["analysis_in_progress", "queued", "generating", "ready", "failed"] | str
 )
 
+IocExportFormat = Literal["csv", "text", "stix", "misp"]
+"""File format of ``download_iocs()``. ``stix`` and ``misp`` need the ``stixReport`` plan
+permission."""
+
 
 class MediaFile(BaseModel):
     """A media file from dynamic analysis."""

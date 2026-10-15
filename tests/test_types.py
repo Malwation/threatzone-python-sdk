@@ -21,12 +21,22 @@ from threatzone.types import (
     AiReport,
     AiReportPending,
     AiReportRegenerateResult,
+    AnnotationNote,
+    AnnotationPin,
+    Annotations,
     Artifact,
     ArtifactHashes,
+    ArtifactJob,
     ArtifactsResponse,
     BehaviourEvent,
+    BehaviourFacets,
     BehavioursResponse,
+    BehaviourSummary,
     CdrResponse,
+    CdrSanitizedFileInfoDetail,
+    CompareDetection,
+    CompareDroppedFile,
+    CompareIoc,
     Connection,
     ConnectionPackets,
     DevicePresetOption,
@@ -42,21 +52,35 @@ from threatzone.types import (
     Hashes,
     HttpRequest,
     Indicator,
+    IndicatorActor,
     IndicatorLevels,
+    IndicatorRelated,
+    IndicatorRelatedActor,
     IndicatorsResponse,
+    IndicatorTarget,
     IoC,
     IoCsResponse,
+    Killchain,
+    KillchainDroppedFile,
+    KillchainMemoryDump,
+    KillchainProcess,
     LimitsCount,
     MediaFile,
     Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
+    MitreTechniqueUsage,
     ModuleInfo,
     NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
+    NetworkEndpoints,
     NetworkExfilRequest,
+    NetworkFlowPackets,
+    NetworkHostFlows,
+    NetworkHttpPackets,
+    NetworkPacketData,
     NetworkSummary,
     NetworkThreat,
     NetworkThreatTls,
@@ -65,26 +89,46 @@ from threatzone.types import (
     PdfReportStatus,
     PlanInfo,
     PlanPermissions,
+    PreviousRun,
     Process,
     ProcessesResponse,
     ProcessTreeNode,
     ProcessTreeResponse,
     ReportStatus,
+    RunComparison,
+    RunJavaOutput,
+    RunNote,
+    RunNotes,
     ScoreBreakdown,
     SignatureCheckResponse,
     SignatureCheckResult,
+    StaticScanOneNoteEmbeddedFile,
     StaticScanResponse,
+    StringFact,
+    StringFacts,
+    StringItem,
+    StringObservable,
+    StringsPage,
     Submission,
     SubmissionCreated,
     SubmissionListItem,
     SubmissionOverview,
     SubmissionOverviewJobs,
+    SyscallSearchResult,
     SyscallsResponse,
     Tag,
+    TotalCountList,
+    UrlAnalysisBrowserSection,
+    UrlAnalysisIndicatorEvidence,
+    UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UserInfo,
     UserInfoDetails,
+    Verdict,
+    VerdictNarrative,
+    VerdictStory,
+    VerdictStoryStep,
     WorkspaceBasicInfo,
     YaraRule,
     YaraRulesResponse,
@@ -499,6 +543,103 @@ class TestIndicatorsSurfaceTypes:
         second = Indicator.model_validate(dumped)
         assert second.attack_codes == first.attack_codes
 
+    def test_indicator_without_v2_fields(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.pid_gens is None
+        assert ind.rule_source is None
+        assert ind.what_happened is None
+        assert ind.why_it_matters is None
+        assert ind.why_this_tier is None
+        assert ind.not_observed is None
+        assert ind.outcome is None
+        assert ind.score_note is None
+        assert ind.score_factors is None
+        assert ind.score_result is None
+        assert ind.score_cap is None
+        assert ind.related is None
+        assert ind.actor is None
+        assert ind.target is None
+        assert ind.t_offset_s is None
+        assert ind.span_s is None
+        assert ind.occurrences is None
+        assert ind.finding_source is None
+        assert ind.artifacts is None
+        assert ind.dynamic_indicator_id is None
+
+    def test_indicator_v2_fields(self, sample_indicator_v2: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator_v2)
+        assert ind.pid_gens == [1, 2]
+        assert ind.rule_source == "behavior:process_hollowing"
+        assert ind.what_happened is not None
+        assert ind.why_it_matters is not None
+        assert ind.why_this_tier is not None
+        assert ind.not_observed == ["No network connection from svchost.exe"]
+        assert ind.outcome == "svchost.exe ran the injected code."
+        assert ind.score_note == "Score: base 90 x confidence 1.05 = 95 (cap 95)."
+        assert ind.score_factors == ["base 90", "confidence 1.05"]
+        assert ind.score_result == 95
+        assert ind.score_cap == 95
+        assert ind.t_offset_s == 4.2
+        assert ind.span_s == 1.5
+        assert ind.occurrences == 3
+        assert ind.actor == IndicatorActor(
+            image="word.exe", pid=3448, pid_gen=1, lineage="explorer.exe > word.exe"
+        )
+        assert ind.target == IndicatorTarget(kind="process", value="svchost.exe")
+        assert ind.related is not None
+        first, second = ind.related
+        assert isinstance(first, IndicatorRelated)
+        assert first.event_id == 1024
+        assert first.signal_id == "sig-0012"
+        assert first.t_offset_s == 4.2
+        assert first.actor == IndicatorRelatedActor(image="word.exe", pid=3448)
+        assert second.event_id is None
+        assert second.t_offset_s is None
+        assert second.actor is None
+
+    def test_indicator_score_note_without_known_form(
+        self, sample_indicator_v2: dict[str, Any]
+    ) -> None:
+        ind = Indicator.model_validate(
+            {
+                **sample_indicator_v2,
+                "scoreNote": None,
+                "scoreFactors": [],
+                "scoreResult": None,
+                "scoreCap": None,
+            }
+        )
+        assert ind.score_note is None
+        assert ind.score_factors == []
+        assert ind.score_result is None
+        assert ind.score_cap is None
+
+    def test_indicator_actor_with_null_process_fields(
+        self, sample_indicator_v2: dict[str, Any]
+    ) -> None:
+        ind = Indicator.model_validate(
+            {
+                **sample_indicator_v2,
+                "actor": {"image": "word.exe", "pid": None, "pidGen": None, "lineage": None},
+                "target": {"kind": None, "value": None},
+            }
+        )
+        assert ind.actor == IndicatorActor(image="word.exe")
+        assert ind.target == IndicatorTarget()
+
+    def test_indicator_overview_row_fields(self, sample_overview_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_overview_indicator)
+        assert ind.id == ""
+        assert ind.finding_source == "dynamic_scan"
+        assert ind.category == [ind.finding_source]
+        assert ind.artifacts == ["507f1f77bcf86cd799439015"]
+        assert ind.dynamic_indicator_id == "507f1f77bcf86cd799439011"
+
+    def test_indicator_v2_round_trip(self, sample_indicator_v2: dict[str, Any]) -> None:
+        first = Indicator.model_validate(sample_indicator_v2)
+        second = Indicator.model_validate(first.model_dump(by_alias=True))
+        assert second == first
+
     def test_indicators_response(self, sample_indicators_response: dict[str, Any]) -> None:
         resp = IndicatorsResponse.model_validate(sample_indicators_response)
         assert resp.total == 1
@@ -509,6 +650,15 @@ class TestIndicatorsSurfaceTypes:
         ioc = IoC.model_validate(sample_ioc)
         assert ioc.type == "domain"
         assert ioc.artifacts == ["art-1"]
+
+    def test_ioc_without_raw_type(self, sample_ioc: dict[str, Any]) -> None:
+        assert IoC.model_validate(sample_ioc).raw_type is None
+
+    def test_ioc_raw_type(self, sample_ioc: dict[str, Any]) -> None:
+        ioc = IoC.model_validate({**sample_ioc, "type": "ip", "rawType": "IP"})
+        assert ioc.type == "ip"
+        assert ioc.raw_type == "IP"
+        assert IoC.model_validate({**sample_ioc, "rawType": None}).raw_type is None
 
     def test_iocs_response(self, sample_iocs_response: dict[str, Any]) -> None:
         resp = IoCsResponse.model_validate(sample_iocs_response)
@@ -590,6 +740,76 @@ class TestIndicatorsSurfaceTypes:
     def test_artifact_keeps_an_unknown_type(self, sample_artifact: dict[str, Any]) -> None:
         artifact = Artifact.model_validate({**sample_artifact, "type": "future_artifact_type"})
         assert artifact.type == "future_artifact_type"
+
+    def test_artifact_without_analysis_fields(self, sample_artifact: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate(sample_artifact)
+        assert artifact.analysis_status is None
+        assert artifact.analysis_trigger is None
+        assert artifact.analysis_reason is None
+        assert artifact.download_link is None
+
+    def test_artifact_analysis_fields(self, sample_artifact_v2: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate(sample_artifact_v2)
+        assert artifact.source == "dynamic_report"
+        assert artifact.analysis_status == "skipped"
+        assert artifact.analysis_trigger == "auto"
+        assert artifact.analysis_reason == (
+            "Artifact exceeds the maximum file size supported for engine analysis."
+        )
+        assert artifact.download_link == (
+            "/public-api/submissions/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            "/download/artifact/507f1f77bcf86cd799439015"
+        )
+
+    def test_artifact_not_analyzed(self, sample_artifact_v2: dict[str, Any]) -> None:
+        artifact = Artifact.model_validate(
+            {
+                **sample_artifact_v2,
+                "analysisStatus": "not_analyzed",
+                "analysisTrigger": None,
+                "analysisReason": None,
+            }
+        )
+        assert artifact.analysis_status == "not_analyzed"
+        assert artifact.analysis_trigger is None
+        assert artifact.analysis_reason is None
+
+    def test_artifact_keeps_unknown_analysis_values(
+        self, sample_artifact_v2: dict[str, Any]
+    ) -> None:
+        artifact = Artifact.model_validate(
+            {
+                **sample_artifact_v2,
+                "source": "future_source",
+                "analysisStatus": "future_status",
+                "analysisTrigger": "future_trigger",
+            }
+        )
+        assert artifact.source == "future_source"
+        assert artifact.analysis_status == "future_status"
+        assert artifact.analysis_trigger == "future_trigger"
+
+    def test_artifact_job(self, sample_artifact_jobs_response: dict[str, Any]) -> None:
+        jobs = [ArtifactJob.model_validate(item) for item in sample_artifact_jobs_response["items"]]
+        assert [job.engine_type for job in jobs] == [
+            "static_scan",
+            "ioc_extractor",
+            "config_extractor",
+        ]
+        assert [job.status for job in jobs] == ["success", "failed", "skipped"]
+        assert [job.error_code for job in jobs] == [None, "JOB_DEAD_LETTERED", "JOB_SKIPPED"]
+
+    def test_artifact_job_keeps_unknown_values(self) -> None:
+        job = ArtifactJob.model_validate(
+            {"engineType": "future_engine", "status": "future_status", "errorCode": "JOB_NEW"}
+        )
+        assert job.engine_type == "future_engine"
+        assert job.status == "future_status"
+        assert job.error_code == "JOB_NEW"
+
+    def test_artifact_job_without_error_code(self) -> None:
+        job = ArtifactJob.model_validate({"engineType": "static_scan", "status": "running"})
+        assert job.error_code is None
 
     def test_artifacts_response(self, sample_artifacts_response: dict[str, Any]) -> None:
         resp = ArtifactsResponse.model_validate(sample_artifacts_response)
@@ -962,6 +1182,94 @@ class TestProcessTypes:
         assert second.nodes[0].children[0].pid == 5678
 
 
+class TestKillchainTypes:
+    def test_killchain(self, sample_killchain: dict[str, Any]) -> None:
+        kc = Killchain.model_validate(sample_killchain)
+        assert kc.dump_collector_active is True
+        coverage = kc.artifact_inventory_coverage
+        assert coverage is not None
+        assert coverage.source_status == "available"
+        assert [(c.name, c.value) for c in coverage.counts] == [
+            ("event_file_count", 3),
+            ("sidecar_count", 2),
+        ]
+        assert coverage.unretained_rows_omitted == 0
+        process = kc.created_processes[0]
+        assert isinstance(process, KillchainProcess)
+        assert (process.pid, process.pid_gen) == (1508, 4)
+        assert process.process_name == "payload.exe"
+        assert process.work_dir == "C:\\Users\\Public"
+        assert process.exit_timestamp == 1790376284.1
+        assert process.events.count == 87
+        assert process.network.items[0].port == 443
+        group = kc.dropped_files[0]
+        assert group.executable_path == "C:\\Users\\analyst\\Desktop\\payload.exe"
+        dropped = group.files[0]
+        assert isinstance(dropped, KillchainDroppedFile)
+        assert dropped.artifact_id == "65f0aa000000000000000001"
+        assert dropped.analysis_status == "analyzed"
+        assert dropped.path_authority == "verified_volume_map"
+        assert dropped.capture_closed is True
+        assert dropped.retention == "retained"
+        assert dropped.event_seq == 1182
+        region = kc.mem_dumps[0].regions[0]
+        assert (region.offset_start, region.offset_end) == ("0x400000", "0x401000")
+        dump = region.dumps[0]
+        assert isinstance(dump, KillchainMemoryDump)
+        assert dump.file_size == 4096
+        assert dump.analysis_status == "not_analyzed"
+
+    def test_v1_killchain_has_null_v2_fields(self, sample_killchain_v1: dict[str, Any]) -> None:
+        kc = Killchain.model_validate(sample_killchain_v1)
+        assert kc.artifact_inventory_coverage is None
+        assert kc.mem_dumps == []
+        process = kc.created_processes[0]
+        assert process.pid_gen is None
+        assert process.origin is None
+        assert process.tid is None
+        assert process.timestamp is None
+        assert process.work_dir is None
+        group = kc.dropped_files[0]
+        assert group.pid_gen is None
+        dropped = group.files[0]
+        assert dropped.artifact_id is None
+        assert dropped.analysis_status is None
+        assert dropped.raw_path is None
+        assert dropped.path_authority is None
+        assert dropped.retention is None
+        assert dropped.event_seq is None
+
+    def test_killchain_keeps_unknown_enum_values(self, sample_killchain: dict[str, Any]) -> None:
+        payload = sample_killchain
+        payload["createdProcesses"][0]["origin"] = "scheduler"
+        dropped = payload["droppedFiles"][0]["files"][0]
+        dropped["pathAuthority"] = "future_authority"
+        dropped["retention"] = "future_retention"
+        dropped["analysisStatus"] = "future_status"
+        payload["artifactInventoryCoverage"]["sourceStatus"] = "unavailable"
+        payload["artifactInventoryCoverage"]["sourceError"] = "future_error"
+        kc = Killchain.model_validate(payload)
+        assert kc.created_processes[0].origin == "scheduler"
+        file = kc.dropped_files[0].files[0]
+        assert file.path_authority == "future_authority"
+        assert file.retention == "future_retention"
+        assert file.analysis_status == "future_status"
+        assert kc.artifact_inventory_coverage is not None
+        assert kc.artifact_inventory_coverage.source_error == "future_error"
+
+    def test_killchain_round_trip(self, sample_killchain: dict[str, Any]) -> None:
+        first = Killchain.model_validate(sample_killchain)
+        dumped = first.model_dump(by_alias=True)
+        assert dumped["droppedFiles"][0]["files"][0]["artifactId"] == "65f0aa000000000000000001"
+        assert dumped["createdProcesses"][0]["workDir"] == "C:\\Users\\Public"
+        assert Killchain.model_validate(dumped) == first
+
+    def test_killchain_requires_the_process_lists(self, sample_killchain: dict[str, Any]) -> None:
+        del sample_killchain["createdProcesses"]
+        with pytest.raises(ValidationError):
+            Killchain.model_validate(sample_killchain)
+
+
 class TestBehaviourTypes:
     def test_behaviour_event(self, sample_behaviour_event: dict[str, Any]) -> None:
         e = BehaviourEvent.model_validate(sample_behaviour_event)
@@ -1062,6 +1370,39 @@ class TestCdrTypes:
         assert resp.sanitized_file_info is not None
         assert resp.sanitized_file_info.details[0].data == "AutoOpen"
 
+    def test_cdr_detail_from_an_older_server(self, sample_cdr_response: dict[str, Any]) -> None:
+        resp = CdrResponse.model_validate(sample_cdr_response)
+        assert resp.sanitized_file_info is not None
+        detail = resp.sanitized_file_info.details[0]
+        assert detail.count is None
+        assert detail.sha256 is None
+        assert detail.description is None
+        assert detail.file_name is None
+        assert detail.details == []
+
+    def test_cdr_nested_details(self, sample_cdr_nested_response: dict[str, Any]) -> None:
+        resp = CdrResponse.model_validate(sample_cdr_nested_response)
+        assert resp.sanitized_file_info is not None
+        [member] = resp.sanitized_file_info.details
+        assert member.count == 2
+        assert member.sha256 == ["cd" * 32]
+        assert member.description == "Inner document"
+        assert member.file_name == "invoice.docx"
+        [nested] = member.details
+        assert isinstance(nested, CdrSanitizedFileInfoDetail)
+        assert nested.name == "Macros"
+        assert nested.action == "removed"
+        assert nested.data == ["AutoOpen"]
+        assert nested.details == []
+
+    def test_cdr_detail_keeps_an_unknown_action(self, sample_cdr_response: dict[str, Any]) -> None:
+        sample_cdr_response["sanitizedFileInfo"]["details"] = [
+            {"name": "macro", "action": "quarantined", "data": None}
+        ]
+        resp = CdrResponse.model_validate(sample_cdr_response)
+        assert resp.sanitized_file_info is not None
+        assert resp.sanitized_file_info.details[0].action == "quarantined"
+
 
 class TestStaticScanTypes:
     def test_static_scan_singleton_and_extra(
@@ -1082,6 +1423,129 @@ class TestStaticScanTypes:
         assert resp.model_extra is not None
         assert resp.model_extra["peExeSections"][0]["name"] == ".text"
         assert resp.model_extra["imports"][0]["library"] == "kernel32.dll"
+
+    def test_static_scan_from_an_older_server(
+        self, sample_static_scan_response: dict[str, Any]
+    ) -> None:
+        resp = StaticScanResponse.model_validate(sample_static_scan_response)
+        assert resp.file_info is not None
+        assert resp.file_info.real_filename is None
+        assert resp.file_info.real_sha256 is None
+        assert resp.one_note_embedded_files is None
+
+    def test_static_scan_nsrl_file_info(
+        self, sample_static_scan_onenote_response: dict[str, Any]
+    ) -> None:
+        resp = StaticScanResponse.model_validate(sample_static_scan_onenote_response)
+        assert resp.file_info is not None
+        assert resp.file_info.real_filename == "notepad.exe"
+        assert resp.file_info.real_sha256 == "d" * 64
+
+    def test_static_scan_onenote_embedded_files(
+        self, sample_static_scan_onenote_response: dict[str, Any]
+    ) -> None:
+        resp = StaticScanResponse.model_validate(sample_static_scan_onenote_response)
+        files = resp.one_note_embedded_files
+        assert files is not None
+        [embedded] = files
+        assert isinstance(embedded, StaticScanOneNoteEmbeddedFile)
+        assert embedded.artifact_id == "art-9"
+        assert embedded.download_link == "/public-api/submissions/uuid-1/download/artifact/art-9"
+        assert embedded.display_name == "click_me.exe"
+        assert embedded.mime_type == "application/x-dosexec"
+        assert embedded.extension == ".exe"
+        assert embedded.identity == "{3F5A2B10-6C1D-4E7A-9B8C-0D1E2F3A4B5C}"
+        assert embedded.filesize == "204800"
+        assert embedded.entropy == 7.42
+        assert embedded.last_modified_time == "2024-01-01T00:00:00Z"
+        assert embedded.embedded_file_name == "click_me.exe"
+        assert embedded.source_filepath == "C:\\Users\\analyst\\Desktop\\click_me.exe"
+        assert resp.model_extra is not None
+        assert resp.model_extra["oneNoteEmbeddedFiles"][0]["artifactId"] == "art-9"
+
+    def test_static_scan_onenote_embedded_file_without_engine_fields(
+        self, sample_static_scan_onenote_response: dict[str, Any]
+    ) -> None:
+        sample_static_scan_onenote_response["oneNoteEmbeddedFiles"] = [
+            {
+                "name": "a.exe",
+                "size": 1,
+                "type": "PE32",
+                "md5": "1" * 32,
+                "sha1": "2" * 40,
+                "sha256": "3" * 64,
+                "artifactId": "",
+                "downloadLink": "",
+                "displayName": "a.exe",
+                "mimeType": "application/x-dosexec",
+            }
+        ]
+        resp = StaticScanResponse.model_validate(sample_static_scan_onenote_response)
+        files = resp.one_note_embedded_files
+        assert files is not None
+        assert files[0].extension is None
+        assert files[0].entropy is None
+        assert files[0].source_filepath is None
+
+
+class TestStringFactsTypes:
+    def test_string_facts_keep_secret_values_in_full(
+        self, sample_string_facts: dict[str, Any]
+    ) -> None:
+        facts = StringFacts.model_validate(sample_string_facts)
+        token, ip = facts.observables
+        assert isinstance(token, StringObservable)
+        raw = sample_string_facts["observables"][0]
+        assert token.kind == "bot-token"
+        assert token.secret is True
+        assert token.value == raw["value"]
+        assert token.display == raw["value"]
+        assert token.source == raw["source"]
+        assert "AAFabcdefghijklmnopqrstuvwxyz012345" in token.display
+        assert token.host == "api.telegram.org"
+        assert token.detail == "Telegram"
+        assert ip.secret is False
+        assert ip.detail is None
+        [fact] = facts.facts
+        assert isinstance(fact, StringFact)
+        assert fact.code == "anti-debug"
+        assert fact.capability == "anti-analysis"
+        assert fact.matches == ["return kernel32.IsDebuggerPresent() != 0"]
+        assert fact.names == []
+        assert facts.total == 1423
+        assert facts.truncated is False
+
+    def test_string_observable_keeps_an_unknown_kind(
+        self, sample_string_facts: dict[str, Any]
+    ) -> None:
+        sample_string_facts["observables"][0]["kind"] = "mutex"
+        facts = StringFacts.model_validate(sample_string_facts)
+        assert facts.observables[0].kind == "mutex"
+
+    def test_string_facts_empty(self) -> None:
+        facts = StringFacts.model_validate(
+            {"observables": [], "facts": [], "total": 0, "truncated": False}
+        )
+        assert facts.observables == []
+        assert facts.facts == []
+
+    def test_strings_page(self, sample_strings_page: dict[str, Any]) -> None:
+        page = StringsPage.model_validate(sample_strings_page)
+        first, second = page.items
+        assert isinstance(first, StringItem)
+        assert first.value == "IsDebuggerPresent"
+        assert first.from_source == "ascii"
+        assert first.blacklist is True
+        assert first.hint == "anti-debug"
+        assert second.hint is None
+        assert page.items_count == 1423
+        assert page.start == 0
+        assert page.end == 2
+        assert page.download_link == "/public-api/submissions/uuid-1/static-scan/strings"
+
+    def test_strings_page_requires_the_window(self) -> None:
+        with pytest.raises(ValidationError):
+            StringsPage.model_validate({"items": []})
 
 
 class TestSignatureCheckTypes:
@@ -1129,6 +1593,46 @@ class TestMitreTypes:
         m = MitreResponse.model_validate(sample_mitre_response)
         assert m.total == 2
         assert m.techniques[0] == "T1547.001"
+        assert m.items is None
+
+    def test_mitre_response_items(self, sample_mitre_response_with_items: dict[str, Any]) -> None:
+        m = MitreResponse.model_validate(sample_mitre_response_with_items)
+        assert m.items is not None
+        assert len(m.items) == 2
+        assert len(m.items) < len(m.techniques)
+        first = m.items[0]
+        assert isinstance(first, MitreTechniqueUsage)
+        assert first.technique_id == "T1055"
+        assert first.name == "Process Injection"
+        assert first.tactic_ids == ["TA0004", "TA0005"]
+        assert first.score == 85
+        assert first.score_maximum == 100
+        assert first.in_verdict_chain is True
+        assert first.indicator_ids == ["665f1c2e9b1d4a0012ab34cd", "665f1c2e9b1d4a0012ab34ce"]
+        assert m.items[1].score == 40.5
+        assert m.items[1].in_verdict_chain is False
+
+    def test_mitre_response_empty_items(self) -> None:
+        m = MitreResponse.model_validate({"techniques": [], "total": 0, "items": []})
+        assert m.items == []
+
+    def test_mitre_item_keeps_an_unknown_score_maximum(
+        self, sample_mitre_response_with_items: dict[str, Any]
+    ) -> None:
+        payload = dict(sample_mitre_response_with_items["items"][0], scoreMaximum=10)
+        assert MitreTechniqueUsage.model_validate(payload).score_maximum == 10
+
+    def test_mitre_item_populates_by_name(self) -> None:
+        item = MitreTechniqueUsage(
+            technique_id="T1055",
+            name="Process Injection",
+            tactic_ids=["TA0005"],
+            score=70,
+            score_maximum=100,
+            in_verdict_chain=False,
+            indicator_ids=[],
+        )
+        assert item.model_dump(by_alias=True)["techniqueId"] == "T1055"
 
 
 class TestUrlAnalysisTypes:
@@ -1284,6 +1788,152 @@ class TestUrlAnalysisSessionTypes:
 # ---------------------------------------------------------------------------
 # Config / downloads / me
 # ---------------------------------------------------------------------------
+
+
+class TestUrlAnalysisParityFields:
+    def test_old_server_payload_has_no_job_id(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        sample_url_analysis_response.pop("jobId", None)
+        assert UrlAnalysisResponse.model_validate(sample_url_analysis_response).job_id is None
+
+    def test_job_id(self, sample_url_analysis_response: dict[str, Any]) -> None:
+        sample_url_analysis_response["jobId"] = "6650f0a1c2d3e4f5a6b7c8db"
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert report.job_id == "6650f0a1c2d3e4f5a6b7c8db"
+        assert report.model_dump(by_alias=True)["jobId"] == "6650f0a1c2d3e4f5a6b7c8db"
+
+    def test_a_removed_verdict_key_is_ignored(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        sample_url_analysis_response["verdictState"] = "final"
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert "verdictState" not in report.model_dump(by_alias=True)
+
+    def test_old_server_session_config_has_no_network_config_fields(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.session_config is not None
+        assert session.session_config.network_config_source is None
+        assert session.session_config.network_config_name is None
+
+    def test_session_config_network_config_fields(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_session_payload["sessionConfig"]["networkConfigSource"] = "admin-default"
+        url_analysis_session_payload["sessionConfig"]["networkConfigName"] = "Tor exit"
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.session_config is not None
+        assert session.session_config.network_config_source == "admin-default"
+        assert session.session_config.network_config_name == "Tor exit"
+
+    def test_session_config_keeps_an_unknown_network_config_source(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_session_payload["sessionConfig"]["networkConfigSource"] = "workspace-default"
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.session_config is not None
+        assert session.session_config.network_config_source == "workspace-default"
+
+
+class TestUrlAnalysisIndicatorsTypes:
+    def test_available_explanation(self, url_analysis_indicators_payload: dict[str, Any]) -> None:
+        result = UrlAnalysisIndicators.model_validate(url_analysis_indicators_payload)
+        assert result.state == "available"
+        snapshot = result.snapshot
+        assert snapshot is not None
+        assert snapshot.schema_version == 1
+        assert snapshot.pass_ == "final"
+        assert snapshot.scored_at == "2026-10-01T09:30:00.000Z"
+        assert snapshot.browser_snapshot is not None
+        assert snapshot.browser_snapshot.manifest_hash.startswith("9f2c")
+        indicator = snapshot.indicators[0]
+        assert indicator.rule_id == "whois.domain_age"
+        assert indicator.weighted_points == 20
+        assert indicator.disposition == "contributing"
+        assert indicator.evidence_refs[0].kind == "report"
+        assert snapshot.aggregation.reputation_credits[0].eligible is False
+        assert snapshot.aggregation.credit_scope == "heuristic"
+        assert snapshot.verdict_adjustments[0].from_ == "malicious"
+        assert snapshot.verdict_adjustments[0].to == "suspicious"
+
+    def test_unavailable_explanation(self) -> None:
+        result = UrlAnalysisIndicators.model_validate(
+            {"state": "unavailable", "unavailableReason": "legacy", "snapshot": None}
+        )
+        assert result.unavailable_reason == "legacy"
+        assert result.snapshot is None
+
+    def test_pending_explanation_without_optional_keys(self) -> None:
+        result = UrlAnalysisIndicators.model_validate({"state": "pending"})
+        assert result.unavailable_reason is None
+        assert result.snapshot is None
+
+    def test_unknown_enum_values_are_kept(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_indicators_payload["state"] = "rescoring"
+        snapshot = url_analysis_indicators_payload["snapshot"]
+        snapshot["pass"] = "replay"
+        snapshot["verdict"] = "phishing"
+        snapshot["aggregation"]["creditScope"] = "none"
+        indicator = snapshot["indicators"][0]
+        indicator["availability"] = "partial"
+        indicator["confidence"] = "low"
+        indicator["disposition"] = "capped"
+        indicator["evidenceRefs"][0]["kind"] = "screenshot"
+        result = UrlAnalysisIndicators.model_validate(url_analysis_indicators_payload)
+        assert result.state == "rescoring"
+        assert result.snapshot is not None
+        assert result.snapshot.pass_ == "replay"
+        assert result.snapshot.verdict == "phishing"
+        assert result.snapshot.aggregation.credit_scope == "none"
+        parsed = result.snapshot.indicators[0]
+        assert (parsed.availability, parsed.confidence, parsed.disposition) == (
+            "partial",
+            "low",
+            "capped",
+        )
+        assert parsed.evidence_refs[0].kind == "screenshot"
+
+    def test_round_trip_keeps_the_aliases(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        dumped = UrlAnalysisIndicators.model_validate(url_analysis_indicators_payload).model_dump(
+            by_alias=True
+        )
+        assert dumped["snapshot"]["pass"] == "final"
+        assert dumped["snapshot"]["verdictAdjustments"][0]["from"] == "malicious"
+        assert dumped == url_analysis_indicators_payload
+
+    def test_evidence(self, url_analysis_evidence_payload: dict[str, Any]) -> None:
+        evidence = UrlAnalysisIndicatorEvidence.model_validate(url_analysis_evidence_payload)
+        assert evidence.state == "available"
+        assert evidence.text is not None
+        assert evidence.truncated is False
+
+    def test_unavailable_evidence(self) -> None:
+        evidence = UrlAnalysisIndicatorEvidence.model_validate(
+            {"state": "unavailable", "text": None, "truncated": False}
+        )
+        assert evidence.text is None
+
+    def test_browser_section(self, url_analysis_browser_section_payload: dict[str, Any]) -> None:
+        section = UrlAnalysisBrowserSection.model_validate(url_analysis_browser_section_payload)
+        assert section.section == "tls"
+        assert section.job_id == "6710a3f2c1d2e3f4a5b6c7d8"
+        assert section.updated_at == 1760000000000
+        assert section.data["tls"]["protocol"] == "TLS 1.3"
+
+    def test_browser_section_keeps_an_unknown_section_name(
+        self, url_analysis_browser_section_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_browser_section_payload["section"] = "screenshots"
+        url_analysis_browser_section_payload["updatedAt"] = None
+        section = UrlAnalysisBrowserSection.model_validate(url_analysis_browser_section_payload)
+        assert section.section == "screenshots"
+        assert section.updated_at is None
 
 
 class TestMessageType:
@@ -1864,3 +2514,618 @@ class TestAiReportTypes:
         pending = AiReportPending.model_validate({"status": "throttled", "stage": "reviewing"})
         assert pending.status == "throttled"
         assert pending.stage == "reviewing"
+
+
+class TestProcessIdentityFields:
+    def test_old_process_has_no_identity_fields(self, sample_process: dict[str, Any]) -> None:
+        p = Process.model_validate(sample_process)
+        assert p.pid_gen is None
+        assert p.origin is None
+        assert p.image is None
+        assert p.method is None
+        assert p.timestamp is None
+        assert p.exit_timestamp is None
+
+    def test_process_reads_the_identity_fields(
+        self, sample_windows_v2_process: dict[str, Any]
+    ) -> None:
+        p = Process.model_validate(sample_windows_v2_process)
+        assert p.pid_gen == 4
+        assert p.origin == "sample"
+        assert p.image == "C:\\Users\\victim\\evil.exe"
+        assert p.method == "NtCreateUserProcess"
+        assert p.timestamp == 1790376279.55
+        assert p.exit_timestamp == 1790376284.1
+        dumped = p.model_dump(by_alias=True)
+        assert dumped["pidGen"] == 4
+        assert dumped["exitTimestamp"] == 1790376284.1
+
+    def test_process_accepts_null_identity_fields(
+        self, sample_windows_v2_process: dict[str, Any]
+    ) -> None:
+        p = Process.model_validate(
+            {**sample_windows_v2_process, "pidGen": None, "origin": None, "exitTimestamp": None}
+        )
+        assert p.pid_gen is None
+        assert p.origin is None
+        assert p.exit_timestamp is None
+
+    def test_process_keeps_an_unknown_origin(
+        self, sample_windows_v2_process: dict[str, Any]
+    ) -> None:
+        p = Process.model_validate({**sample_windows_v2_process, "origin": "scheduler"})
+        assert p.origin == "scheduler"
+
+    def test_old_tree_node_has_no_identity_fields(
+        self, sample_process_tree_response: dict[str, Any]
+    ) -> None:
+        root = ProcessTreeResponse.model_validate(sample_process_tree_response).nodes[0]
+        assert root.pid_gen is None
+        assert root.origin is None
+        assert root.cwd is None
+
+    def test_tree_node_reads_the_identity_fields(self) -> None:
+        node = ProcessTreeNode.model_validate(
+            {
+                "pid": 1508,
+                "ppid": 800,
+                "pidGen": 2,
+                "origin": "shell",
+                "tid": 0,
+                "name": "cmd.exe",
+                "cmd": "cmd.exe",
+                "cwd": "C:\\Users\\analyst",
+                "children": [],
+            }
+        )
+        assert node.pid_gen == 2
+        assert node.origin == "shell"
+        assert node.cwd == "C:\\Users\\analyst"
+
+
+class TestBehaviourIndexTypes:
+    def test_old_behaviour_event_has_no_pid_gen_or_subject(
+        self, sample_behaviour_event: dict[str, Any]
+    ) -> None:
+        e = BehaviourEvent.model_validate(sample_behaviour_event)
+        assert e.pid_gen is None
+        assert e.subject is None
+
+    def test_old_behaviours_response_has_no_index_fields(
+        self, sample_behaviours_response: dict[str, Any]
+    ) -> None:
+        resp = BehavioursResponse.model_validate(sample_behaviours_response)
+        assert resp.sorted_by is None
+        assert resp.many_processes_match is None
+
+    def test_indexed_behaviours_response(
+        self, sample_indexed_behaviours_response: dict[str, Any]
+    ) -> None:
+        resp = BehavioursResponse.model_validate(sample_indexed_behaviours_response)
+        assert resp.sorted_by == "time"
+        assert resp.many_processes_match is False
+        event = resp.items[0]
+        assert event.pid_gen == 0
+        assert event.subject == "C:\\evil.dll"
+
+    def test_behaviours_response_keeps_an_unknown_page_order(
+        self, sample_indexed_behaviours_response: dict[str, Any]
+    ) -> None:
+        resp = BehavioursResponse.model_validate(
+            {**sample_indexed_behaviours_response, "sortedBy": "processName"}
+        )
+        assert resp.sorted_by == "processName"
+
+    def test_behaviour_summary(self, sample_behaviour_summary_response: dict[str, Any]) -> None:
+        summary = BehaviourSummary.model_validate(sample_behaviour_summary_response)
+        assert summary.total_count == 1337
+        assert summary.first_timestamp == 1712345678.901
+        assert summary.by_type[0].value == "registry"
+        assert summary.by_operation[0].count == 42
+        process = summary.by_process[0]
+        assert process.process_id == 1508
+        assert process.process_name == "payload.exe"
+        assert process.last_timestamp is None
+        assert summary.exits[0].event_id == 2048
+        assert summary.exits[0].status is None
+
+    def test_empty_behaviour_summary(self) -> None:
+        summary = BehaviourSummary.model_validate(
+            {
+                "totalCount": 0,
+                "firstTimestamp": None,
+                "lastTimestamp": None,
+                "byType": [],
+                "byOperation": [],
+                "byProcess": [],
+                "exits": [],
+            }
+        )
+        assert summary.total_count == 0
+        assert summary.first_timestamp is None
+
+    def test_behaviour_summary_requires_the_counts(self) -> None:
+        with pytest.raises(ValidationError):
+            BehaviourSummary.model_validate({"totalCount": 1})
+
+    def test_behaviour_facets(self, sample_behaviour_facets_response: dict[str, Any]) -> None:
+        facets = BehaviourFacets.model_validate(sample_behaviour_facets_response)
+        assert [item.value for item in facets.items] == ["RegSetValue", "WriteFile"]
+        assert facets.complete is False
+        assert facets.scanned_rows == 250000
+
+
+class TestSyscallSearchTypes:
+    def test_old_syscalls_response_has_no_first_line(
+        self, sample_syscalls_response: dict[str, Any]
+    ) -> None:
+        assert SyscallsResponse.model_validate(sample_syscalls_response).first_line is None
+
+    def test_syscalls_response_reads_the_first_line(
+        self, sample_syscalls_response: dict[str, Any]
+    ) -> None:
+        resp = SyscallsResponse.model_validate({**sample_syscalls_response, "firstLine": 501})
+        assert resp.first_line == 501
+
+    def test_syscall_search_result(self, sample_syscall_search_response: dict[str, Any]) -> None:
+        result = SyscallSearchResult.model_validate(sample_syscall_search_response)
+        assert result.lines[0].line == 3000
+        assert result.lines[0].raw.startswith("ntdll!NtCreateFile")
+        assert result.next_from_line == 3000
+        assert result.scanned_to == 3000
+        assert result.total_count == 1500000
+        assert result.done is False
+        assert result.truncated is False
+        assert result.busy is False
+
+    def test_busy_syscall_search_result(self) -> None:
+        result = SyscallSearchResult.model_validate(
+            {
+                "lines": [],
+                "nextFromLine": 0,
+                "scannedTo": 0,
+                "totalCount": None,
+                "done": False,
+                "truncated": True,
+                "busy": True,
+            }
+        )
+        assert result.busy is True
+        assert result.total_count is None
+
+
+class TestNetworkSensorFields:
+    def test_older_server_connection_has_no_sensor_fields(
+        self, sample_tcp_connection: dict[str, Any]
+    ) -> None:
+        c = Connection.model_validate(sample_tcp_connection)
+        assert c.source_ip is None
+        assert c.source_port is None
+        assert c.ptr_domain is None
+        assert c.app_proto is None
+        assert c.hostname is None
+        assert c.pkts_to_server is None
+        assert c.pkts_to_client is None
+        assert c.bytes_to_server is None
+        assert c.bytes_to_client is None
+        assert c.packets_total is None
+        assert c.packets_omitted is None
+
+    def test_connection_reads_the_sensor_fields(
+        self, sample_tcp_connection_full: dict[str, Any]
+    ) -> None:
+        c = Connection.model_validate(sample_tcp_connection_full)
+        assert (c.source_ip, c.source_port) == ("192.0.2.86", 49712)
+        assert c.domain == "dns.google"
+        assert c.ptr_domain == "server-10.hosting.example.net"
+        assert c.app_proto == "tls"
+        assert c.hostname == "dns.google"
+        assert (c.pkts_to_server, c.pkts_to_client) == (14, 11)
+        assert (c.bytes_to_server, c.bytes_to_client) == (1832, 6120)
+        assert (c.packets_total, c.packets_omitted) == (25, 0)
+
+    def test_older_server_threat_has_no_source_or_level(
+        self, sample_network_threat: dict[str, Any]
+    ) -> None:
+        t = NetworkThreat.model_validate(sample_network_threat)
+        assert t.source_ip is None
+        assert t.source_port is None
+        assert t.severity_level is None
+
+    def test_threat_reads_the_source_and_level(
+        self, sample_network_threat_full: dict[str, Any]
+    ) -> None:
+        t = NetworkThreat.model_validate(sample_network_threat_full)
+        assert t.severity_level == 1
+        assert (t.source_ip, t.source_port) == ("192.0.2.86", 49712)
+
+    def test_threat_keeps_an_unknown_level(self, sample_network_threat: dict[str, Any]) -> None:
+        t = NetworkThreat.model_validate({**sample_network_threat, "severityLevel": 5})
+        assert t.severity_level == 5
+
+    def test_older_server_summary_has_no_new_fields(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        s = NetworkSummary.model_validate(sample_network_summary)
+        assert s.https_pcap_available is None
+        assert s.has_https_inspection is None
+        assert s.unattributed_pcap_available is None
+        assert s.attribution_counts is None
+        assert s.unattributed_counts is None
+        assert s.submission_only_alerts is None
+
+    def test_summary_reads_the_new_fields(
+        self, sample_network_summary_full: dict[str, Any]
+    ) -> None:
+        s = NetworkSummary.model_validate(sample_network_summary_full)
+        assert s.https_pcap_available is True
+        assert s.has_https_inspection is True
+        assert s.unattributed_pcap_available is False
+        assert s.attribution_counts is not None
+        assert s.attribution_counts.tcp.sample == 30
+        assert s.attribution_counts.dns.sample_child == 1
+        assert s.attribution_counts.threats.windows_background == 2
+        assert s.attribution_counts.udp.sensor_only == 0
+        assert s.unattributed_counts is not None
+        assert s.unattributed_counts.tcp == 3
+        alerts = s.submission_only_alerts
+        assert alerts is not None
+        assert (alerts.scope, alerts.source, alerts.total, alerts.omitted) == (
+            "submission_unattributed",
+            "pinned_offline_eve",
+            3,
+            2,
+        )
+        [row] = alerts.rows
+        assert row.line_number == 812
+        assert row.sid == 2034567
+        assert row.severity == 1
+        assert (row.source_ip, row.destination_ip) == ("192.0.2.86", "192.0.2.10")
+
+
+class TestNetworkPacketTypes:
+    def test_packet_data_decodes_base64(self) -> None:
+        data = NetworkPacketData.model_validate({"trimmed": False, "data": "dGVzdA=="})
+        assert data.data == b"test"
+        assert data.sha256 is None
+        assert data.model_dump(mode="json", by_alias=True)["data"] == "dGVzdA=="
+
+    def test_empty_payload_is_empty_bytes(self) -> None:
+        assert NetworkPacketData.model_validate({"trimmed": False, "data": ""}).data == b""
+
+    def test_packet_data_rejects_text_that_is_not_base64(self) -> None:
+        with pytest.raises(ValidationError):
+            NetworkPacketData.model_validate({"trimmed": False, "data": "not base64!"})
+
+    def test_http_request_packets(self, sample_http_request_packets: dict[str, Any]) -> None:
+        packets = NetworkHttpPackets.model_validate(sample_http_request_packets)
+        [pair] = packets.items
+        assert pair.method == "POST"
+        assert pair.port_known is True
+        assert pair.headers == {"Host": "malware-c2.example.com"}
+        assert pair.body is not None
+        assert pair.body.data == b"test"
+        assert pair.body.sha256 is not None
+        assert pair.response is not None
+        assert pair.response.status_code == 200
+        assert pair.response.body is None
+        assert packets.truncated is False
+        assert packets.source_scope is None
+
+    def test_sensor_summary_record_has_no_headers_or_bodies(self) -> None:
+        packets = NetworkHttpPackets.model_validate(
+            {
+                "items": [
+                    {
+                        "timeshift": 1.0,
+                        "url": "/",
+                        "method": "PROPFIND",
+                        "destinationIp": "192.0.2.10",
+                        "destinationPort": 0,
+                        "portKnown": False,
+                        "headers": None,
+                        "body": None,
+                        "response": None,
+                    }
+                ],
+                "truncated": False,
+                "sourceScope": None,
+            }
+        )
+        [pair] = packets.items
+        assert pair.method == "PROPFIND"
+        assert pair.port_known is False
+        assert pair.headers is None
+        assert pair.response is None
+
+    def test_connection_packets(self, sample_tcp_connection_packets: dict[str, Any]) -> None:
+        packets = NetworkFlowPackets.model_validate(sample_tcp_connection_packets)
+        assert packets.protocol == "tcp"
+        assert (packets.source_ip, packets.source_port) == ("192.0.2.86", 49712)
+        sent, received = packets.items
+        assert sent.type == "send"
+        assert sent.data is not None
+        assert sent.data.data == b"\x16\x03\x01\x00\x01"
+        assert sent.data.trimmed is True
+        assert received.type == "receive"
+        assert received.data is None
+        assert packets.truncated is True
+        assert packets.source_scope == "sample_attributed"
+
+    def test_connection_packets_keep_an_unknown_direction(
+        self, sample_tcp_connection_packets: dict[str, Any]
+    ) -> None:
+        payload = {
+            **sample_tcp_connection_packets,
+            "items": [{"type": "both", "data": None}],
+        }
+        assert NetworkFlowPackets.model_validate(payload).items[0].type == "both"
+
+
+class TestNetworkEndpointTypes:
+    def test_endpoints(self, sample_network_endpoints: dict[str, Any]) -> None:
+        endpoints = NetworkEndpoints.model_validate(sample_network_endpoints)
+        assert endpoints.total == 42
+        assert endpoints.truncated is False
+        [endpoint] = endpoints.items
+        assert endpoint.key == "malware-c2.example.com"
+        assert endpoint.ips == ["192.0.2.10"]
+        assert endpoint.ports == [443]
+        assert endpoint.source == "sample"
+        assert endpoint.request_count == 14
+        assert endpoint.alert_count == 1
+        assert endpoint.max_alert_severity == "1"
+        assert endpoint.process_ids == [1924]
+        assert endpoint.attribution_note is None
+
+    def test_endpoint_keyed_by_address(self, sample_network_endpoints: dict[str, Any]) -> None:
+        [row] = sample_network_endpoints["items"]
+        payload = {
+            **sample_network_endpoints,
+            "items": [
+                {
+                    **row,
+                    "key": "192.0.2.10",
+                    "host": None,
+                    "source": "future_source",
+                    "firstTimeshift": None,
+                    "lastTimeshift": None,
+                    "maxAlertSeverity": None,
+                    "attributionNote": "Several names resolved to this address",
+                }
+            ],
+        }
+        [endpoint] = NetworkEndpoints.model_validate(payload).items
+        assert endpoint.host is None
+        assert endpoint.source == "future_source"
+        assert endpoint.first_timeshift is None
+        assert endpoint.attribution_note == "Several names resolved to this address"
+
+    def test_host_flows(self, sample_network_host_flows: dict[str, Any]) -> None:
+        page = NetworkHostFlows.model_validate(sample_network_host_flows)
+        [flow] = page.flows
+        assert flow.protocol == "HTTP"
+        assert flow.remote_ip == "192.0.2.10"
+        assert flow.local_port is None
+        assert flow.bytes_sent is None
+        assert flow.methods[0].method == "POST"
+        assert flow.methods[0].count == 3
+        assert flow.sample_paths == ["http://malware-c2.example.com/gate.php"]
+        assert page.totals.http_requests == 3
+        assert page.totals.udp_flows == 0
+        [alert] = page.alerts
+        assert alert.signature == "ET MALWARE Test beacon"
+        assert alert.severity == 1
+        assert alert.count == 3
+        assert alert.first_timeshift == 2.5
+        assert page.page_info.end_cursor == "aGYxOjI"
+        assert page.page_info.has_next_page is True
+        assert page.truncated is False
+
+    def test_older_server_host_flows_have_no_alerts(
+        self, sample_network_host_flows: dict[str, Any]
+    ) -> None:
+        payload = {k: v for k, v in sample_network_host_flows.items() if k != "alerts"}
+        assert NetworkHostFlows.model_validate(payload).alerts == []
+
+    def test_host_flows_keep_an_unknown_protocol_and_null_severity(
+        self, sample_network_host_flows: dict[str, Any]
+    ) -> None:
+        [flow] = sample_network_host_flows["flows"]
+        [alert] = sample_network_host_flows["alerts"]
+        payload = {
+            **sample_network_host_flows,
+            "flows": [{**flow, "protocol": "QUIC"}],
+            "alerts": [{**alert, "severity": None, "firstTimeshift": None}],
+            "pageInfo": {"endCursor": None, "hasNextPage": False},
+        }
+        page = NetworkHostFlows.model_validate(payload)
+        assert page.flows[0].protocol == "QUIC"
+        assert page.alerts[0].severity is None
+        assert page.page_info.end_cursor is None
+
+
+class TestTotalCountList:
+    def test_is_a_plain_list_with_the_total(self) -> None:
+        page = TotalCountList([1, 2], total_count=128)
+        assert isinstance(page, list)
+        assert page == [1, 2]
+        assert page.total_count == 128
+
+    def test_total_defaults_to_none(self) -> None:
+        assert TotalCountList[int]().total_count is None
+
+
+class TestVerdictTypes:
+    def test_verdict(self, sample_verdict: dict[str, Any]) -> None:
+        verdict = Verdict.model_validate(sample_verdict)
+        assert verdict.format == "windows-v2-worker-1"
+        assert verdict.score == 45
+        assert verdict.tier == "Suspicious"
+        narrative = verdict.narrative
+        assert isinstance(narrative, VerdictNarrative)
+        assert narrative.sequence[0].t_offset_s == 1.2
+        assert narrative.decisive[0].source == "policy:win.collect.clipboard_policy"
+        assert narrative.tier_reason.startswith("Owner policy floor")
+        assert narrative.would_raise == ["an upload of the clipboard data"]
+        assert narrative.coverage_note is None
+        story = verdict.story
+        assert isinstance(story, VerdictStory)
+        assert story.truncated is False
+        assert story.headline is not None
+        assert story.headline.parts[0].type == "process"
+        step = story.steps[0]
+        assert isinstance(step, VerdictStoryStep)
+        assert (step.process.image, step.process.pid) == ("invoice.exe", 1924)
+        assert step.category == "network"
+        assert step.evidence_seqs == [12, 13]
+        assert step.key is True
+        assert step.reason is None
+
+    def test_legacy_verdict_is_all_none(self, sample_verdict_legacy: dict[str, Any]) -> None:
+        verdict = Verdict.model_validate(sample_verdict_legacy)
+        assert verdict.model_dump() == {
+            "format": None,
+            "score": None,
+            "tier": None,
+            "summary": None,
+            "narrative": None,
+            "story": None,
+        }
+
+    def test_older_server_without_fields(self) -> None:
+        verdict = Verdict.model_validate({})
+        assert verdict.tier is None
+
+    def test_step_without_optional_fields(self, sample_verdict: dict[str, Any]) -> None:
+        step = dict(sample_verdict["story"]["steps"][0])
+        for key in ("key", "parts", "command"):
+            del step[key]
+        parsed = VerdictStoryStep.model_validate(step)
+        assert parsed.key is None
+        assert parsed.parts is None
+        assert parsed.command is None
+
+    def test_unknown_enum_values_are_kept(self, sample_verdict: dict[str, Any]) -> None:
+        payload = dict(sample_verdict)
+        payload["tier"] = "Critical"
+        story = dict(payload["story"])
+        step = dict(story["steps"][0])
+        step["category"] = "exfiltration"
+        step["parts"] = [{"type": "registry_key", "value": "HKCU\\Run"}]
+        story["steps"] = [step]
+        payload["story"] = story
+        verdict = Verdict.model_validate(payload)
+        assert verdict.tier == "Critical"
+        assert verdict.story is not None
+        assert verdict.story.steps[0].category == "exfiltration"
+        parts = verdict.story.steps[0].parts
+        assert parts is not None
+        assert parts[0].type == "registry_key"
+
+
+class TestRunNotesTypes:
+    def test_run_notes(self, sample_run_notes: dict[str, Any]) -> None:
+        notes = RunNotes.model_validate(sample_run_notes)
+        java = notes.java_output
+        assert isinstance(java, RunJavaOutput)
+        assert "123456:AAH-secret-value" in java.text
+        assert java.size == 120
+        assert java.truncated is False
+        cut_short = notes.analysis_cut_short
+        assert cut_short is not None
+        assert cut_short.basis == "unfinished_download"
+        assert cut_short.ended_at_s == 540
+        assert cut_short.transfer is not None
+        assert cut_short.transfer.declared_bytes == 4194304
+        assert notes.network_notes == ["The sandbox network refused 3 outgoing mail connections."]
+        assert notes.submission_hints == []
+        assert isinstance(notes.run_notes[0], RunNote)
+        assert notes.run_notes[0].code == "sample_exited_early"
+        assert notes.is_dump_collector_activated is True
+
+    def test_legacy_run_notes(self, sample_run_notes_legacy: dict[str, Any]) -> None:
+        notes = RunNotes.model_validate(sample_run_notes_legacy)
+        assert notes.java_output is None
+        assert notes.analysis_cut_short is None
+        assert notes.run_notes == []
+        assert notes.is_dump_collector_activated is False
+
+    def test_unknown_basis_is_kept(self, sample_run_notes: dict[str, Any]) -> None:
+        payload = dict(sample_run_notes)
+        payload["analysisCutShort"] = {
+            **payload["analysisCutShort"],
+            "basis": "vm_crashed",
+            "transfer": None,
+        }
+        notes = RunNotes.model_validate(payload)
+        assert notes.analysis_cut_short is not None
+        assert notes.analysis_cut_short.basis == "vm_crashed"
+        assert notes.analysis_cut_short.transfer is None
+
+
+class TestAnnotationTypes:
+    def test_annotations(self, sample_annotations: dict[str, Any]) -> None:
+        annotations = Annotations.model_validate(sample_annotations)
+        assert annotations.submission_uuid == "a1b2c3d4-e5f6-4789-abcd-ef1234567890"
+        pin = annotations.pins[0]
+        assert isinstance(pin, AnnotationPin)
+        assert (pin.kind, pin.ref, pin.label) == ("process", "process:pid-4120", "payload.exe")
+        assert pin.created_by == "64a000000000000000000001"
+        assert pin.created_at.year == 2026
+        note = annotations.note
+        assert isinstance(note, AnnotationNote)
+        assert note.text == "The sample drops a second stage."
+
+    def test_empty_annotations(self) -> None:
+        annotations = Annotations.model_validate(
+            {"submissionUuid": "a1b2c3d4-e5f6-4789-abcd-ef1234567890", "pins": [], "note": None}
+        )
+        assert annotations.pins == []
+        assert annotations.note is None
+
+    def test_unknown_pin_kind_is_kept(self, sample_annotations: dict[str, Any]) -> None:
+        payload = dict(sample_annotations)
+        payload["pins"] = [{**payload["pins"][0], "kind": "screenshot"}]
+        annotations = Annotations.model_validate(payload)
+        assert annotations.pins[0].kind == "screenshot"
+
+    def test_round_trip_uses_api_names(self, sample_annotations: dict[str, Any]) -> None:
+        dumped = Annotations.model_validate(sample_annotations).model_dump(
+            mode="json", by_alias=True
+        )
+        assert set(dumped) == {"submissionUuid", "pins", "note"}
+        assert set(dumped["pins"][0]) == {"id", "kind", "ref", "label", "createdBy", "createdAt"}
+
+
+class TestRunCompareTypes:
+    def test_run_comparison(self, sample_run_comparison: dict[str, Any]) -> None:
+        comparison = RunComparison.model_validate(sample_run_comparison)
+        assert comparison.other_submission_uuid == "b1b2c3d4-e5f6-4789-abcd-ef1234567891"
+        assert isinstance(comparison.detections.added[0], CompareDetection)
+        assert comparison.detections.removed[0].level == "suspicious"
+        assert comparison.techniques.added == ["T1059"]
+        assert comparison.techniques.removed_total == 1
+        assert isinstance(comparison.iocs.added[0], CompareIoc)
+        assert comparison.iocs.added[0].category == "ip"
+        dropped = comparison.dropped_files
+        assert isinstance(dropped.added[0], CompareDroppedFile)
+        assert dropped.added[1].sha256 is None
+        assert (dropped.added_total, dropped.removed_total) == (2, 0)
+
+    def test_previous_run(self) -> None:
+        assert PreviousRun.model_validate({"previousRunUuid": "b1"}).previous_run_uuid == "b1"
+        assert PreviousRun.model_validate({"previousRunUuid": None}).previous_run_uuid is None
+        assert PreviousRun.model_validate({}).previous_run_uuid is None
+
+
+class TestAnnotationErrorCodes:
+    @pytest.mark.parametrize(
+        "code",
+        ["ANNOTATION_PIN_LIMIT_REACHED", "ANNOTATION_PIN_NOT_FOUND", "NOT_FOUND", "FORBIDDEN"],
+    )
+    def test_codes_are_known(self, code: str) -> None:
+        err = ApiError.model_validate(
+            {"status_code": 400, "error": "Bad Request", "message": "m", "code": code}
+        )
+        assert err.code == code

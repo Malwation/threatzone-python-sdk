@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -20,13 +21,22 @@ from ._exceptions import (
     PdfReportPendingError,
     YaraRulePendingError,
 )
+from ._params import behaviour_filter_params, syscall_search_params
 from ._streaming import AsyncDownloadResponse
 from .types import (
     AiReport,
     AiReportPending,
     AiReportRegenerateResult,
+    AnnotationPinKind,
+    Annotations,
+    ArtifactJob,
+    ArtifactSource,
     ArtifactsResponse,
+    BehaviourEventSort,
+    BehaviourFacetField,
+    BehaviourFacets,
     BehavioursResponse,
+    BehaviourSummary,
     CdrResponse,
     Connection,
     DevicePresetOption,
@@ -37,30 +47,49 @@ from .types import (
     HttpRequest,
     IndicatorLevel,
     IndicatorsResponse,
+    IocExportFormat,
     IoCsResponse,
     IoCType,
+    Killchain,
     MediaFile,
     Message,
     MetafieldOption,
     Metafields,
     MitreResponse,
     NetworkConfigListItem,
+    NetworkEndpoints,
     NetworkExfilRequest,
+    NetworkFlowPackets,
+    NetworkHostFlows,
+    NetworkHttpPackets,
     NetworkSummary,
     NetworkThreat,
     OverviewSummary,
     PaginatedSubmissions,
     PdfReportStatus,
+    PreviousRun,
     ProcessesResponse,
     ProcessTreeResponse,
+    RunComparison,
+    RunNotes,
     SignatureCheckResponse,
     StaticScanResponse,
+    StringFacts,
+    StringsPage,
     Submission,
     SubmissionCreated,
+    SubmissionSearchScope,
+    SyscallSearchResult,
     SyscallsResponse,
+    TotalCountList,
+    UrlAnalysisBrowserSection,
+    UrlAnalysisBrowserSectionName,
+    UrlAnalysisIndicatorEvidence,
+    UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UserInfo,
+    Verdict,
     YaraRuleCategory,
     YaraRulesResponse,
 )
@@ -102,6 +131,16 @@ def _pending_body(raw: bytes) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _total_count(response: httpx.Response) -> int | None:
+    value = response.headers.get("x-total-count")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 class AsyncThreatZone:
@@ -522,26 +561,42 @@ class AsyncThreatZone:
         *,
         page: int | None = None,
         limit: int | None = None,
+        scope: SubmissionSearchScope | None = None,
     ) -> list[Submission]:
         """
         Search submissions by SHA256 hash.
 
-        The server returns one page, newest submission first. Without ``page``
-        and ``limit`` the server returns the first 20 rows.
+        The match is exact. The server returns one page, newest submission
+        first. Without ``page`` and ``limit`` the server returns the first 20
+        rows. Private submissions of other workspaces never appear.
 
         Args:
-            sha256: SHA256 hash to search for.
+            sha256: SHA256 hash to search for (64 hexadecimal characters).
             page: 1-indexed page number.
             limit: Maximum items per page (1-100). The server default is 20.
+            scope: ``"workspace"`` (the server default) reads the file
+                submissions of your workspace and the public file submissions
+                of other workspaces. ``"public"`` reads only public
+                submissions of all workspaces, also URL submissions whose
+                downloaded payload has this SHA256. ``"public"`` never returns
+                a private submission, also not one of your workspace. The SDK
+                omits the parameter when it is ``None``.
 
         Returns:
-            List of matching submissions on the requested page.
+            List of matching submissions on the requested page. The rows do
+            not have the detail-only fields.
+
+        Raises:
+            BadRequestError: When the hash, ``page``, ``limit`` or ``scope`` is
+                not valid (``INVALID_QUERY_PARAM``).
         """
         params: dict[str, Any] = {}
         if page is not None:
             params["page"] = page
         if limit is not None:
             params["limit"] = limit
+        if scope is not None:
+            params["scope"] = scope
 
         response = await self._http.get(
             f"/submissions/search/sha256/{sha256}",
@@ -741,18 +796,45 @@ class AsyncThreatZone:
         response = await self._http.get(f"/submissions/{uuid}/extracted-configs")
         return ExtractedConfigsResponse.model_validate(response.json())
 
-    async def get_artifacts(self, uuid: str) -> ArtifactsResponse:
+    async def get_artifacts(
+        self,
+        uuid: str,
+        *,
+        source: ArtifactSource | None = None,
+    ) -> ArtifactsResponse:
         """
         Get extracted artifacts for a submission.
 
         Args:
             uuid: Submission UUID.
+            source: Return only the artifacts with this stored source value, for example
+                ``"dynamic_report"``. An unknown value raises ``BadRequestError``.
 
         Returns:
-            Paginated artifact list. Each artifact carries nested MD5/SHA1/SHA256 hashes.
+            Artifact list. Each artifact carries nested MD5/SHA1/SHA256 hashes, the engine
+            analysis state and the download route path.
         """
-        response = await self._http.get(f"/submissions/{uuid}/artifacts")
+        params: dict[str, Any] | None = {"source": source} if source is not None else None
+        response = await self._http.get(f"/submissions/{uuid}/artifacts", params=params)
         return ArtifactsResponse.model_validate(response.json())
+
+    async def get_artifact_jobs(self, uuid: str, artifact_id: str) -> list[ArtifactJob]:
+        """
+        Get the engine analysis jobs of an artifact.
+
+        Args:
+            uuid: Submission UUID.
+            artifact_id: Artifact ID from get_artifacts().
+
+        Returns:
+            One ``ArtifactJob`` per engine job, oldest first. An empty list means that no
+            engine job was created for the artifact.
+
+        Raises:
+            NotFoundError: When the artifact does not belong to the submission.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/artifacts/{artifact_id}/jobs")
+        return [ArtifactJob.model_validate(item) for item in response.json()["items"]]
 
     async def get_eml_analysis(self, uuid: str) -> list[EmlAnalysis]:
         """
@@ -816,6 +898,75 @@ class AsyncThreatZone:
             AsyncDownloadResponse for streaming or saving the strings JSON file.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/static-scan/strings")
+
+    async def get_static_scan_string_facts(self, uuid: str) -> StringFacts:
+        """
+        Get the observables and facts that the UI shows for the extracted strings.
+
+        Observable ``value``, ``display`` and ``source`` contain the full text.
+        ``secret`` is a label for filters only. The SDK does not mask values.
+        This is a heavy route: each API token can send 30 heavy-route requests
+        each minute.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            String observables, facts, the number of read strings and the
+            truncation flag.
+
+        Raises:
+            ReportUnavailableError: When the static report is not yet available.
+            RateLimitError: When the heavy-route rate limit is reached (429).
+        """
+        response = await self._http.get(f"/submissions/{uuid}/static-scan/string-facts")
+        return StringFacts.model_validate(response.json())
+
+    async def get_static_scan_strings_page(
+        self,
+        uuid: str,
+        *,
+        start: int | None = None,
+        end: int | None = None,
+        search: str | None = None,
+    ) -> StringsPage:
+        """
+        Get a window of the extracted strings, as the strings table of the UI shows it.
+
+        The API filters the strings by ``search`` first, then applies the
+        ``start``/``end`` window to the matched strings. This is a heavy route:
+        each API token can send 30 heavy-route requests each minute.
+
+        Args:
+            uuid: Submission UUID.
+            start: Index of the first matched string (0-based). The API default is 0.
+            end: Index after the last matched string. ``end - start`` must be
+                1000 or less. The API default is ``start + 1000``.
+            search: Return only strings that contain this text (case-insensitive,
+                at most 200 characters).
+
+        Returns:
+            The strings window, the number of matched strings and the download link.
+
+        Raises:
+            BadRequestError: When ``start``/``end``/``search`` is not valid.
+            NotFoundError: When the strings file is not available.
+            ReportUnavailableError: When the static report is not yet available.
+            RateLimitError: When the heavy-route rate limit is reached (429).
+        """
+        params: dict[str, Any] = {}
+        if start is not None:
+            params["start"] = start
+        if end is not None:
+            params["end"] = end
+        if search is not None:
+            params["search"] = search
+
+        response = await self._http.get(
+            f"/submissions/{uuid}/static-scan/strings/items",
+            params=params if params else None,
+        )
+        return StringsPage.model_validate(response.json())
 
     async def get_cdr_results(self, uuid: str) -> CdrResponse:
         """
@@ -888,6 +1039,28 @@ class AsyncThreatZone:
         response = await self._http.get(f"/submissions/{uuid}/processes/tree")
         return ProcessTreeResponse.model_validate(response.json())
 
+    async def get_killchain(self, uuid: str) -> Killchain:
+        """
+        Get the kill chain timeline of the dynamic analysis.
+
+        The timeline has the processes the sandbox observed, the files each process dropped,
+        and the memory dumps of each process. The web UI kill chain view shows the same data.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            Kill chain timeline. Download a stored file with ``download_artifact()`` and the
+            ``artifact_id`` of the file. ``artifact_id`` is ``None`` when no stored artifact of
+            the current analysis exists for the file.
+
+        Raises:
+            ReportUnavailableError: When the dynamic report is not yet available.
+            RateLimitError: When the API token is above the heavy-route limit.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/killchain")
+        return Killchain.model_validate(response.json())
+
     async def get_behaviours(
         self,
         uuid: str,
@@ -898,9 +1071,30 @@ class AsyncThreatZone:
         process_name: str | None = None,
         page: int | None = None,
         limit: int | None = None,
+        event_ids: Sequence[int] | None = None,
+        pids: Sequence[int] | None = None,
+        parent_pids: Sequence[int] | None = None,
+        types: Sequence[str] | None = None,
+        operations: Sequence[str] | None = None,
+        statuses: Sequence[str] | None = None,
+        process_name_contains: str | None = None,
+        from_timestamp: float | None = None,
+        to_timestamp: float | None = None,
+        syscall_line_from: int | None = None,
+        syscall_line_to: int | None = None,
+        fields: Mapping[str, str | Sequence[str]] | None = None,
+        text: str | None = None,
+        sort: BehaviourEventSort | None = None,
     ) -> BehavioursResponse:
         """
         Get behaviour events captured during dynamic analysis.
+
+        A request without index parameters reads the behaviour file and returns the raw
+        ``details`` object. ``event_ids`` does not need the index. The other new
+        parameters (from ``pids`` to ``sort``) read the behaviour index, the same index
+        that the web UI reads. Then ``details`` holds the values that the web UI shows,
+        and the response sets ``sorted_by`` and ``many_processes_match``. Every set filter
+        must match. The values of one list match as any of.
 
         Args:
             uuid: Submission UUID.
@@ -910,12 +1104,42 @@ class AsyncThreatZone:
             process_name: Filter by process name (exact match).
             page: 1-indexed page number.
             limit: Maximum items per page (1-500).
+            event_ids: Return only the events with these IDs (at most 500), for example
+                the events of one indicator finding.
+            pids: Return the events of any of these process IDs (at most 100).
+            parent_pids: Return the events whose parent process ID is any of these IDs.
+            types: Return the events of any of these types (exact match).
+            operations: Return the events of any of these operations. The match does
+                not use case.
+            statuses: Return the events with any of these status details (exact match).
+            process_name_contains: Text that the process name contains. The match does
+                not use case. The server uses at most the 50 matching process names
+                with the most events.
+            from_timestamp: Lowest event time, in unix seconds.
+            to_timestamp: Highest event time, in unix seconds.
+            syscall_line_from: Lowest syscall log line (1-based).
+            syscall_line_to: Highest syscall log line. The span must not be more than
+                10,000 lines.
+            fields: Detail filters, sent as ``field.<key>``. The key is a
+                ``BehaviourFieldFilterKey`` (for example ``path``, ``key`` or ``cmd``).
+                The value is the text that the detail contains (the match does not use
+                case), or a list of texts that match as any of. At most 5 values in one
+                request.
+            text: Text that the process name, PIDs, operation, event time or any detail
+                value contains (3 to 200 characters). The match does not use case.
+            sort: Row order: ``eventId`` (file order) or ``time``. The server sorts by
+                time only when the matching rows are few enough; read ``sorted_by``.
 
         Returns:
             Paginated behaviour events.
 
         Raises:
             ReportUnavailableError: When the dynamic report is not yet available.
+            BehaviourIndexingError: When the request needs the behaviour index and the
+                index is not ready. Retry after ``retry_after`` seconds.
+            BehaviourTooLargeError: When an index filter needs a scan above the read
+                limit.
+            BehaviourUnreadableError: When the stored behaviour file is not valid.
         """
         params: dict[str, Any] = {}
         if type is not None:
@@ -930,12 +1154,151 @@ class AsyncThreatZone:
             params["page"] = page
         if limit is not None:
             params["limit"] = limit
+        params.update(
+            behaviour_filter_params(
+                event_ids=event_ids,
+                pids=pids,
+                parent_pids=parent_pids,
+                types=types,
+                operations=operations,
+                statuses=statuses,
+                process_name_contains=process_name_contains,
+                from_timestamp=from_timestamp,
+                to_timestamp=to_timestamp,
+                syscall_line_from=syscall_line_from,
+                syscall_line_to=syscall_line_to,
+                fields=fields,
+            )
+        )
+        if text is not None:
+            params["text"] = text
+        if sort is not None:
+            params["sort"] = sort
 
         response = await self._http.get(
             f"/submissions/{uuid}/behaviours",
             params=params,
         )
         return BehavioursResponse.model_validate(response.json())
+
+    async def get_behaviour_summary(self, uuid: str) -> BehaviourSummary:
+        """
+        Get the behaviour event counts that the web UI shows above the Behaviour view.
+
+        The route reads the behaviour index and is a heavy route (a limited number of
+        requests per minute for each API token).
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            The total, the time span, the counts by type, operation and process, and the
+            first exit event of each process. Zero counts when the run has no behaviour
+            file.
+
+        Raises:
+            ReportUnavailableError: When the dynamic report is not yet available.
+            BehaviourIndexingError: When the behaviour index is not ready.
+            RateLimitError: When the API token is above the heavy-route limit.
+                ``retry_after`` gives the seconds to wait.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/behaviours/summary")
+        return BehaviourSummary.model_validate(response.json())
+
+    async def get_behaviour_facets(
+        self,
+        uuid: str,
+        field: BehaviourFacetField,
+        *,
+        contains: str | None = None,
+        first: int | None = None,
+        event_ids: Sequence[int] | None = None,
+        pids: Sequence[int] | None = None,
+        parent_pids: Sequence[int] | None = None,
+        types: Sequence[str] | None = None,
+        operations: Sequence[str] | None = None,
+        statuses: Sequence[str] | None = None,
+        process_name_contains: str | None = None,
+        from_timestamp: float | None = None,
+        to_timestamp: float | None = None,
+        syscall_line_from: int | None = None,
+        syscall_line_to: int | None = None,
+        fields: Mapping[str, str | Sequence[str]] | None = None,
+    ) -> BehaviourFacets:
+        """
+        Count the most frequent values of one behaviour event field.
+
+        The web UI shows these counts in its filter lists. The route reads the behaviour
+        index and is a heavy route (a limited number of requests per minute for each API
+        token).
+
+        Args:
+            uuid: Submission UUID.
+            field: The field to count: ``operation``, ``type``, ``processName``,
+                ``function`` or ``subject``.
+            contains: Count only the values that contain this text. The match does not
+                use case.
+            first: Number of values to return, most frequent first (default 200,
+                maximum 2000).
+            event_ids: Return only the events with these IDs (at most 500), for example
+                the events of one indicator finding.
+            pids: Return the events of any of these process IDs (at most 100).
+            parent_pids: Return the events whose parent process ID is any of these IDs.
+            types: Return the events of any of these types (exact match).
+            operations: Return the events of any of these operations. The match does
+                not use case.
+            statuses: Return the events with any of these status details (exact match).
+            process_name_contains: Text that the process name contains. The match does
+                not use case. The server uses at most the 50 matching process names
+                with the most events.
+            from_timestamp: Lowest event time, in unix seconds.
+            to_timestamp: Highest event time, in unix seconds.
+            syscall_line_from: Lowest syscall log line (1-based).
+            syscall_line_to: Highest syscall log line. The span must not be more than
+                10,000 lines.
+            fields: Detail filters, sent as ``field.<key>``. The key is a
+                ``BehaviourFieldFilterKey`` (for example ``path``, ``key`` or ``cmd``).
+                The value is the text that the detail contains (the match does not use
+                case), or a list of texts that match as any of. At most 5 values in one
+                request.
+
+        Returns:
+            The value counts. ``complete`` is ``False`` when the read limit stopped the
+            row scan, so the counts are too low.
+
+        Raises:
+            ReportUnavailableError: When the dynamic report is not yet available.
+            BehaviourIndexingError: When the request needs the behaviour index and the
+                index is not ready. Retry after ``retry_after`` seconds.
+            BehaviourTooLargeError: When an index filter needs a scan above the read
+                limit.
+            RateLimitError: When the API token is above the heavy-route limit.
+                ``retry_after`` gives the seconds to wait.
+        """
+        params: dict[str, Any] = {"field": field}
+        if contains is not None:
+            params["contains"] = contains
+        if first is not None:
+            params["first"] = first
+        params.update(
+            behaviour_filter_params(
+                event_ids=event_ids,
+                pids=pids,
+                parent_pids=parent_pids,
+                types=types,
+                operations=operations,
+                statuses=statuses,
+                process_name_contains=process_name_contains,
+                from_timestamp=from_timestamp,
+                to_timestamp=to_timestamp,
+                syscall_line_from=syscall_line_from,
+                syscall_line_to=syscall_line_to,
+                fields=fields,
+            )
+        )
+
+        response = await self._http.get(f"/submissions/{uuid}/behaviours/facets", params=params)
+        return BehaviourFacets.model_validate(response.json())
 
     async def get_syscalls(
         self,
@@ -969,6 +1332,59 @@ class AsyncThreatZone:
             params=params if params else None,
         )
         return SyscallsResponse.model_validate(response.json())
+
+    async def search_syscalls(
+        self,
+        uuid: str,
+        *,
+        query: str,
+        pids: Sequence[int] | None = None,
+        failed_only: bool | None = None,
+        apis: Sequence[str] | None = None,
+        after_line: int | None = None,
+        limit: int | None = None,
+    ) -> SyscallSearchResult:
+        """
+        Search the raw syscall log for lines that contain a text.
+
+        The scan reads the log in line order. One request scans a limited number of lines
+        for a limited time. To get the next page, send ``next_from_line`` of the result as
+        ``after_line``. This is a heavy route (a limited number of requests per minute for
+        each API token).
+
+        Args:
+            uuid: Submission UUID.
+            query: Text to find (3 to 200 characters). The match does not use case and
+                reads the text as plain text, not as a pattern.
+            pids: Keep only the lines of these process IDs (at most 100).
+            failed_only: When ``True``, keep only the failed calls.
+            apis: Keep only the calls of these APIs, by the full call
+                (``ntdll!NtCreateFile``) or by the name (``NtCreateFile``).
+            after_line: Start the scan after this 1-based line number. ``0`` or unset
+                starts at line 1.
+            limit: Maximum number of hits (default 200, maximum 500).
+
+        Returns:
+            The hits and the scan position. ``busy`` is ``True`` when the server did not
+            scan; send the same request again later.
+
+        Raises:
+            ReportUnavailableError: When the dynamic report is not yet available.
+            RateLimitError: When the API token is above the heavy-route limit.
+                ``retry_after`` gives the seconds to wait.
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/syscalls/search",
+            params=syscall_search_params(
+                query=query,
+                pids=pids,
+                failed_only=failed_only,
+                apis=apis,
+                after_line=after_line,
+                limit=limit,
+            ),
+        )
+        return SyscallSearchResult.model_validate(response.json())
 
     # =========================================================================
     # URL Analysis
@@ -1064,6 +1480,327 @@ class AsyncThreatZone:
         response = await self._http.post(f"/submissions/{uuid}/restart/url_analysis")
         return Message.model_validate(response.json())
 
+    async def get_url_analysis_indicators(self, uuid: str) -> UrlAnalysisIndicators:
+        """
+        Get the stored explanation of the URL threat score.
+
+        Every plan can use this call. Each indicator lists its points and its
+        evidence references.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            UrlAnalysisIndicators. ``snapshot`` is set when ``state`` is
+            ``"available"``. ``unavailable_reason`` is ``"legacy"``,
+            ``"size_limit"`` or ``"scoring_error"`` when ``state`` is
+            ``"unavailable"``.
+
+        Raises:
+            ReportUnavailableError: When the URL analysis report is not complete
+                (HTTP 409).
+            NotFoundError: When the submission does not exist or is private to
+                another workspace.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/url-analysis/indicators")
+        return UrlAnalysisIndicators.model_validate(response.json())
+
+    async def get_url_analysis_indicator_evidence(
+        self,
+        uuid: str,
+        indicator_id: str,
+        reference_id: str,
+        *,
+        job_id: str | None = None,
+        scored_at: str | None = None,
+    ) -> UrlAnalysisIndicatorEvidence:
+        """
+        Get one evidence item of an indicator in the URL score explanation.
+
+        The API needs the ``job_id`` and ``scored_at`` of the snapshot that holds
+        the indicator. When one of them is None, the SDK reads
+        get_url_analysis_indicators() first and uses the snapshot values. Pass
+        both to skip that extra request.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+            indicator_id: ``UrlScoreIndicator.id`` of the snapshot.
+            reference_id: ``UrlScoreEvidenceRef.id`` of the indicator.
+            job_id: ``UrlScoreExplanation.job_id`` of the snapshot.
+            scored_at: ``UrlScoreExplanation.scored_at`` of the snapshot, as the
+                API sent it.
+
+        Returns:
+            UrlAnalysisIndicatorEvidence. ``state`` is ``"unavailable"`` when the
+            evidence is not stored, or when ``job_id`` and ``scored_at`` are not
+            the values of the current snapshot. ``text`` is pretty-printed JSON
+            of 8192 characters or fewer.
+
+        Raises:
+            BadRequestError: When a value is malformed or too long (HTTP 400).
+            NotFoundError: When the indicator or the reference is not in the
+                current explanation (``URL_SCORE_EVIDENCE_NOT_FOUND``).
+            ReportUnavailableError: When the URL analysis report is not complete
+                (HTTP 409).
+        """
+        if job_id is None or scored_at is None:
+            snapshot = (await self.get_url_analysis_indicators(uuid)).snapshot
+            if snapshot is not None:
+                job_id = snapshot.job_id if job_id is None else job_id
+                scored_at = snapshot.scored_at if scored_at is None else scored_at
+        response = await self._http.get(
+            f"/submissions/{uuid}/url-analysis/indicators/{quote(indicator_id, safe='')}"
+            f"/evidence/{quote(reference_id, safe='')}",
+            params={"jobId": job_id, "scoredAt": scored_at},
+        )
+        return UrlAnalysisIndicatorEvidence.model_validate(response.json())
+
+    async def get_url_analysis_browser_section(
+        self, uuid: str, section: UrlAnalysisBrowserSectionName | str
+    ) -> UrlAnalysisBrowserSection:
+        """
+        Get one section of the browser snapshot of the current URL analysis run.
+
+        Every plan can use this call. The API returns only the approved
+        sections. It never returns cookies, full network entries, or request
+        and response bodies.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+            section: ``"overview"``, ``"findings"``, ``"tls"`` or
+                ``"network-summary"`` (redirects, hosts and IP addresses).
+
+        Returns:
+            UrlAnalysisBrowserSection. ``data`` holds the section as the report
+            page shows it and can contain fields that the SDK does not model.
+
+        Raises:
+            NotFoundError: When the section name is not approved
+                (``URL_BROWSER_SECTION_NOT_FOUND``), or when the current run has
+                no data for the section (``URL_BROWSER_SECTION_UNAVAILABLE``).
+            ReportUnavailableError: When the URL analysis report is not complete
+                (HTTP 409).
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/url-analysis/browser/{quote(section, safe='')}"
+        )
+        return UrlAnalysisBrowserSection.model_validate(response.json())
+
+    # =========================================================================
+    # Verdict, run notes, annotations and run compare
+    # =========================================================================
+
+    async def get_verdict(self, uuid: str) -> Verdict:
+        """
+        Get the dynamic verdict of a Windows V2 report with its narrative and story.
+
+        The web report shows the same data. The framework writes the narrative
+        and story text. The text can change between releases: show it, do not
+        parse it.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            Verdict. Every field is ``None`` for a legacy report, and for a
+            stored verdict that does not belong to the committed analysis
+            attempt. ``narrative`` and ``summary`` are ``None`` on reports
+            older than schema 2.1.
+
+        Raises:
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+            ReportUnavailableError: When the dynamic report is not available
+                (``DYNAMIC_REPORT_UNAVAILABLE``).
+        """
+        response = await self._http.get(f"/submissions/{uuid}/verdict")
+        return Verdict.model_validate(response.json())
+
+    async def get_run(self, uuid: str) -> RunNotes:
+        """
+        Get the facts that a Windows V2 analysis states about its run.
+
+        ``java_output.text`` is the full stored Java console text of a JAR
+        sample. The API does not mask secrets that the sample wrote.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            RunNotes. For a legacy report, ``java_output`` and
+            ``analysis_cut_short`` are ``None`` and the lists are empty.
+
+        Raises:
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+            ReportUnavailableError: When the dynamic report is not available
+                (``DYNAMIC_REPORT_UNAVAILABLE``).
+        """
+        response = await self._http.get(f"/submissions/{uuid}/run")
+        return RunNotes.model_validate(response.json())
+
+    async def get_annotations(self, uuid: str) -> Annotations:
+        """
+        Get the evidence pins and the note of your workspace on a submission.
+
+        Pins and the note belong to the workspace of the API token. Each
+        workspace that can see the submission keeps its own pins and note.
+        You never read the annotations of another workspace.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            Annotations of your workspace. ``pins`` is empty and ``note`` is
+            ``None`` when your workspace has none.
+
+        Raises:
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/annotations")
+        return Annotations.model_validate(response.json())
+
+    async def pin_evidence(
+        self,
+        uuid: str,
+        *,
+        kind: AnnotationPinKind,
+        ref: str,
+        label: str,
+    ) -> Annotations:
+        """
+        Add an evidence pin for your workspace.
+
+        Your workspace can pin a submission that it can see: its own
+        submissions and public submissions of other workspaces. The pin stays
+        in your workspace. A second pin with the same ``kind`` and ``ref``
+        changes nothing. The web UI and the HTML and PDF reports of your
+        workspace show the pin.
+
+        Args:
+            uuid: Submission UUID.
+            kind: Kind of the evidence, for example ``"process"`` or
+                ``"technique"``.
+            ref: The value that identifies the evidence (1 to 512
+                characters). The web UI opens the evidence only when ``ref``
+                uses the web UI format, for example ``"technique:T1055"``.
+            label: Short text that names the evidence (1 to 200 characters
+                after the server trims it).
+
+        Returns:
+            Annotations of your workspace after the change.
+
+        Raises:
+            BadRequestError: When the body is not valid
+                (``INVALID_QUERY_PARAM``), or your workspace has 200 pins on
+                the submission (``ANNOTATION_PIN_LIMIT_REACHED``).
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+        """
+        response = await self._http.post(
+            f"/submissions/{uuid}/annotations/pins",
+            json={"kind": kind, "ref": ref, "label": label},
+        )
+        return Annotations.model_validate(response.json())
+
+    async def unpin_evidence(self, uuid: str, pin_id: str) -> Annotations:
+        """
+        Remove one evidence pin of your workspace.
+
+        Args:
+            uuid: Submission UUID.
+            pin_id: Pin ID from ``AnnotationPin.id``.
+
+        Returns:
+            Annotations of your workspace after the change.
+
+        Raises:
+            BadRequestError: When ``uuid`` or ``pin_id`` is not a UUID
+                (``INVALID_QUERY_PARAM``).
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace (``NOT_FOUND``), or your
+                workspace has no pin with this ID on the submission
+                (``ANNOTATION_PIN_NOT_FOUND``).
+        """
+        response = await self._http.delete(
+            f"/submissions/{uuid}/annotations/pins/{quote(pin_id, safe='')}"
+        )
+        return Annotations.model_validate(response.json())
+
+    async def set_note(self, uuid: str, text: str) -> Annotations:
+        """
+        Replace the note of your workspace on a submission.
+
+        The request replaces the full note text. An empty text, or a text with
+        only spaces, removes the note. Your workspace can write a note on a
+        submission that it can see; the note stays in your workspace.
+
+        Args:
+            uuid: Submission UUID.
+            text: The full note text (0 to 10000 characters).
+
+        Returns:
+            Annotations of your workspace after the change. ``note`` is
+            ``None`` after an empty text.
+
+        Raises:
+            BadRequestError: When the body is not valid
+                (``INVALID_QUERY_PARAM``).
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+        """
+        response = await self._http.put(
+            f"/submissions/{uuid}/annotations/note", json={"text": text}
+        )
+        return Annotations.model_validate(response.json())
+
+    async def get_previous_run(self, uuid: str) -> PreviousRun:
+        """
+        Find the previous run of the same sample or URL.
+
+        The previous run has the same SHA256 and the same submission type, was
+        created before this run, and is in the workspace of this submission.
+        For a submission of another workspace, only a public previous run
+        counts. Deleted runs never count.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            PreviousRun. ``previous_run_uuid`` is ``None`` when no run matches.
+
+        Raises:
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/previous-run")
+        return PreviousRun.model_validate(response.json())
+
+    async def compare_runs(self, uuid: str, other_uuid: str) -> RunComparison:
+        """
+        Compare two runs.
+
+        ``added`` items are in the ``uuid`` run only. ``removed`` items are in
+        the ``other_uuid`` run only. Each list holds at most 200 items; the
+        ``*_total`` fields count the items before that cap.
+
+        Args:
+            uuid: Submission UUID of the run to read.
+            other_uuid: Submission UUID of the run to compare with, for example
+                ``get_previous_run(uuid).previous_run_uuid``.
+
+        Returns:
+            RunComparison with the ``detections``, ``techniques``, ``iocs`` and
+            ``dropped_files`` differences.
+
+        Raises:
+            NotFoundError: When either run does not exist, or is private and
+                belongs to another workspace.
+        """
+        response = await self._http.get(f"/submissions/{uuid}/compare/{other_uuid}")
+        return RunComparison.model_validate(response.json())
+
     # =========================================================================
     # AI Report
     # =========================================================================
@@ -1155,7 +1892,7 @@ class AsyncThreatZone:
         limit: int | None = None,
         skip: int | None = None,
         attribution: Sequence[str] | None = None,
-    ) -> list[DnsQuery]:
+    ) -> TotalCountList[DnsQuery]:
         """
         Get DNS queries captured during dynamic analysis.
 
@@ -1169,6 +1906,9 @@ class AsyncThreatZone:
 
         Returns:
             DNS queries with host, type, status, records, and timeshift.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1182,7 +1922,10 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/dns",
             params=params if params else None,
         )
-        return [DnsQuery.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (DnsQuery.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
 
     async def get_http_requests(
         self,
@@ -1191,13 +1934,13 @@ class AsyncThreatZone:
         limit: int | None = None,
         skip: int | None = None,
         attribution: Sequence[str] | None = None,
-    ) -> list[HttpRequest]:
+    ) -> TotalCountList[HttpRequest]:
         """
         Get HTTP requests observed during dynamic analysis.
 
-        The API now returns a slim shape (host/ip/port/country only). Method
-        and URL data are no longer available because they were never reliably
-        recoverable from the captured packets.
+        The rows have a slim shape (host/ip/port/country only). To read the
+        method, URL, headers and bodies of one row, call
+        get_http_request_packets() with the ``id`` of the row.
 
         Args:
             uuid: Submission UUID.
@@ -1209,6 +1952,9 @@ class AsyncThreatZone:
 
         Returns:
             HTTP requests in slimmed-down shape.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1222,7 +1968,10 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/http",
             params=params if params else None,
         )
-        return [HttpRequest.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (HttpRequest.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
 
     async def get_tcp_connections(
         self,
@@ -1231,7 +1980,7 @@ class AsyncThreatZone:
         limit: int | None = None,
         skip: int | None = None,
         attribution: Sequence[str] | None = None,
-    ) -> list[Connection]:
+    ) -> TotalCountList[Connection]:
         """
         Get TCP connections captured during dynamic analysis.
 
@@ -1245,6 +1994,9 @@ class AsyncThreatZone:
 
         Returns:
             TCP connections with destination, geolocation, and packet counts.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1258,7 +2010,10 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/tcp",
             params=params if params else None,
         )
-        return [Connection.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (Connection.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
 
     async def get_udp_connections(
         self,
@@ -1267,7 +2022,7 @@ class AsyncThreatZone:
         limit: int | None = None,
         skip: int | None = None,
         attribution: Sequence[str] | None = None,
-    ) -> list[Connection]:
+    ) -> TotalCountList[Connection]:
         """
         Get UDP connections captured during dynamic analysis.
 
@@ -1281,6 +2036,9 @@ class AsyncThreatZone:
 
         Returns:
             UDP connections with destination, geolocation, and packet counts.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1294,7 +2052,10 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/udp",
             params=params if params else None,
         )
-        return [Connection.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (Connection.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
 
     async def get_network_threats(
         self,
@@ -1303,7 +2064,7 @@ class AsyncThreatZone:
         limit: int | None = None,
         skip: int | None = None,
         attribution: Sequence[str] | None = None,
-    ) -> list[NetworkThreat]:
+    ) -> TotalCountList[NetworkThreat]:
         """
         Get Suricata network threats detected during dynamic analysis.
 
@@ -1317,6 +2078,9 @@ class AsyncThreatZone:
 
         Returns:
             Network threats with Suricata signature, protocol, and TLS fingerprint.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1330,7 +2094,10 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/threats",
             params=params if params else None,
         )
-        return [NetworkThreat.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (NetworkThreat.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
 
     async def get_network_exfil_requests(
         self,
@@ -1338,7 +2105,7 @@ class AsyncThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
-    ) -> list[NetworkExfilRequest]:
+    ) -> TotalCountList[NetworkExfilRequest]:
         """
         Get chat bot and webhook requests read from the decrypted HTTPS capture.
 
@@ -1354,6 +2121,9 @@ class AsyncThreatZone:
 
         Returns:
             Chat bot and webhook requests, in the order of the first request.
+            ``total_count`` is the ``X-Total-Count`` header: the rows that match
+            the request without ``skip`` and ``limit``, or ``None`` when the server
+            does not send it.
         """
         params: dict[str, Any] = {}
         if limit is not None:
@@ -1365,7 +2135,167 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/network/exfil-requests",
             params=params if params else None,
         )
-        return [NetworkExfilRequest.model_validate(item) for item in response.json()]
+        return TotalCountList(
+            (NetworkExfilRequest.model_validate(item) for item in response.json()),
+            total_count=_total_count(response),
+        )
+
+    async def get_http_request_packets(self, uuid: str, request_id: str) -> NetworkHttpPackets:
+        """
+        Get the stored request and response pairs of one HTTP request entry.
+
+        The payloads are not masked: a token, a password or a key in the traffic is
+        returned in full. ``NetworkPacketData.data`` holds the bytes, decoded from base64.
+
+        Args:
+            uuid: Submission UUID.
+            request_id: ``id`` of a row of get_http_requests(). The form ``eve-<number>``
+                reads a record of the network sensor summary of an older report.
+
+        Returns:
+            At most 200 pairs in stored order. ``truncated`` is ``True`` when the entry has
+            more. An empty ``items`` list means that the sandbox stored no packet.
+
+        Raises:
+            NotFoundError: When the row does not belong to the submission
+                (``NETWORK_ROW_NOT_FOUND``).
+            BadRequestError: When ``request_id`` is malformed.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/network/http/{quote(request_id, safe='')}/packets"
+        )
+        return NetworkHttpPackets.model_validate(response.json())
+
+    async def get_tcp_connection_packets(self, uuid: str, connection_id: str) -> NetworkFlowPackets:
+        """
+        Get the stored packets of one TCP connection.
+
+        The payloads are not masked. ``NetworkPacketData.data`` holds the bytes, decoded
+        from base64.
+
+        Args:
+            uuid: Submission UUID.
+            connection_id: ``id`` of a row of get_tcp_connections().
+
+        Returns:
+            At most 200 packets in stored order. ``truncated`` is ``True`` when the
+            connection has more.
+
+        Raises:
+            NotFoundError: When the row is not a TCP row of the submission
+                (``NETWORK_ROW_NOT_FOUND``).
+            BadRequestError: When ``connection_id`` is malformed.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/network/tcp/{quote(connection_id, safe='')}/packets"
+        )
+        return NetworkFlowPackets.model_validate(response.json())
+
+    async def get_udp_connection_packets(self, uuid: str, connection_id: str) -> NetworkFlowPackets:
+        """
+        Get the stored packets of one UDP connection.
+
+        The payloads are not masked. ``NetworkPacketData.data`` holds the bytes, decoded
+        from base64.
+
+        Args:
+            uuid: Submission UUID.
+            connection_id: ``id`` of a row of get_udp_connections().
+
+        Returns:
+            At most 200 packets in stored order. ``truncated`` is ``True`` when the
+            connection has more.
+
+        Raises:
+            NotFoundError: When the row is not a UDP row of the submission
+                (``NETWORK_ROW_NOT_FOUND``).
+            BadRequestError: When ``connection_id`` is malformed.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/network/udp/{quote(connection_id, safe='')}/packets"
+        )
+        return NetworkFlowPackets.model_validate(response.json())
+
+    async def get_network_endpoints(
+        self,
+        uuid: str,
+        *,
+        attribution: Sequence[str] | None = None,
+        limit: int | None = None,
+    ) -> NetworkEndpoints:
+        """
+        Get the remote endpoints of the network map: the rows of each host joined.
+
+        This is a heavy route. Each API token can send 30 heavy-route requests per minute.
+
+        Args:
+            uuid: Submission UUID.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
+            limit: Maximum number of endpoints (1-500). The server default is 300.
+
+        Returns:
+            The endpoints, sample endpoints first. ``total`` is the count before ``limit``.
+
+        Raises:
+            RateLimitError: When the token sent too many heavy-route requests.
+            BadRequestError: When a parameter is not valid.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        params: dict[str, Any] = {
+            "attribution": ",".join(attribution) if attribution is not None else None,
+            "limit": limit,
+        }
+        response = await self._http.get(f"/submissions/{uuid}/network/endpoints", params=params)
+        return NetworkEndpoints.model_validate(response.json())
+
+    async def get_network_host_flows(
+        self,
+        uuid: str,
+        host: str,
+        *,
+        attribution: Sequence[str] | None = None,
+        first: int | None = None,
+        after: str | None = None,
+    ) -> NetworkHostFlows:
+        """
+        Get one page of the flows and alerts of one network endpoint.
+
+        This is a heavy route. Each API token can send 30 heavy-route requests per minute.
+        The SDK percent-encodes ``host`` in the path.
+
+        Args:
+            uuid: Submission UUID.
+            host: ``key`` of an endpoint of get_network_endpoints(). The match ignores case.
+            attribution: Row sources. Send the value of the get_network_endpoints() call.
+            first: Flows of the page (1-200). The server default is 50.
+            after: ``page_info.end_cursor`` of the previous page. Omit it for the first
+                page. Keep ``host`` and ``attribution`` the same.
+
+        Returns:
+            The flows, the totals and the alert groups of the host. An unknown host returns
+            an empty page.
+
+        Raises:
+            RateLimitError: When the token sent too many heavy-route requests.
+            BadRequestError: When ``host``, ``first``, ``after`` or ``attribution`` is not
+                valid.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        params: dict[str, Any] = {
+            "attribution": ",".join(attribution) if attribution is not None else None,
+            "first": first,
+            "after": after,
+        }
+        response = await self._http.get(
+            f"/submissions/{uuid}/network/endpoints/{quote(host, safe='')}/flows",
+            params=params,
+        )
+        return NetworkHostFlows.model_validate(response.json())
 
     # =========================================================================
     # Downloads
@@ -1407,6 +2337,73 @@ class AsyncThreatZone:
             AsyncDownloadResponse for streaming or saving the file.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/pcap")
+
+    async def download_https_pcap(self, uuid: str) -> AsyncDownloadResponse:
+        """
+        Download the HTTPS inspection capture (PCAP) of the dynamic analysis.
+
+        The capture holds the decrypted HTTPS traffic of the relayed connections. The plan
+        needs the ``downloadReport`` permission. Read
+        ``get_network_summary().https_pcap_available`` first.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            PermissionDeniedError: When the plan does not have the ``downloadReport``
+                permission.
+            NotFoundError: When the latest analysis attempt has no HTTPS inspection capture.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        return await self._http.get_stream(f"/submissions/{uuid}/download/pcap-https")
+
+    async def download_behaviour(self, uuid: str) -> AsyncDownloadResponse:
+        """
+        Download the raw behaviour file (``behaviour.json``) of the dynamic analysis.
+
+        The file is a JSON array of every behaviour event. The server streams the stored
+        file without changes and without a size limit. Use it when ``get_behaviours()``
+        raises ``BehaviourTooLargeError``. The plan needs the ``downloadReport``
+        permission.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            PermissionDeniedError: When the plan does not have the ``downloadReport``
+                permission.
+            NotFoundError: When the dynamic report has no behaviour file.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        return await self._http.get_stream(f"/submissions/{uuid}/download/behaviour")
+
+    async def download_syscalls(self, uuid: str) -> AsyncDownloadResponse:
+        """
+        Download the raw syscall log (``syscalls.txt``) of the dynamic analysis.
+
+        The file holds one syscall per line. Line ``N`` of the file is
+        ``BehaviourEvent.syscall_line_number`` ``N``. The server streams the stored file
+        without changes. The plan needs the ``downloadReport`` permission.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            PermissionDeniedError: When the plan does not have the ``downloadReport``
+                permission.
+            NotFoundError: When the dynamic report has no syscall log.
+            ReportUnavailableError: When the dynamic report is not yet available.
+        """
+        return await self._http.get_stream(f"/submissions/{uuid}/download/syscalls")
 
     async def download_yara_rule(self, uuid: str) -> AsyncDownloadResponse:
         """
@@ -1475,6 +2472,39 @@ class AsyncThreatZone:
             AsyncDownloadResponse for streaming or saving the ``{uuid}_stix-2.1.json`` file.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/stix-2.1-report")
+
+    async def download_iocs(self, uuid: str, *, format: IocExportFormat) -> AsyncDownloadResponse:
+        """
+        Download the IP, domain, URL and SHA-256 indicators of a submission as one file.
+
+        The web UI offers the same file. The file has no grade column and no
+        grade field. The server removes values that are not valid for their
+        type and duplicate values, and reads at most the first 50,000 IoC
+        records; use ``get_iocs()`` to read every record of every type. Values
+        are not masked: protect the file as sensitive data.
+
+        Args:
+            uuid: Submission UUID.
+            format: ``"csv"`` (columns ``type``, ``value``, ``defanged``,
+                ``sources``), ``"text"`` (one defanged value on each line),
+                ``"stix"`` (STIX 2.1 bundle) or ``"misp"`` (MISP event JSON).
+                ``"stix"`` and ``"misp"`` need the ``stixReport`` plan
+                permission.
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            BadRequestError: When ``format`` is not known
+                (``INVALID_QUERY_PARAM``).
+            PermissionDeniedError: When ``format`` is ``"stix"`` or ``"misp"``
+                and the plan has no ``stixReport`` permission.
+            NotFoundError: When the submission does not exist, or is private
+                and belongs to another workspace.
+        """
+        return await self._http.get_stream(
+            f"/submissions/{uuid}/download/iocs", params={"format": format}
+        )
 
     async def get_pdf_report_status(self, uuid: str) -> PdfReportStatus:
         """

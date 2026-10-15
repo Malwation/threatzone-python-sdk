@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from threatzone import AsyncThreatZone, ReportUnavailableError, ThreatZone
+from threatzone import (
+    AsyncThreatZone,
+    BadRequestError,
+    NotFoundError,
+    ReportUnavailableError,
+    ThreatZone,
+)
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
     AiReport,
     AiReportPending,
     AiReportRegenerateResult,
+    ArtifactJob,
     ArtifactsResponse,
     IndicatorsResponse,
     IoCsResponse,
@@ -102,6 +109,54 @@ def test_indicator_ioc_artifact_network_contracts(
     assert isinstance(sync_client.get_artifacts(created.uuid), ArtifactsResponse)
     assert isinstance(sync_client.get_network_summary(created.uuid), NetworkSummary)
     assert isinstance(sync_client.get_overview_summary(created.uuid), OverviewSummary)
+
+
+def test_indicator_v2_and_ioc_raw_type_contracts(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    indicator = sync_client.get_indicators(created.uuid).items[0]
+    assert indicator.pid_gens is not None
+    assert len(indicator.pid_gens) == len(indicator.pids)
+    assert indicator.rule_source is not None
+    assert indicator.actor is not None
+    assert indicator.related is not None
+    assert indicator.related[0].event_id in indicator.event_ids
+    for ioc in sync_client.get_iocs(created.uuid).items:
+        assert ioc.raw_type is not None
+        assert ioc.type == ioc.raw_type.lower()
+
+
+def test_artifact_analysis_and_jobs_contract(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    artifact = sync_client.get_artifacts(created.uuid).items[0]
+    assert artifact.analysis_status == "analyzed"
+    assert artifact.analysis_trigger == "auto"
+    assert artifact.download_link is not None
+    assert artifact.download_link.endswith(f"/download/artifact/{artifact.id}")
+    assert sync_client.get_artifacts(created.uuid, source="dynamic_report").total == 1
+    assert sync_client.get_artifacts(created.uuid, source="static_report").items == []
+    with pytest.raises(BadRequestError):
+        sync_client.get_artifacts(created.uuid, source="no_such_source")
+    jobs = sync_client.get_artifact_jobs(created.uuid, artifact.id)
+    assert all(isinstance(job, ArtifactJob) for job in jobs)
+    assert [job.error_code for job in jobs] == [None, "JOB_SKIPPED"]
+    with pytest.raises(NotFoundError):
+        sync_client.get_artifact_jobs(created.uuid, "no-such-artifact")
+
+
+async def test_async_artifact_jobs_contract(
+    fake_api: FakeThreatZoneAPI, async_client: AsyncThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = await async_client.create_sandbox_submission(b"PE")
+    artifacts = await async_client.get_artifacts(created.uuid, source="dynamic_report")
+    jobs = await async_client.get_artifact_jobs(created.uuid, artifacts.items[0].id)
+    assert [job.engine_type for job in jobs] == ["static_scan", "config_extractor"]
 
 
 def test_url_analysis_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:

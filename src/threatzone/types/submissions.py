@@ -12,6 +12,8 @@ from .common import FileInfo, Hashes, ReportStatus, ReportStatusValue, Tag, Thre
 SubmissionLevel = ThreatLevel
 SubmissionType = Literal["file", "url"]
 SubmissionReportStatus = ReportStatusValue
+SubmissionSearchScope = Literal["workspace", "public"]
+"""Rows that ``search_by_sha256()`` reads: ``workspace`` (the default) or ``public``."""
 ScoreLayer = (
     Literal[
         "indicator_mean",
