@@ -23,12 +23,14 @@ from threatzone._exceptions import (
     NotFoundError,
     PdfReportPendingError,
     PermissionDeniedError,
+    RateLimitError,
     ReportUnavailableError,
     YaraRulePendingError,
 )
 from threatzone.types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     Artifact,
     ArtifactsResponse,
     BehavioursResponse,
@@ -711,6 +713,21 @@ class TestAsyncQuerySubmissions:
                 sub = await client.get_submission("sub-789")
         assert isinstance(sub, Submission)
         assert _call_url(mock).endswith("/submissions/sub-789")
+
+    async def test_get_submission_detail_fields(
+        self, api_key: str, sample_submission_detail: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_async_client(_make_response(200, sample_submission_detail))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                sub = await client.get_submission("sub-789")
+        assert sub.score_breakdown is not None
+        assert sub.score_breakdown.deciding_layer == "indicator_mean"
+        assert sub.overview.duration == 42.7
+        assert sub.file is not None
+        assert sub.file.history is not None
+        assert sub.reports[0].metafields is not None
+        assert sub.tags[0].author == "system"
 
     async def test_get_submission_404(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(404, {"message": "no"}))
@@ -1887,6 +1904,60 @@ class TestAsyncAiReport:
             async with AsyncThreatZone(api_key=api_key) as client:
                 with pytest.raises(PermissionDeniedError):
                     await client.get_ai_report("sub-789")
+
+    async def test_200_failed_report_has_the_error_code(
+        self, api_key: str, sample_ai_report_failed: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_async_client(_make_response(200, sample_ai_report_failed))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                report = await client.get_ai_report("sub-789")
+        assert isinstance(report, AiReport)
+        assert report.error is not None
+        assert report.error.code == "PIPELINE_TIMEOUT"
+        assert report.reason == "regenerate"
+
+
+class TestAsyncRegenerateAiReport:
+    async def test_202_returns_the_queued_result(
+        self, api_key: str, sample_ai_report_regenerate: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(202, sample_ai_report_regenerate))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                result = await client.regenerate_ai_report("sub-789")
+        assert isinstance(result, AiReportRegenerateResult)
+        assert result.status == "queued"
+        assert result.message == "AI report regeneration queued"
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith("/submissions/sub-789/ai-report/regenerate")
+
+    async def test_403(self, api_key: str) -> None:
+        ctx, _ = _patched_async_client(_make_response(403, {"message": "Forbidden"}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(PermissionDeniedError):
+                    await client.regenerate_ai_report("sub-789")
+
+    async def test_409_carries_the_code(self, api_key: str) -> None:
+        body = {"statusCode": 409, "message": "Conflict", "code": "AI_REPORT_IN_PROGRESS"}
+        ctx, _ = _patched_async_client(_make_response(409, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ReportUnavailableError) as exc_info:
+                    await client.regenerate_ai_report("sub-789")
+        assert exc_info.value.code == "AI_REPORT_IN_PROGRESS"
+
+    async def test_429_carries_retry_after(self, api_key: str) -> None:
+        body = {"statusCode": 429, "message": "Quota used", "code": "AI_REPORT_QUOTA_EXCEEDED"}
+        response = _make_response(429, body, headers={"Retry-After": "120"})
+        ctx, mock = _patched_async_client(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(RateLimitError) as exc_info:
+                    await client.regenerate_ai_report("sub-789")
+        assert exc_info.value.retry_after == 120.0
+        assert mock.call_count == 1
 
 
 def _patched_async_streams(*responses: httpx.Response) -> tuple[Any, MagicMock]:

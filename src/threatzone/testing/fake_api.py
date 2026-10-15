@@ -472,6 +472,7 @@ class FakeThreatZoneAPI:
             "get_network_threats": self._handle_get_network_threats,
             "get_network_exfil_requests": self._handle_get_network_exfil_requests,
             "get_ai_report": self._handle_get_ai_report,
+            "regenerate_ai_report": self._handle_regenerate_ai_report,
             "download_pcap": self._handle_download_pcap,
             "download_sample": self._handle_download_sample,
             "download_artifact": self._handle_download_artifact,
@@ -724,7 +725,9 @@ class FakeThreatZoneAPI:
             self._activate_pending_seed(sha)
         results = [s for s in self._states.values() if s.sha256 == sha]
         start = (page - 1) * limit
-        return _json_list([_responses.build_submission(s) for s in results[start : start + limit]])
+        return _json_list(
+            [_responses.build_submission_search_row(s) for s in results[start : start + limit]]
+        )
 
     def _create_submission(
         self,
@@ -1223,6 +1226,25 @@ class FakeThreatZoneAPI:
         if isinstance(report, AiReportPending):
             return _json(report, status_code=202)
         return _json(report)
+
+    def _handle_regenerate_ai_report(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        if state.current_status() != "completed":
+            return _error(
+                409,
+                "Conflict",
+                "The analysis score is not final. Try again after the analysis finishes.",
+                "AI_REPORT_NOT_FINALIZED",
+                {"submissionUuid": state.uuid},
+            )
+        state.ai_report_queued = True
+        state.ai_report_reason = "regenerate"
+        return _json(_responses.build_ai_report_regenerate_result(), status_code=202)
 
     def _handle_download_pcap(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])

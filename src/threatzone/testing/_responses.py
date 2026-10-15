@@ -13,11 +13,13 @@ and pydantic enforces the contract at runtime.
 
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
 from threatzone.types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     ArtifactsResponse,
     BehavioursResponse,
     CdrResponse,
@@ -84,17 +86,25 @@ def _file_info_for(state: SubmissionState) -> dict[str, Any]:
     }
 
 
+_FAKE_REPORT_DURATION_SECONDS = 42.7
+_TAGS: list[dict[str, Any]] = [
+    {"type": "family", "value": "test", "origin": "config_extractor", "author": "system"}
+]
+
+
 def _report_statuses(state: SubmissionState) -> list[dict[str, Any]]:
     statuses: list[dict[str, Any]] = []
     for report_type in state.report_types():
         raw_status = state.report_status_for(report_type)
-        level: str | None = state.level if raw_status == "completed" else None
+        completed = raw_status == "completed"
+        level: str | None = state.level if completed else None
         statuses.append(
             {
                 "type": report_type,
                 "status": raw_status,
                 "level": level,
                 "score": None,
+                "duration": _FAKE_REPORT_DURATION_SECONDS if completed else None,
                 "format": None,
                 "operatingSystem": None,
             }
@@ -143,7 +153,7 @@ def _submission_payload(state: SubmissionState) -> dict[str, Any]:
         "file": _file_info_for(state) if state.type == "file" else None,
         "level": state.level,
         "private": state.private,
-        "tags": [{"type": "family", "value": "test", "origin": "config_extractor"}],
+        "tags": [dict(tag) for tag in _TAGS],
         "reports": _report_statuses(state),
         "overview": _submission_overview(state),
         "indicators": _indicator_rollup(state),
@@ -153,8 +163,48 @@ def _submission_payload(state: SubmissionState) -> dict[str, Any]:
     }
 
 
+def _file_history(state: SubmissionState) -> dict[str, Any] | None:
+    if len(state.filename_history) < 2:
+        return None
+    return {
+        "filenames": list(state.filename_history),
+        "lastReceivedAt": int(state.created_at.timestamp() * 1000),
+    }
+
+
+def _live_score_breakdown(state: SubmissionState) -> dict[str, Any] | None:
+    if state.type != "file" or state.current_status() != "completed":
+        return None
+    return state.score_breakdown
+
+
+def _submission_detail_payload(state: SubmissionState) -> dict[str, Any]:
+    payload = _submission_payload(state)
+    reports: list[dict[str, Any]] = payload["reports"]
+    for report in reports:
+        report["metafields"] = state.report_metafields.get(report["type"])
+    durations = [r["duration"] for r in reports if r["duration"] is not None]
+    payload["overview"]["duration"] = max(durations) if durations else None
+    if payload["file"] is not None:
+        payload["file"]["history"] = _file_history(state)
+    breakdown = _live_score_breakdown(state)
+    payload["scoreBreakdown"] = breakdown
+    payload["score"] = breakdown["score"] if breakdown is not None else None
+    return payload
+
+
 def build_submission(state: SubmissionState) -> Submission:
-    """Build the full ``Submission`` detail response for a state."""
+    """Build the ``GET /submissions/{uuid}`` detail response for a state."""
+    return Submission.model_validate(_submission_detail_payload(state))
+
+
+def build_submission_search_row(state: SubmissionState) -> Submission:
+    """Build one ``GET /submissions/search/sha256/{sha256}`` row.
+
+    The real API sends the detail-only fields (``scoreBreakdown``,
+    ``file.history``, ``reports[].metafields``, ``overview.duration``) only on
+    the detail route.
+    """
     return Submission.model_validate(_submission_payload(state))
 
 
@@ -166,7 +216,7 @@ def _submission_list_item_payload(state: SubmissionState) -> dict[str, Any]:
         "level": state.level,
         "type": state.type,
         "private": state.private,
-        "tags": [{"type": "family", "value": "test", "origin": "config_extractor"}],
+        "tags": [dict(tag) for tag in _TAGS],
         "reports": _report_statuses(state),
         "mimetype": "application/octet-stream" if state.type == "file" else None,
         "size": 1024 if state.type == "file" else None,
@@ -811,9 +861,16 @@ _AI_VERDICTS: dict[str, str] = {
 
 
 def build_ai_report(state: SubmissionState) -> AiReport | AiReportPending:
-    """Build the AI report: pending until the analysis completes."""
+    """Build the AI report: pending until the analysis completes.
+
+    After ``regenerate_ai_report()`` the next read answers ``queued`` once, and
+    the read after that returns the report with ``reason == "regenerate"``.
+    """
     if state.current_status() != "completed":
         return AiReportPending.model_validate({"status": "waiting_for_analysis"})
+    if state.ai_report_queued:
+        state.ai_report_queued = False
+        return AiReportPending.model_validate({"status": "queued"})
     verdict = _AI_VERDICTS[state.level]
     evidence = {"source": "submission", "ref": state.uuid, "label": "Submission"}
     return AiReport.model_validate(
@@ -887,8 +944,23 @@ def build_ai_report(state: SubmissionState) -> AiReport | AiReportPending:
                 "iocReview": None,
             },
             "updatedAt": state.updated_at.isoformat(),
+            "reason": state.ai_report_reason,
+            "error": None,
+            "analysisFinalized": True,
         }
     )
+
+
+def build_ai_report_regenerate_result() -> AiReportRegenerateResult:
+    """Build the 202 answer of the AI report regenerate route."""
+    return AiReportRegenerateResult.model_validate(
+        {"status": "queued", "message": "AI report regeneration queued"}
+    )
+
+
+def _next_ai_report_quota_reset() -> datetime:
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    return datetime.combine(tomorrow, time.min, tzinfo=timezone.utc)
 
 
 def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
@@ -1135,6 +1207,8 @@ def build_user_info() -> UserInfo:
                 "apiRequestCount": 0,
                 "dailySubmissionCount": 0,
                 "concurrentSubmissionCount": 0,
+                "aiReportCount": 0,
+                "aiReportResetsAt": _next_ai_report_quota_reset().isoformat(),
             },
         },
         "plan": {
@@ -1150,6 +1224,15 @@ def build_user_info() -> UserInfo:
                 "apiLimit": 1000,
                 "dailyLimit": 100,
                 "concurrentLimit": 10,
+                "aiReportLimit": 20,
+            },
+            "permissions": {
+                "downloadSample": True,
+                "htmlReport": True,
+                "stixReport": True,
+                "pdfReport": True,
+                "downloadReport": True,
+                "aiReport": True,
             },
         },
         "modules": [

@@ -24,10 +24,12 @@ Top-level submission types. Returned by `create_*_submission()`, `list_submissio
 | `SubmissionCreated` | Thin envelope for a freshly queued submission. | `POST /submissions/*` |
 | `SubmissionListItem` | One row in a paginated list. Carries enrichment (indicators rollup, overview). | `GET /submissions` |
 | `PaginatedSubmissions` | Full list envelope with `items`, `total`, `page`, `limit`, `total_pages`. | `GET /submissions` |
-| `Submission` | Full submission detail including `file`, `mitre_techniques`, `overview`. `search_by_sha256()` returns one page of these (`page`, `limit`; the server default is 20 rows). | `GET /submissions/:uuid`, `GET /submissions/search/sha256/:sha256` |
-| `SubmissionOverview` | Aggregated analysis status + job progress (`status`, optional `jobs`). | Nested in `Submission` and `SubmissionListItem` |
+| `Submission` | Full submission detail including `file`, `mitre_techniques`, `overview`, `score_breakdown`. `score` is the live score that the web UI shows; it is `None` for a pure URL submission until the final URL verdict. `search_by_sha256()` returns one page of these (`page`, `limit`; the server default is 20 rows). | `GET /submissions/:uuid`, `GET /submissions/search/sha256/:sha256` |
+| `SubmissionOverview` | Aggregated analysis status + job progress (`status`, optional `jobs`, `duration`). `duration` is the longest report run time in seconds; only `get_submission()` sends it. | Nested in `Submission` and `SubmissionListItem` |
 | `SubmissionIndicatorsRollup` | Severity rollup attached to a submission (`levels`, `artifact_count`). | Nested in `Submission` and `SubmissionListItem` |
-| `ReportStatus` | Per-report state (`type`, `status`, `level`, `score`, `format`, `operating_system`). `score` is a `float` or `None`. | Nested `reports[]` on `Submission` |
+| `ReportStatus` | Per-report state (`type`, `status`, `level`, `score`, `duration`, `format`, `operating_system`, `metafields`). `score` is a `float` or `None`. `metafields` is a `dict[str, str]` of the analysis options as the web UI shows them (option name to selected value); only `get_submission()` sends it. | Nested `reports[]` on `Submission` |
+| `ScoreBreakdown` | Explanation of `Submission.score`: `deciding_layer`, `verdict`, `score`, `cap`, `contributors`, `what_would_change`. Only `get_submission()` sends it. `None` for a pure URL submission, before the overview exists, and when the stored score does not come from the current score rule. | `GET /submissions/:uuid` |
+| `ScoreContributor` | One finding with a large effect on the score: `source`, `indicator_id`, `title`, `points`, `level`. At most ten, largest effect first. | Nested in `ScoreBreakdown.contributors` |
 
 **Discriminative fields.**
 
@@ -36,6 +38,10 @@ Top-level submission types. Returned by `create_*_submission()`, `list_submissio
 - `Submission.reports[].status` is `Literal["error", "not_started", "accepted", "in_progress", "clean_up", "completed"]`.
 - `Submission.reports[].type` is `Literal["dynamic", "static", "cdr", "url_analysis", "open_in_browser"]`.
 - `Submission.is_complete()` returns `True` when every report is in `completed` or `error`.
+- `ScoreBreakdown.deciding_layer` is `ScoreLayer` (`indicator_mean`, `dynamic_verdict`, `config_floor`, `url_analysis`, `submission_level`, `none`, or a new value). `cap` is set only for `indicator_mean`.
+- `ScoreContributor.level` is a `ThreatLevel` or a new value. `ScoreBreakdown.verdict` is a display label such as `Malicious`.
+- `ScoreContributor.title` and `ScoreBreakdown.what_would_change` are display text. The text can change between releases. Do not parse it; match on `indicator_id`.
+- Every detail-only field (`score_breakdown`, `overview.duration`, `file.history`, `reports[].metafields`) is `None` on `search_by_sha256()` rows, on `list_submissions()` rows, and on older servers.
 
 Related: `Tag`, `FileInfo`, `Hashes` (in `threatzone.types.common`).
 
@@ -192,7 +198,9 @@ permission.
 
 | Type | Purpose |
 |------|---------|
-| `AiReport` | HTTP 200 body: `status`, `job_id`, `verdict`, `confidence`, `agrees_with_engine`, `family`, `family_status`, `report`, `updated_at`. `report` and the verdict fields are set only when `status` is `completed` or `stale`. |
+| `AiReport` | HTTP 200 body: `status`, `job_id`, `verdict`, `confidence`, `agrees_with_engine`, `family`, `family_status`, `report`, `updated_at`, `reason`, `error`, `analysis_finalized`. `report` and the verdict fields are set only when `status` is `completed` or `stale`. `reason` is `finalized`, `regenerate`, or `stale_refresh`. `error` is set only when `status` is `failed`. `analysis_finalized` is `True` when the analysis score is final; `regenerate_ai_report()` needs a final score. |
+| `AiReportError` | `{code}`. Machine-readable failure code, for example `PIPELINE_TIMEOUT`. The API never returns the platform error text. Treat an unknown code as a generic failure. |
+| `AiReportRegenerateResult` | HTTP 202 body of `regenerate_ai_report()`: `status` (`queued`), `message`. A subclass of `AiReportPending`. Poll `get_ai_report()` for the new report. |
 | `AiReportPending` | HTTP 202 body: `status` (`waiting_for_analysis`, `queued`, `in_progress`), `job_id`, `stage` (`collecting`, `screenshots`, `writing`). `job_id` and `stage` are set only for `in_progress`. Poll again later. |
 | `AiReportContent` | `{summary, classification, iocs, techniques, attack_flow, narrative, screenshots, engine_agreement, recommendations, ioc_review}`. |
 | `AiReportSummary` | `{verdict, confidence, text, engine_verdict, agrees_with_engine, disagreement_reason}`. |
@@ -204,11 +212,12 @@ permission.
 | `AiReportScreenshot` | `{ordinal, observation, kind, threat_relevant}`. `ordinal` matches the media list. |
 | `AiReportEngineAgreement` | `{engine, reported, agrees, note}`. |
 | `AiReportRecommendation` | `{kind, text}`. `kind` is `containment`, `detection`, or `hunting`. |
-| `AiReportIocReview` / `AiReportIocCandidate` / `AiReportIocReviewSummary` | IoC curation. The curated list is every candidate with `verdict == "valid"`. `ioc_review` is `None` on older reports and on URL submissions. |
+| `AiReportIocReview` / `AiReportIocCandidate` / `AiReportIocReviewSummary` | IoC curation. The curated list is every candidate with `verdict == "valid"`. `ioc_review` is `None` on older reports and on URL submissions. `AiReportIocReviewSummary.reviewed_by_model` (an `int` or `None`) is the recorded count of candidates sent to the AI review; it is `None` on reports generated before the platform recorded the count. |
 | `AiReportEvidence` | `{source, ref, label}`. Engine evidence for one statement. |
 
 Every enum-like field (`AiVerdict`, `AiConfidence`, `AiReportStatus`, `AiReportPendingStatus`,
-`AiReportProgressStage`, `AiFamilyStatus`, `AiIocStatus`, `AiTechniqueOrigin`, `AiFlowNodeKind`,
+`AiReportProgressStage`, `AiReportQueueReason`, `AiReportErrorCode`, `AiFamilyStatus`,
+`AiIocStatus`, `AiTechniqueOrigin`, `AiFlowNodeKind`,
 `AiKillChainPhase`, `AiScreenshotKind`, `AiRecommendationKind`, `AiIocKind`, `AiIocVerdict`,
 `AiIocDecider`, `AiEvidenceSource`) keeps an unknown value from a newer server as a plain
 string. Every field except `status` is `None` when the server omits it.
@@ -221,17 +230,20 @@ User, workspace, plan, and quota types. Returned by `get_user_info()`.
 
 | Type | Purpose |
 |------|---------|
-| `UserInfo` | Top-level response: `user_info`, `plan`, `modules`. Has convenience accessors `email`, `full_name`, `workspace`, `workspace_name`, `workspace_alias`. |
+| `UserInfo` | Top-level response: `user_info`, `plan`, `modules`. Has convenience accessors `email`, `full_name`, `workspace`, `workspace_name`, `workspace_alias`, `plan_permissions`, `ai_report_resets_at`. |
 | `UserInfoDetails` | Nested user details: `email`, `full_name`, `workspace`, `limits_count`. |
 | `WorkspaceBasicInfo` | `{name, alias, private, type}`. `type` is `Literal["personal", "organization"]`. |
-| `LimitsCount` | Current usage: `api_request_count`, `daily_submission_count`, `concurrent_submission_count`. |
-| `PlanInfo` | `{plan_name, start_time, end_time, subs_time, file_limits, submission_limits}`. |
+| `LimitsCount` | Current usage: `api_request_count`, `daily_submission_count`, `concurrent_submission_count`, `ai_report_count`, `ai_report_resets_at`. `ai_report_count` counts the AI report quota units used since 00:00 UTC; a report in progress counts as used. `ai_report_resets_at` is the next 00:00 UTC. |
+| `PlanInfo` | `{plan_name, start_time, end_time, subs_time, file_limits, submission_limits, permissions}`. |
+| `PlanPermissions` | `{download_sample, html_report, stix_report, pdf_report, download_report, ai_report}`. A `False` value means that the matching routes return 403. |
 | `FileLimits` | `{extensions, file_size}`. |
-| `SubmissionLimits` | `{api_limit, daily_limit, concurrent_limit}`. |
+| `SubmissionLimits` | `{api_limit, daily_limit, concurrent_limit, ai_report_limit}`. `ai_report_limit` is `0` when the plan has no AI report. |
 | `ModuleInfo` | One enabled module: `{module_id, module_name, start_time, end_time}`. |
 
 Check `account.user_info.limits_count.api_request_count` to decide whether to back off
 before hammering rate-limited endpoints.
+
+Every AI report quota field and `PlanInfo.permissions` is `None` when an older server omits it.
 
 ---
 
@@ -280,10 +292,11 @@ Types shared across multiple surfaces.
 | Type | Purpose |
 |------|---------|
 | `Hashes` | `{md5, sha1, sha256}`. Used by `Submission.hashes` and `ArtifactHashes`. |
-| `FileInfo` | File metadata on a submission: `name`, `size`, `extension`, `mimetype`, `is_mimetype_checked`, `declared_extension`, `real_extension`, `is_mimetype_mismatched`, `entrypoint`, `source`. `declared_extension` is the lowercased extension of the original filename; `real_extension` is the extension detected from the content; `is_mimetype_mismatched` is `True` when they disagree (display only). The three fields are `None` when an older server omits them. |
+| `FileInfo` | File metadata on a submission: `name`, `size`, `extension`, `mimetype`, `is_mimetype_checked`, `declared_extension`, `real_extension`, `is_mimetype_mismatched`, `entrypoint`, `source`, `history` (`FileHistory`, detail only). `declared_extension` is the lowercased extension of the original filename; `real_extension` is the extension detected from the content; `is_mimetype_mismatched` is `True` when they disagree (display only). The three fields are `None` when an older server omits them. |
 | `FileSource` | `{type: Literal["upload", "url"], url}`. How the file arrived at the platform. |
 | `FileEntrypoint` | `{filename}`. Entrypoint inside an archive submission. |
-| `Tag` | `{type, value, origin}`. `origin` is `TagOrigin` (`dynamic`, `network`, `static`, `yara`, `config_extractor`, `signature`, `email`, `url`, `import`, or a new value): the engine that wrote a system tag. `None` for user tags, older tags, and older servers. |
+| `FileHistory` | `{filenames, last_received_at}`. `FileInfo.history` on `get_submission()`: every file name of the same sample (same SHA256) on the platform, newest first, without duplicates. The list includes names from other workspaces, the same as the web UI. `last_received_at` is a Unix time in milliseconds. `None` when the sample has one file name and on older servers. |
+| `Tag` | `{type, value, origin, author}`. `origin` is `TagOrigin` (`dynamic`, `network`, `static`, `yara`, `config_extractor`, `signature`, `email`, `url`, `import`, or a new value): the engine that wrote a system tag. `None` for user tags, older tags, and older servers. `author` is `TagAuthor` (`system`, `user`, or a new value); `None` on older servers. |
 | `ReportStatus` | Per-report state &mdash; see Submissions section. |
 | `Message` | `{message}`. One-line acknowledgement returned by an action endpoint. |
 | `ReportOperatingSystem` | `{name, platform}`. `platform` is `OperatingSystemPlatform` (`windows`/`linux`/`android`/`macos`) or another string. The API can send `""` when it does not know the platform. |

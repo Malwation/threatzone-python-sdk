@@ -91,6 +91,11 @@ class SubmissionState:
     session_network_config_id: str | None = None
     session_duration_seconds: int | None = None
     pdf_report_ready: bool = False
+    score_breakdown: dict[str, Any] | None = None
+    filename_history: list[str] = field(default_factory=list)
+    report_metafields: dict[str, dict[str, str]] = field(default_factory=dict)
+    ai_report_reason: str = "finalized"
+    ai_report_queued: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

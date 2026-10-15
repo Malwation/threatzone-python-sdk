@@ -26,6 +26,7 @@ TagOrigin = (
     ]
     | str
 )
+TagAuthor = Literal["system", "user"] | str
 
 
 class Message(BaseModel):
@@ -63,6 +64,20 @@ class FileSource(BaseModel):
     url: str | None = None
 
 
+class FileHistory(BaseModel):
+    """Other file names of the same sample (same SHA256) on the platform."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    filenames: list[str]
+    """Every file name of the sample, newest first, without duplicates.
+
+    The list includes names from other workspaces, the same as the web UI.
+    """
+    last_received_at: int = Field(alias="lastReceivedAt")
+    """Unix time in milliseconds of the latest other submission of the sample."""
+
+
 class FileInfo(BaseModel):
     """File metadata for a submission."""
 
@@ -78,6 +93,12 @@ class FileInfo(BaseModel):
     is_mimetype_mismatched: bool | None = Field(default=None, alias="isMimetypeMismatched")
     entrypoint: FileEntrypoint | None = None
     source: FileSource
+    history: FileHistory | None = None
+    """Other names of the same sample. Only ``get_submission()`` sends it.
+
+    ``None`` when the sample has one file name, when the server cannot read the
+    sample index, and on older servers.
+    """
 
 
 class Tag(BaseModel):
@@ -88,6 +109,11 @@ class Tag(BaseModel):
     type: str
     value: str
     origin: TagOrigin | None = None
+    author: TagAuthor | None = None
+    """``system`` for an analysis engine, ``user`` for a workspace member.
+
+    ``None`` on older servers.
+    """
 
 
 class ReportOperatingSystem(BaseModel):
@@ -111,3 +137,10 @@ class ReportStatus(BaseModel):
     duration: float | None = None
     format: str | None = None
     operating_system: ReportOperatingSystem | None = Field(default=None, alias="operatingSystem")
+    metafields: dict[str, str] | None = None
+    """Analysis options of the report, as the web UI shows them.
+
+    The key is the option name and the value is the selected parameter name.
+    Only ``get_submission()`` sends it. ``None`` when the report has no options
+    and on older servers.
+    """

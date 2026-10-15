@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from threatzone import AsyncThreatZone, ThreatZone
+import pytest
+
+from threatzone import AsyncThreatZone, ReportUnavailableError, ThreatZone
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     ArtifactsResponse,
     IndicatorsResponse,
     IoCsResponse,
@@ -24,7 +27,12 @@ from threatzone.types import (
 
 def test_user_info_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
     del fake_api
-    assert isinstance(sync_client.get_user_info(), UserInfo)
+    user = sync_client.get_user_info()
+    assert isinstance(user, UserInfo)
+    assert user.plan_permissions is not None
+    assert user.plan_permissions.ai_report is True
+    assert user.ai_report_resets_at is not None
+    assert user.plan.submission_limits.ai_report_limit == 20
 
 
 def test_submission_created_and_submission_contract(
@@ -35,6 +43,44 @@ def test_submission_created_and_submission_contract(
     assert isinstance(created, SubmissionCreated)
     submission = sync_client.get_submission(created.uuid)
     assert isinstance(submission, Submission)
+
+
+def test_submission_detail_fields_contract(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    target_sha = scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    pending = sync_client.get_submission(created.uuid)
+    assert pending.score is None
+    assert pending.score_breakdown is None
+    assert pending.overview.duration is None
+    done = sync_client.wait_for_completion(created.uuid, poll_interval=0.001, timeout=5)
+    assert done.score_breakdown is not None
+    assert done.score == done.score_breakdown.score
+    assert done.overview.duration is not None
+    assert done.file is not None
+    assert done.file.history is not None
+    assert done.file.history.filenames == ["malware.exe", "invoice.exe"]
+    assert done.reports[0].metafields == {
+        "Work Path": "Desktop",
+        "Enable Memory Dumps": "Enabled",
+    }
+    assert done.tags[0].author == "system"
+    [row] = sync_client.search_by_sha256(target_sha)
+    assert row.score_breakdown is None
+    assert row.overview.duration is None
+    assert row.file is not None
+    assert row.file.history is None
+
+
+def test_pure_url_submission_has_no_live_score(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_phishing_url(fake_api)
+    created = sync_client.create_url_submission("https://phishing.example.com")
+    done = sync_client.wait_for_completion(created.uuid, poll_interval=0.001, timeout=5)
+    assert done.score is None
+    assert done.score_breakdown is None
 
 
 def test_paginated_submissions_contract(
@@ -93,6 +139,28 @@ def test_ai_report_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
     report = sync_client.get_ai_report(created.uuid)
     assert isinstance(report, AiReport)
     assert report.status == "completed"
+    assert report.reason == "finalized"
+    assert report.analysis_finalized is True
+
+
+def test_ai_report_regenerate_contract(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    with pytest.raises(ReportUnavailableError) as exc_info:
+        sync_client.regenerate_ai_report(created.uuid)
+    assert exc_info.value.code == "AI_REPORT_NOT_FINALIZED"
+    sync_client.wait_for_completion(created.uuid, poll_interval=0.001, timeout=5)
+    result = sync_client.regenerate_ai_report(created.uuid)
+    assert isinstance(result, AiReportRegenerateResult)
+    assert result.status == "queued"
+    pending = sync_client.get_ai_report(created.uuid)
+    assert isinstance(pending, AiReportPending)
+    assert pending.status == "queued"
+    report = sync_client.get_ai_report(created.uuid)
+    assert isinstance(report, AiReport)
+    assert report.reason == "regenerate"
 
 
 def test_pdf_and_stix_report_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:

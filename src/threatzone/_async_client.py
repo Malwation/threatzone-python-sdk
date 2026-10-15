@@ -24,6 +24,7 @@ from ._streaming import AsyncDownloadResponse
 from .types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     ArtifactsResponse,
     BehavioursResponse,
     CdrResponse,
@@ -1091,6 +1092,44 @@ class AsyncThreatZone:
         if response.status_code == 202:
             return AiReportPending.model_validate(response.json())
         return AiReport.model_validate(response.json())
+
+    async def regenerate_ai_report(self, uuid: str) -> AiReportRegenerateResult:
+        """
+        Queue a new AI analyst report for a submission.
+
+        The new report replaces the current report when it completes. Only the
+        user who submitted the submission, or an admin of its workspace, can
+        queue a report. Requires the ``aiReport`` plan permission and a final
+        analysis score (``AiReport.analysis_finalized``). A new report uses one
+        unit of the daily AI report quota of the caller when it runs.
+
+        Args:
+            uuid: Submission UUID.
+
+        Returns:
+            AiReportRegenerateResult with ``status == "queued"`` (HTTP 202). It
+            is an AiReportPending. A second request in the next 10 minutes
+            returns the same result and does not queue a second report. Poll
+            get_ai_report() for the new report.
+
+        Raises:
+            BadRequestError: When AI reports are disabled on the platform
+                (``AI_REPORTS_DISABLED``).
+            PermissionDeniedError: When the caller did not submit the submission
+                and is not a workspace admin, when the submission belongs to
+                another workspace, or when the plan has no ``aiReport``
+                permission.
+            NotFoundError: When the submission does not exist.
+            ReportUnavailableError: When the analysis score is not final
+                (``code == "AI_REPORT_NOT_FINALIZED"``) or an AI report is in
+                progress (``code == "AI_REPORT_IN_PROGRESS"``).
+            RateLimitError: When the caller used the daily AI report quota.
+                ``retry_after`` gives the seconds until 00:00 UTC.
+            InternalServerError: When the platform could not queue the report
+                (``AI_REPORT_QUEUE_UNAVAILABLE``).
+        """
+        response = await self._http.post(f"/submissions/{uuid}/ai-report/regenerate")
+        return AiReportRegenerateResult.model_validate(response.json())
 
     # =========================================================================
     # Network

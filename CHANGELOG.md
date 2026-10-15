@@ -83,6 +83,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns 409 when the URL report is in `error`.
 - The bundled `FakeThreatZoneAPI` serves the exfil-request, AI report, STIX and PDF routes,
   pages the SHA-256 search, and returns the new fields.
+- `Submission.score_breakdown` (new types `ScoreBreakdown`, `ScoreContributor` and
+  `ScoreLayer`) explains the submission score: `deciding_layer`, `verdict`, `score`, `cap`,
+  `contributors` and `what_would_change`. Only `get_submission()` sends it. The contributor
+  titles and the `what_would_change` sentences can change between releases. Do not parse
+  them; match on `indicator_id`.
+- `Submission.score` from `get_submission()` is the live score that the web UI shows. A pure
+  URL submission returns `None` until the final URL verdict.
+- `get_submission()` adds `overview.duration` (the longest report run time in seconds),
+  `file.history` (new type `FileHistory` with `filenames` and `last_received_at`) and
+  `reports[].metafields` (the analysis options as the web UI shows them).
+- `Tag.author` (new type `TagAuthor`: `system`, `user`, or a new value) tells who added
+  the tag.
+- Every new field is `None` when an older server omits it, and on routes that do not send
+  it (`list_submissions()`, `search_by_sha256()`).
+- The bundled `FakeThreatZoneAPI` returns these fields on `GET /submissions/{uuid}` only.
+  `scenarios.seed_malicious_pe()` seeds a score breakdown, a file name history and report
+  metafields.
+- `regenerate_ai_report(uuid)` queues a new AI analyst report and returns an
+  `AiReportRegenerateResult` (`status == "queued"`, `message`). The result is an
+  `AiReportPending`. Poll `get_ai_report()` for the new report. The caller must be the
+  submitter or a workspace admin, the plan must have the `aiReport` permission, and the
+  analysis score must be final. A 409 raises `ReportUnavailableError` with
+  `code == "AI_REPORT_NOT_FINALIZED"` or `"AI_REPORT_IN_PROGRESS"`. A used daily quota raises
+  `RateLimitError`; `retry_after` gives the seconds until 00:00 UTC.
+- `AiReport` adds `reason` (new type `AiReportQueueReason`: `finalized`, `regenerate`,
+  `stale_refresh`), `error` (new type `AiReportError` with only `code`, new type
+  `AiReportErrorCode`) and `analysis_finalized`. The API never returns the platform error
+  text. `AiReportIocReviewSummary.reviewed_by_model` is `None` on reports generated before the
+  platform recorded the count.
+- `get_user_info()` adds `LimitsCount.ai_report_count`, `LimitsCount.ai_report_resets_at`,
+  `SubmissionLimits.ai_report_limit` and `PlanInfo.permissions` (new type `PlanPermissions`:
+  `download_sample`, `html_report`, `stix_report`, `pdf_report`, `download_report`,
+  `ai_report`). `UserInfo.plan_permissions` and `UserInfo.ai_report_resets_at` are shortcuts.
+  Every new field is `None` when an older server omits it.
+- The bundled `FakeThreatZoneAPI` serves `POST /submissions/{uuid}/ai-report/regenerate`. It
+  returns 409 `AI_REPORT_NOT_FINALIZED` before the analysis completes. After a regenerate, the
+  next `get_ai_report()` returns `queued`, and the read after that returns the report with
+  `reason == "regenerate"`. `GET /me` returns the AI report quota and the plan permissions.
 
 Every method above is mirrored on `AsyncThreatZone`.
 

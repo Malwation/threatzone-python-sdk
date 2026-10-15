@@ -17,6 +17,24 @@ AiConfidence = Literal["high", "medium", "low"] | str
 AiReportStatus = Literal["completed", "stale", "failed", "skipped_quota", "in_progress"] | str
 AiReportPendingStatus = Literal["in_progress", "waiting_for_analysis", "queued"] | str
 AiReportProgressStage = Literal["collecting", "screenshots", "writing"] | str
+AiReportQueueReason = Literal["finalized", "regenerate", "stale_refresh"] | str
+AiReportErrorCode = (
+    Literal[
+        "VENDOR_NOT_CONFIGURED",
+        "VENDOR_AUTH_FAILED",
+        "VENDOR_MODEL_NOT_FOUND",
+        "VENDOR_UNAVAILABLE",
+        "VENDOR_PROXY_FAILED",
+        "VENDOR_REJECTED",
+        "INVALID_MODEL_OUTPUT",
+        "MODEL_OUTPUT_TRUNCATED",
+        "PIPELINE_TIMEOUT",
+        "INTERNAL_ERROR",
+        "NOT_ELIGIBLE",
+        "REQUEUE_LIMIT_REACHED",
+    ]
+    | str
+)
 AiFamilyStatus = Literal["confirmed", "proposed", "none"] | str
 AiIocStatus = Literal["confirmed", "likely", "noise", "ai_proposed"] | str
 AiTechniqueOrigin = Literal["engine", "ai_proposed"] | str
@@ -281,12 +299,26 @@ class AiReportContent(BaseModel):
     ioc_review: AiReportIocReview | None = Field(default=None, alias="iocReview")
 
 
+class AiReportError(BaseModel):
+    """Failure of a ``failed`` AI report.
+
+    The API returns only a machine-readable code. The platform error text is
+    never returned. Treat an unknown code as a generic failure.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: AiReportErrorCode | None = None
+
+
 class AiReport(BaseModel):
     """AI analyst report of a submission (HTTP 200).
 
     ``report``, ``verdict``, ``confidence``, ``agrees_with_engine``, ``family``,
     and ``family_status`` are set only when ``status`` is ``completed`` or
-    ``stale``.
+    ``stale``. ``error`` is set only when ``status`` is ``failed``.
+    ``analysis_finalized`` is ``True`` when the analysis score is final;
+    ``regenerate_ai_report()`` needs a final score.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -300,6 +332,9 @@ class AiReport(BaseModel):
     family_status: AiFamilyStatus | None = Field(default=None, alias="familyStatus")
     report: AiReportContent | None = None
     updated_at: datetime | None = Field(default=None, alias="updatedAt")
+    reason: AiReportQueueReason | None = None
+    error: AiReportError | None = None
+    analysis_finalized: bool | None = Field(default=None, alias="analysisFinalized")
 
 
 class AiReportPending(BaseModel):
@@ -314,3 +349,14 @@ class AiReportPending(BaseModel):
     status: AiReportPendingStatus
     job_id: str | None = Field(default=None, alias="jobId")
     stage: AiReportProgressStage | None = None
+
+
+class AiReportRegenerateResult(AiReportPending):
+    """Answer of ``POST /submissions/{uuid}/ai-report/regenerate`` (HTTP 202).
+
+    ``status`` is ``queued``. A second request in the next 10 minutes returns
+    the same answer and does not queue a second report. Poll
+    ``get_ai_report()`` for the result.
+    """
+
+    message: str | None = None

@@ -76,6 +76,8 @@ def sample_user_info() -> dict[str, Any]:
                 "apiRequestCount": 50,
                 "dailySubmissionCount": 10,
                 "concurrentSubmissionCount": 2,
+                "aiReportCount": 3,
+                "aiReportResetsAt": "2026-10-15T00:00:00.000Z",
             },
         },
         "plan": {
@@ -91,6 +93,15 @@ def sample_user_info() -> dict[str, Any]:
                 "apiLimit": 1000,
                 "dailyLimit": 100,
                 "concurrentLimit": 10,
+                "aiReportLimit": 20,
+            },
+            "permissions": {
+                "downloadSample": True,
+                "htmlReport": True,
+                "stixReport": False,
+                "pdfReport": True,
+                "downloadReport": False,
+                "aiReport": True,
             },
         },
         "modules": [
@@ -323,6 +334,62 @@ def sample_submission(
         "mitreTechniques": ["T1547.001", "T1071.001"],
         "createdAt": "2024-01-15T10:30:00Z",
         "updatedAt": "2024-01-15T11:00:00Z",
+    }
+
+
+@pytest.fixture
+def sample_score_breakdown() -> dict[str, Any]:
+    return {
+        "decidingLayer": "indicator_mean",
+        "verdict": "Malicious",
+        "score": 78.5,
+        "cap": 95,
+        "contributors": [
+            {
+                "source": "dynamic_scan",
+                "indicatorId": "ransomware-shadow-copy-delete",
+                "title": "Deletes volume shadow copies",
+                "points": 95,
+                "level": "malicious",
+            },
+            {
+                "source": "static_scan",
+                "indicatorId": None,
+                "title": "Packed executable",
+                "points": 62.5,
+                "level": "suspicious",
+            },
+        ],
+        "whatWouldChange": [
+            "One malicious finding removes the benign findings from the mean score.",
+        ],
+    }
+
+
+@pytest.fixture
+def sample_submission_detail(
+    sample_submission: dict[str, Any],
+    sample_score_breakdown: dict[str, Any],
+) -> dict[str, Any]:
+    reports = [dict(report) for report in sample_submission["reports"]]
+    reports[0]["metafields"] = {"Work Path": "Desktop", "Enable Memory Dumps": "Enabled"}
+    reports[1]["metafields"] = None
+    return {
+        **sample_submission,
+        "file": {
+            **sample_submission["file"],
+            "history": {
+                "filenames": ["test.exe", "invoice.exe"],
+                "lastReceivedAt": 1718447400000,
+            },
+        },
+        "tags": [
+            {"type": "malware", "value": "trojan", "origin": "yara", "author": "system"},
+            {"type": "campaign", "value": "q3", "origin": None, "author": "user"},
+        ],
+        "reports": reports,
+        "overview": {**sample_submission["overview"], "duration": 42.7},
+        "scoreBreakdown": sample_score_breakdown,
     }
 
 
@@ -1153,9 +1220,35 @@ def sample_ai_report(sample_ai_report_evidence: dict[str, Any]) -> dict[str, Any
             },
         },
         "updatedAt": "2026-09-28T10:00:00.000Z",
+        "reason": "finalized",
+        "error": None,
+        "analysisFinalized": True,
+    }
+
+
+@pytest.fixture
+def sample_ai_report_failed() -> dict[str, Any]:
+    return {
+        "jobId": None,
+        "status": "failed",
+        "verdict": None,
+        "confidence": None,
+        "agreesWithEngine": None,
+        "family": None,
+        "familyStatus": None,
+        "report": None,
+        "updatedAt": "2026-09-28T10:00:00.000Z",
+        "reason": "regenerate",
+        "error": {"code": "PIPELINE_TIMEOUT"},
+        "analysisFinalized": True,
     }
 
 
 @pytest.fixture
 def sample_ai_report_in_progress() -> dict[str, Any]:
     return {"status": "in_progress", "jobId": None, "stage": "writing"}
+
+
+@pytest.fixture
+def sample_ai_report_regenerate() -> dict[str, Any]:
+    return {"status": "queued", "message": "AI report regeneration queued"}

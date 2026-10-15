@@ -170,6 +170,10 @@ _ROUTES_POST: list[tuple[str, re.Pattern[str]]] = [
         "restart_url_analysis",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/restart/url_analysis$"),
     ),
+    (
+        "regenerate_ai_report",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/ai-report/regenerate$"),
+    ),
 ]
 
 

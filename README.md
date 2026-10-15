@@ -62,6 +62,27 @@ print(f"MITRE techniques: {completed.mitre_techniques}")
 
 - Pass `auto_select_environment=True` to let the server route the sample to a Windows / Linux / macOS / Android environment based on its detected type. See [recipe 14](./docs/RECIPES.md#14-auto-select-sandbox-environment).
 
+### Score explanation
+
+`get_submission()` returns the live score that the web UI shows, and
+`score_breakdown` explains it:
+
+```python
+detail = client.get_submission(submission.uuid)
+print(detail.score)  # 78.5
+if detail.score_breakdown is not None:
+    print(detail.score_breakdown.deciding_layer)  # indicator_mean
+    for contributor in detail.score_breakdown.contributors:
+        print(contributor.points, contributor.indicator_id, contributor.title)
+```
+
+- A pure URL submission has `score=None` and `score_breakdown=None` until the final URL
+  verdict.
+- `contributors[].title` and `what_would_change` are display text. The text can change
+  between releases. Match on `indicator_id`, not on the title.
+- The detail response also carries `overview.duration`, `file.history` (other names of the
+  same sample), `reports[].metafields` (the analysis options) and `tags[].author`.
+
 ### Filename canonicalisation (`dynamic_mimetype_check`)
 
 By default the server appends the real (Magika-detected) extension to the
@@ -172,6 +193,20 @@ from threatzone import AiReportPending
 report = client.get_ai_report(uuid)
 if isinstance(report, AiReportPending):
     print(f"AI report is {report.status}. Try again later.")
+elif report.status == "failed" and report.error is not None:
+    print(f"AI report failed: {report.error.code}")
+
+# Queue a new AI report (submitter or workspace admin, final score, uses one quota unit).
+# 409 raises ReportUnavailableError (AI_REPORT_NOT_FINALIZED / AI_REPORT_IN_PROGRESS);
+# a used daily quota raises RateLimitError with retry_after.
+queued = client.regenerate_ai_report(uuid)  # AiReportRegenerateResult, status == "queued"
+
+# Plan permissions and the AI report quota.
+account = client.get_user_info()
+if account.plan_permissions is not None and not account.plan_permissions.download_report:
+    print("The plan cannot download the network capture.")
+print(f"AI reports used: {account.user_info.limits_count.ai_report_count}")
+print(f"AI quota resets at: {account.ai_report_resets_at}")
 
 # Chat bot and webhook requests from the decrypted HTTPS capture.
 for entry in client.get_network_exfil_requests(uuid):

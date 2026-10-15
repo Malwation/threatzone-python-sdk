@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from threatzone.types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     Artifact,
     ArtifactHashes,
     ArtifactsResponse,
@@ -63,11 +64,13 @@ from threatzone.types import (
     PaginatedSubmissions,
     PdfReportStatus,
     PlanInfo,
+    PlanPermissions,
     Process,
     ProcessesResponse,
     ProcessTreeNode,
     ProcessTreeResponse,
     ReportStatus,
+    ScoreBreakdown,
     SignatureCheckResponse,
     SignatureCheckResult,
     StaticScanResponse,
@@ -108,6 +111,17 @@ class TestCommonTypes:
         t = Tag.model_validate({"type": "malware", "value": "trojan"})
         assert t.type == "malware"
         assert t.value == "trojan"
+        assert t.author is None
+
+    def test_tag_author(self) -> None:
+        system_tag = Tag.model_validate({"type": "family", "value": "x", "author": "system"})
+        user_tag = Tag.model_validate({"type": "note", "value": "y", "author": "user"})
+        assert system_tag.author == "system"
+        assert user_tag.author == "user"
+
+    def test_tag_keeps_an_unknown_author(self) -> None:
+        tag = Tag.model_validate({"type": "family", "value": "x", "author": "integration"})
+        assert tag.author == "integration"
 
     def test_file_info_model_aliases_camelcase(self) -> None:
         info = FileInfo.model_validate(
@@ -196,6 +210,46 @@ class TestCommonTypes:
         assert status.level is None
         assert status.score is None
         assert status.operating_system is None
+        assert status.metafields is None
+
+    def test_report_status_metafields(self) -> None:
+        status = ReportStatus.model_validate(
+            {
+                "type": "dynamic",
+                "status": "completed",
+                "metafields": {"Work Path": "Desktop", "Timeout": "120"},
+            }
+        )
+        assert status.metafields == {"Work Path": "Desktop", "Timeout": "120"}
+
+    def test_file_info_without_history(self) -> None:
+        info = FileInfo.model_validate(
+            {
+                "name": "x.exe",
+                "size": 1024,
+                "extension": "exe",
+                "mimetype": "application/octet-stream",
+                "isMimetypeChecked": True,
+                "source": {"type": "upload", "url": None},
+            }
+        )
+        assert info.history is None
+
+    def test_file_info_history(self) -> None:
+        info = FileInfo.model_validate(
+            {
+                "name": "x.exe",
+                "size": 1024,
+                "extension": "exe",
+                "mimetype": "application/octet-stream",
+                "isMimetypeChecked": True,
+                "source": {"type": "upload", "url": None},
+                "history": {"filenames": ["x.exe", "y.exe"], "lastReceivedAt": 1718447400000},
+            }
+        )
+        assert info.history is not None
+        assert info.history.filenames == ["x.exe", "y.exe"]
+        assert info.history.last_received_at == 1718447400000
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +348,78 @@ class TestSubmissionTypes:
         sub = Submission.model_validate(sample_submission)
         assert sub.is_complete() is True
         assert sub.has_errors() is True
+
+    def test_submission_from_an_older_server(self, sample_submission: dict[str, Any]) -> None:
+        sub = Submission.model_validate(sample_submission)
+        assert sub.score_breakdown is None
+        assert sub.overview.duration is None
+        assert sub.file is not None
+        assert sub.file.history is None
+        assert all(report.metafields is None for report in sub.reports)
+        assert all(tag.author is None for tag in sub.tags)
+
+    def test_submission_detail_fields(self, sample_submission_detail: dict[str, Any]) -> None:
+        sub = Submission.model_validate(sample_submission_detail)
+        assert sub.overview.duration == 42.7
+        assert sub.file is not None
+        assert sub.file.history is not None
+        assert sub.file.history.filenames == ["test.exe", "invoice.exe"]
+        assert sub.file.history.last_received_at == 1718447400000
+        assert sub.reports[0].metafields == {
+            "Work Path": "Desktop",
+            "Enable Memory Dumps": "Enabled",
+        }
+        assert sub.reports[1].metafields is None
+        assert [tag.author for tag in sub.tags] == ["system", "user"]
+
+    def test_submission_score_breakdown(self, sample_submission_detail: dict[str, Any]) -> None:
+        sub = Submission.model_validate(sample_submission_detail)
+        breakdown = sub.score_breakdown
+        assert breakdown is not None
+        assert breakdown.deciding_layer == "indicator_mean"
+        assert breakdown.verdict == "Malicious"
+        assert breakdown.score == sub.score
+        assert breakdown.cap == 95
+        assert [c.indicator_id for c in breakdown.contributors] == [
+            "ransomware-shadow-copy-delete",
+            None,
+        ]
+        assert breakdown.contributors[1].points == 62.5
+        assert breakdown.contributors[1].level == "suspicious"
+        assert breakdown.what_would_change == [
+            "One malicious finding removes the benign findings from the mean score."
+        ]
+
+    def test_score_breakdown_keeps_unknown_layer_and_level(
+        self, sample_score_breakdown: dict[str, Any]
+    ) -> None:
+        payload = {**sample_score_breakdown, "decidingLayer": "ml_model", "cap": None}
+        payload["contributors"] = [{**payload["contributors"][0], "level": "informative"}]
+        breakdown = ScoreBreakdown.model_validate(payload)
+        assert breakdown.deciding_layer == "ml_model"
+        assert breakdown.cap is None
+        assert breakdown.contributors[0].level == "informative"
+
+    def test_pure_url_submission_has_no_score(self, sample_submission: dict[str, Any]) -> None:
+        payload = {
+            **sample_submission,
+            "type": "url",
+            "filename": None,
+            "url": "https://example.com",
+            "hashes": None,
+            "file": None,
+            "level": "unknown",
+            "score": None,
+            "scoreBreakdown": None,
+        }
+        sub = Submission.model_validate(payload)
+        assert sub.score is None
+        assert sub.score_breakdown is None
+
+    def test_submission_detail_round_trip(self, sample_submission_detail: dict[str, Any]) -> None:
+        first = Submission.model_validate(sample_submission_detail)
+        second = Submission.model_validate(first.model_dump(by_alias=True, mode="json"))
+        assert second == first
 
     def test_submission_round_trip(self, sample_submission: dict[str, Any]) -> None:
         first = Submission.model_validate(sample_submission)
@@ -1275,6 +1401,44 @@ class TestMeTypes:
         assert user.workspace_name == "Harkonnens"
         assert user.workspace_alias == "spice-maniacs"
 
+    def test_user_info_reads_the_ai_quota_and_plan_permissions(
+        self, sample_user_info: dict[str, Any]
+    ) -> None:
+        user = UserInfo.model_validate(sample_user_info)
+        limits = user.user_info.limits_count
+        assert limits.ai_report_count == 3
+        assert limits.ai_report_resets_at is not None
+        assert limits.ai_report_resets_at.isoformat() == "2026-10-15T00:00:00+00:00"
+        assert user.ai_report_resets_at == limits.ai_report_resets_at
+        assert user.plan.submission_limits.ai_report_limit == 20
+        permissions = user.plan_permissions
+        assert isinstance(permissions, PlanPermissions)
+        assert permissions.download_sample is True
+        assert permissions.html_report is True
+        assert permissions.stix_report is False
+        assert permissions.pdf_report is True
+        assert permissions.download_report is False
+        assert permissions.ai_report is True
+
+    def test_user_info_accepts_an_old_server_payload(
+        self, sample_user_info: dict[str, Any]
+    ) -> None:
+        limits_payload = sample_user_info["userInfo"]["limitsCount"]
+        del limits_payload["aiReportCount"]
+        del limits_payload["aiReportResetsAt"]
+        del sample_user_info["plan"]["submissionLimits"]["aiReportLimit"]
+        del sample_user_info["plan"]["permissions"]
+        user = UserInfo.model_validate(sample_user_info)
+        assert user.user_info.limits_count.ai_report_count is None
+        assert user.ai_report_resets_at is None
+        assert user.plan.submission_limits.ai_report_limit is None
+        assert user.plan_permissions is None
+
+    def test_plan_permissions_accept_a_partial_payload(self) -> None:
+        permissions = PlanPermissions.model_validate({"aiReport": False})
+        assert permissions.ai_report is False
+        assert permissions.download_sample is None
+
     def test_user_info_round_trip(self, sample_user_info: dict[str, Any]) -> None:
         first = UserInfo.model_validate(sample_user_info)
         dumped = first.model_dump(by_alias=True)
@@ -1636,6 +1800,65 @@ class TestAiReportTypes:
         assert pending.status == status
         assert pending.stage is None
         assert pending.job_id is None
+
+    def test_completed_report_reads_the_run_fields(self, sample_ai_report: dict[str, Any]) -> None:
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.reason == "finalized"
+        assert report.error is None
+        assert report.analysis_finalized is True
+
+    def test_failed_report_has_only_the_error_code(
+        self, sample_ai_report_failed: dict[str, Any]
+    ) -> None:
+        report = AiReport.model_validate(sample_ai_report_failed)
+        assert report.status == "failed"
+        assert report.report is None
+        assert report.reason == "regenerate"
+        assert report.error is not None
+        assert report.error.code == "PIPELINE_TIMEOUT"
+        assert "message" not in report.error.model_dump(by_alias=True)
+
+    def test_report_from_an_old_server_has_no_run_fields(
+        self, sample_ai_report: dict[str, Any]
+    ) -> None:
+        for key in ("reason", "error", "analysisFinalized"):
+            del sample_ai_report[key]
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.reason is None
+        assert report.error is None
+        assert report.analysis_finalized is None
+
+    def test_report_keeps_unknown_run_values(self, sample_ai_report_failed: dict[str, Any]) -> None:
+        sample_ai_report_failed["reason"] = "scheduled_refresh"
+        sample_ai_report_failed["error"] = {"code": "FUTURE_FAILURE"}
+        report = AiReport.model_validate(sample_ai_report_failed)
+        assert report.reason == "scheduled_refresh"
+        assert report.error is not None
+        assert report.error.code == "FUTURE_FAILURE"
+
+    def test_ioc_review_without_a_recorded_model_count(
+        self, sample_ai_report: dict[str, Any]
+    ) -> None:
+        sample_ai_report["report"]["iocReview"]["summary"]["reviewedByModel"] = None
+        report = AiReport.model_validate(sample_ai_report)
+        assert report.report is not None
+        assert report.report.ioc_review is not None
+        assert report.report.ioc_review.summary is not None
+        assert report.report.ioc_review.summary.reviewed_by_model is None
+
+    def test_regenerate_result_is_a_pending_report(
+        self, sample_ai_report_regenerate: dict[str, Any]
+    ) -> None:
+        result = AiReportRegenerateResult.model_validate(sample_ai_report_regenerate)
+        assert isinstance(result, AiReportPending)
+        assert result.status == "queued"
+        assert result.message == "AI report regeneration queued"
+        assert result.stage is None
+
+    def test_regenerate_result_keeps_unknown_status(self) -> None:
+        result = AiReportRegenerateResult.model_validate({"status": "deduplicated"})
+        assert result.status == "deduplicated"
+        assert result.message is None
 
     def test_pending_body_keeps_unknown_values(self) -> None:
         pending = AiReportPending.model_validate({"status": "throttled", "stage": "reviewing"})

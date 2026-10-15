@@ -16,6 +16,8 @@ from .ai_report import (
     AiReportClassification,
     AiReportContent,
     AiReportEngineAgreement,
+    AiReportError,
+    AiReportErrorCode,
     AiReportEvidence,
     AiReportFamily,
     AiReportFlowEdge,
@@ -28,7 +30,9 @@ from .ai_report import (
     AiReportPending,
     AiReportPendingStatus,
     AiReportProgressStage,
+    AiReportQueueReason,
     AiReportRecommendation,
+    AiReportRegenerateResult,
     AiReportScreenshot,
     AiReportStatus,
     AiReportSummary,
@@ -41,6 +45,7 @@ from .behaviours import BehaviourEvent, BehaviourOs, BehavioursResponse
 from .cdr import CdrResponse, CdrSanitizedFileInfo, CdrSanitizedFileInfoDetail
 from .common import (
     FileEntrypoint,
+    FileHistory,
     FileInfo,
     FileSource,
     Hashes,
@@ -51,6 +56,7 @@ from .common import (
     ReportStatusValue,
     ReportType,
     Tag,
+    TagAuthor,
     TagOrigin,
     ThreatLevel,
 )
@@ -97,6 +103,7 @@ from .me import (
     LimitsCount,
     ModuleInfo,
     PlanInfo,
+    PlanPermissions,
     SubmissionLimits,
     UserInfo,
     UserInfoDetails,
@@ -149,6 +156,9 @@ from .static_scan import (
 )
 from .submissions import (
     PaginatedSubmissions,
+    ScoreBreakdown,
+    ScoreContributor,
+    ScoreLayer,
     Submission,
     SubmissionCreated,
     SubmissionIndicatorLevels,
@@ -186,6 +196,7 @@ from .url_analysis import (
 __all__ = [
     # Common
     "FileEntrypoint",
+    "FileHistory",
     "FileInfo",
     "FileSource",
     "Hashes",
@@ -196,6 +207,7 @@ __all__ = [
     "ReportStatusValue",
     "ReportType",
     "Tag",
+    "TagAuthor",
     "TagOrigin",
     "ThreatLevel",
     # Errors
@@ -226,6 +238,8 @@ __all__ = [
     "AiReportClassification",
     "AiReportContent",
     "AiReportEngineAgreement",
+    "AiReportError",
+    "AiReportErrorCode",
     "AiReportEvidence",
     "AiReportFamily",
     "AiReportFlowEdge",
@@ -238,7 +252,9 @@ __all__ = [
     "AiReportPending",
     "AiReportPendingStatus",
     "AiReportProgressStage",
+    "AiReportQueueReason",
     "AiReportRecommendation",
+    "AiReportRegenerateResult",
     "AiReportScreenshot",
     "AiReportStatus",
     "AiReportSummary",
@@ -279,6 +295,7 @@ __all__ = [
     "LimitsCount",
     "ModuleInfo",
     "PlanInfo",
+    "PlanPermissions",
     "SubmissionLimits",
     "UserInfo",
     "UserInfoDetails",
@@ -362,6 +379,9 @@ __all__ = [
     "UrlAnalysisWhoisInfo",
     # Submissions
     "PaginatedSubmissions",
+    "ScoreBreakdown",
+    "ScoreContributor",
+    "ScoreLayer",
     "Submission",
     "SubmissionCreated",
     "SubmissionIndicatorLevels",

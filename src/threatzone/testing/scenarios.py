@@ -39,6 +39,36 @@ def seed_malicious_pe(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> 
         ],
         mitre_techniques=["T1055", "T1547.001", "T1112", "T1059.001"],
     )
+    pending = fake._pending_seeds[target_sha]
+    pending.filename_history = ["malware.exe", "invoice.exe"]
+    pending.report_metafields = {
+        "dynamic": {"Work Path": "Desktop", "Enable Memory Dumps": "Enabled"},
+    }
+    pending.score_breakdown = {
+        "decidingLayer": "indicator_mean",
+        "verdict": "Malicious",
+        "score": 92.0,
+        "cap": 95.0,
+        "contributors": [
+            {
+                "source": "dynamic_scan",
+                "indicatorId": "process-injection",
+                "title": "Injects code into another process",
+                "points": 95.0,
+                "level": "malicious",
+            },
+            {
+                "source": "static_scan",
+                "indicatorId": None,
+                "title": "Packed executable",
+                "points": 60.0,
+                "level": "suspicious",
+            },
+        ],
+        "whatWouldChange": [
+            "Removing the malicious findings lowers the mean score.",
+        ],
+    }
     return target_sha
 
 

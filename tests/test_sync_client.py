@@ -28,12 +28,14 @@ from threatzone._exceptions import (
     NotFoundError,
     PdfReportPendingError,
     PermissionDeniedError,
+    RateLimitError,
     ReportUnavailableError,
     YaraRulePendingError,
 )
 from threatzone.types import (
     AiReport,
     AiReportPending,
+    AiReportRegenerateResult,
     Artifact,
     ArtifactsResponse,
     BehavioursResponse,
@@ -284,6 +286,9 @@ class TestUserInfo:
         assert user.email == sample_user_info["userInfo"]["email"]
         assert _call_url(mock).endswith("/me")
         assert _call_method(mock) == "GET"
+        assert user.plan_permissions is not None
+        assert user.plan_permissions.stix_report is False
+        assert user.ai_report_resets_at is not None
 
     def test_401(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(401, {"message": "Invalid API key"}))
@@ -678,6 +683,20 @@ class TestQuerySubmissions:
             sub = client.get_submission("sub-789")
         assert isinstance(sub, Submission)
         assert _call_url(mock).endswith("/submissions/sub-789")
+
+    def test_get_submission_detail_fields(
+        self, api_key: str, sample_submission_detail: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_submission_detail))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            sub = client.get_submission("sub-789")
+        assert sub.score_breakdown is not None
+        assert sub.score_breakdown.deciding_layer == "indicator_mean"
+        assert sub.overview.duration == 42.7
+        assert sub.file is not None
+        assert sub.file.history is not None
+        assert sub.reports[0].metafields is not None
+        assert sub.tags[0].author == "system"
 
     def test_get_submission_404(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(404, {"message": "Not found"}))
@@ -1743,6 +1762,61 @@ class TestAiReport:
         ctx, _ = _patched_client(_make_response(404, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.get_ai_report("sub-789")
+
+    def test_200_failed_report_has_the_error_code(
+        self, api_key: str, sample_ai_report_failed: dict[str, Any]
+    ) -> None:
+        ctx, _ = _patched_client(_make_response(200, sample_ai_report_failed))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            report = client.get_ai_report("sub-789")
+        assert isinstance(report, AiReport)
+        assert report.error is not None
+        assert report.error.code == "PIPELINE_TIMEOUT"
+        assert report.analysis_finalized is True
+
+
+class TestRegenerateAiReport:
+    def test_202_returns_the_queued_result(
+        self, api_key: str, sample_ai_report_regenerate: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(202, sample_ai_report_regenerate))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.regenerate_ai_report("sub-789")
+        assert isinstance(result, AiReportRegenerateResult)
+        assert isinstance(result, AiReportPending)
+        assert result.status == "queued"
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith("/submissions/sub-789/ai-report/regenerate")
+
+    def test_403(self, api_key: str) -> None:
+        ctx, _ = _patched_client(_make_response(403, {"message": "Forbidden"}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
+            client.regenerate_ai_report("sub-789")
+
+    @pytest.mark.parametrize("code", ["AI_REPORT_NOT_FINALIZED", "AI_REPORT_IN_PROGRESS"])
+    def test_409_carries_the_code(self, api_key: str, code: str) -> None:
+        body = {"statusCode": 409, "message": "Conflict", "code": code}
+        ctx, _ = _patched_client(_make_response(409, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ReportUnavailableError) as exc_info,
+        ):
+            client.regenerate_ai_report("sub-789")
+        assert exc_info.value.code == code
+
+    def test_429_carries_retry_after(self, api_key: str) -> None:
+        body = {"statusCode": 429, "message": "Quota used", "code": "AI_REPORT_QUOTA_EXCEEDED"}
+        response = _make_response(429, body, headers={"Retry-After": "3600"})
+        ctx, mock = _patched_client(response)
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(RateLimitError) as exc_info,
+        ):
+            client.regenerate_ai_report("sub-789")
+        assert exc_info.value.retry_after == 3600.0
+        assert mock.call_count == 1
 
 
 def _patched_streams(*responses: httpx.Response) -> tuple[Any, MagicMock]:
