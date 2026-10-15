@@ -874,7 +874,6 @@ def sample_url_analysis_response() -> dict[str, Any]:
             "threatDetails": [{"source": "intel-1", "details": {"family": "EvilKit"}}],
         },
         "pages": ["https://evil.com/login"],
-        "verdictState": "final",
         "threatScore": 72,
         "riskLevel": "High",
         "privacyScore": 35,

@@ -243,7 +243,6 @@ class UrlAnalysisResponse(BaseModel):
     extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
     threat_analysis: UrlAnalysisThreatAnalysis | None = Field(default=None, alias="threatAnalysis")
     pages: list[str]
-    verdict_state: str | None = Field(default=None, alias="verdictState")
     threat_score: int | None = Field(default=None, alias="threatScore")
     risk_level: str | None = Field(default=None, alias="riskLevel")
     privacy_score: int | None = Field(default=None, alias="privacyScore")

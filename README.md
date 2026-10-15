@@ -131,7 +131,7 @@ Session control:
   concurrent-submission quota.
 
 Scoring fields (`threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`,
-`privacy_breakdown`, `verdict_state`, `verdict_provenance`, `impersonation_target`,
+`privacy_breakdown`, `verdict_provenance`, `impersonation_target`,
 `completeness`, `intel_detections`, `metafields`, `scored_at`) are `None` or empty until
 scoring finishes. Read them after the report reaches `completed`.
 
