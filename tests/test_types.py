@@ -50,6 +50,7 @@ from threatzone.types import (
     Metafields,
     MitreResponse,
     ModuleInfo,
+    NetworkAvailability,
     NetworkConfigListItem,
     NetworkConfigListResponse,
     NetworkSummary,
@@ -285,6 +286,33 @@ class TestIndicatorsSurfaceTypes:
         assert ind.syscall_line_numbers == [12, 100]
         assert ind.author == "system"
 
+    def test_indicator_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        v2 = Indicator.model_validate({**sample_indicator, "score": 45, "scoreMaximum": 100})
+        assert v2.score == 45
+        assert v2.score_maximum == 100
+        legacy = Indicator.model_validate({**sample_indicator, "scoreMaximum": 10})
+        assert legacy.score_maximum == 10
+
+    def test_indicator_unknown_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate({**sample_indicator, "scoreMaximum": 1000})
+        assert ind.score_maximum == 1000
+
+    def test_indicator_without_score_maximum(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.score_maximum is None
+        assert ind.score == sample_indicator["score"]
+
+    def test_indicator_summary(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(
+            {**sample_indicator, "summary": "word.exe hollowed svchost.exe.", "scoreMaximum": 100}
+        )
+        assert ind.summary == "word.exe hollowed svchost.exe."
+        assert ind.description == sample_indicator["description"]
+
+    def test_indicator_without_summary(self, sample_indicator: dict[str, Any]) -> None:
+        ind = Indicator.model_validate(sample_indicator)
+        assert ind.summary is None
+
     def test_indicator_category_is_list(self, sample_indicator: dict[str, Any]) -> None:
         ind = Indicator.model_validate(sample_indicator)
         assert ind.category == ["evasion", "persistence"]
@@ -416,6 +444,66 @@ class TestIndicatorsSurfaceTypes:
         summary = OverviewSummary.model_validate(sample_overview_summary)
         assert summary.network is None
 
+    def test_overview_summary_network_v2_unavailable(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        sample_overview_summary["network"] = {
+            "dnsCount": 0,
+            "httpCount": 0,
+            "tcpCount": 0,
+            "udpCount": 0,
+            "threatCount": 0,
+            "countsAvailable": False,
+            "availability": {
+                "state": "unavailable",
+                "reason": "capture_unavailable",
+                "coverage": "none",
+            },
+            "sourceScope": "none",
+        }
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.dns_count == 0
+        assert network.counts_available is False
+        assert network.availability == NetworkAvailability(
+            state="unavailable", reason="capture_unavailable", coverage="none"
+        )
+        assert network.source_scope == "none"
+
+    def test_overview_summary_network_legacy_has_no_availability(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.dns_count == 15
+        assert network.counts_available is None
+        assert network.availability is None
+        assert network.source_scope is None
+
+    def test_overview_summary_network_explicit_null_and_unknown_values(
+        self, sample_overview_summary: dict[str, Any]
+    ) -> None:
+        sample_overview_summary["network"].update(
+            {"countsAvailable": None, "availability": None, "sourceScope": None}
+        )
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.counts_available is None
+        assert network.availability is None
+        assert network.source_scope is None
+
+        sample_overview_summary["network"].update(
+            {
+                "availability": {"state": "future_state", "reason": None, "coverage": "future_cov"},
+                "sourceScope": "future_scope",
+            }
+        )
+        network = OverviewSummary.model_validate(sample_overview_summary).network
+        assert network is not None
+        assert network.availability is not None
+        assert network.availability.state == "future_state"
+        assert network.source_scope == "future_scope"
+
     def test_overview_summary_round_trip(self, sample_overview_summary: dict[str, Any]) -> None:
         first = OverviewSummary.model_validate(sample_overview_summary)
         dumped = first.model_dump(by_alias=True)
@@ -434,6 +522,89 @@ class TestNetworkTypes:
         s = NetworkSummary.model_validate(sample_network_summary)
         assert s.dns_count == 15
         assert s.pcap_available is True
+
+    def test_network_summary_v2_unavailable(self, sample_network_summary: dict[str, Any]) -> None:
+        payload = {
+            **sample_network_summary,
+            "pcapAvailable": False,
+            "countsAvailable": False,
+            "availability": {
+                "state": "unavailable",
+                "reason": "capture_unavailable",
+                "coverage": "none",
+            },
+            "sourceScope": "none",
+        }
+        s = NetworkSummary.model_validate(payload)
+        assert s.counts_available is False
+        assert s.availability == NetworkAvailability(
+            state="unavailable", reason="capture_unavailable", coverage="none"
+        )
+        assert s.source_scope == "none"
+        assert s.pcap_available is False
+
+    def test_network_summary_legacy_has_no_availability(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        s = NetworkSummary.model_validate(sample_network_summary)
+        assert s.counts_available is None
+        assert s.availability is None
+        assert s.source_scope is None
+        assert s.dns_count == 15
+        assert s.pcap_available is True
+
+    def test_network_summary_legacy_explicit_nulls(
+        self, sample_network_summary: dict[str, Any]
+    ) -> None:
+        payload = {
+            **sample_network_summary,
+            "countsAvailable": True,
+            "availability": None,
+            "sourceScope": None,
+        }
+        s = NetworkSummary.model_validate(payload)
+        assert s.counts_available is True
+        assert s.availability is None
+
+    def test_unknown_enum_values_parse(
+        self,
+        sample_network_summary: dict[str, Any],
+        sample_dns_query: dict[str, Any],
+    ) -> None:
+        s = NetworkSummary.model_validate(
+            {
+                **sample_network_summary,
+                "availability": {"state": "future_state", "reason": None, "coverage": "future_cov"},
+                "sourceScope": "future_scope",
+            }
+        )
+        assert s.availability is not None
+        assert s.availability.state == "future_state"
+        assert s.availability.coverage == "future_cov"
+        assert s.source_scope == "future_scope"
+        assert DnsQuery.model_validate({**sample_dns_query, "sourceScope": "x"}).source_scope == "x"
+
+    def test_network_availability_null_reason(self) -> None:
+        a = NetworkAvailability.model_validate(
+            {"state": "observed", "reason": None, "coverage": "complete"}
+        )
+        assert a.reason is None
+
+    def test_list_rows_source_scope(
+        self,
+        sample_dns_query: dict[str, Any],
+        sample_http_request: dict[str, Any],
+        sample_network_threat: dict[str, Any],
+    ) -> None:
+        assert DnsQuery.model_validate(sample_dns_query).source_scope is None
+        dns = DnsQuery.model_validate({**sample_dns_query, "sourceScope": "sample_attributed"})
+        assert dns.source_scope == "sample_attributed"
+        http = HttpRequest.model_validate(
+            {**sample_http_request, "sourceScope": "submission_ip_scoped"}
+        )
+        assert http.source_scope == "submission_ip_scoped"
+        threat = NetworkThreat.model_validate({**sample_network_threat, "sourceScope": "none"})
+        assert threat.source_scope == "none"
 
     def test_network_summary_round_trip(self, sample_network_summary: dict[str, Any]) -> None:
         first = NetworkSummary.model_validate(sample_network_summary)

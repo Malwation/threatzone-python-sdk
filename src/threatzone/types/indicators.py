@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .network import NetworkAvailability, NetworkSourceScope
+
 IndicatorLevel = Literal["malicious", "suspicious", "benign"]
 IndicatorAuthor = Literal["system", "user"]
 
@@ -33,9 +35,11 @@ class Indicator(BaseModel):
     id: str
     name: str
     description: str
+    summary: str | None = None
     category: list[str]
     level: IndicatorLevel
     score: int
+    score_maximum: int | None = Field(default=None, alias="scoreMaximum")
     pids: list[int]
     attack_codes: list[str] = Field(alias="attackCodes")
     event_ids: list[int] = Field(alias="eventIds")
@@ -219,6 +223,9 @@ class SummaryNetwork(BaseModel):
     tcp_count: int = Field(alias="tcpCount")
     udp_count: int = Field(alias="udpCount")
     threat_count: int = Field(alias="threatCount")
+    counts_available: bool | None = Field(default=None, alias="countsAvailable")
+    availability: NetworkAvailability | None = None
+    source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
 class OverviewSummary(BaseModel):
