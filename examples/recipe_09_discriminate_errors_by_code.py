@@ -38,6 +38,7 @@ def main(client: ThreatZone, submission_uuid: str) -> str:
         code = (exc.body or {}).get("code") if exc.body else None
         return f"PERMISSION_DENIED:{code or 'unknown'}"
     except NotFoundError:
+        # A private submission of another workspace also arrives here, not at PermissionDeniedError.
         return "NOT_FOUND"
     except BadRequestError as exc:
         code = (exc.body or {}).get("code") if exc.body else None

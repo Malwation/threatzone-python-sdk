@@ -34,11 +34,41 @@ def seed_malicious_pe(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> 
         ],
         iocs=[
             ("domain", "malware-c2.example.com"),
-            ("ip", "192.0.2.10"),
+            ("IP", "192.0.2.10"),
             ("sha256", "b" * 64),
         ],
         mitre_techniques=["T1055", "T1547.001", "T1112", "T1059.001"],
     )
+    pending = fake._pending_seeds[target_sha]
+    pending.filename_history = ["malware.exe", "invoice.exe"]
+    pending.report_metafields = {
+        "dynamic": {"Work Path": "Desktop", "Enable Memory Dumps": "Enabled"},
+    }
+    pending.score_breakdown = {
+        "decidingLayer": "indicator_mean",
+        "verdict": "Malicious",
+        "score": 92.0,
+        "cap": 95.0,
+        "contributors": [
+            {
+                "source": "dynamic_scan",
+                "indicatorId": "process-injection",
+                "title": "Injects code into another process",
+                "points": 95.0,
+                "level": "malicious",
+            },
+            {
+                "source": "static_scan",
+                "indicatorId": None,
+                "title": "Packed executable",
+                "points": 60.0,
+                "level": "suspicious",
+            },
+        ],
+        "whatWouldChange": [
+            "Removing the malicious findings lowers the mean score.",
+        ],
+    }
     return target_sha
 
 
@@ -147,7 +177,8 @@ def seed_static_only_submission(fake: FakeThreatZoneAPI, *, sha256: str | None =
 
 def seed_private_cross_workspace(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> str:
     """Seed a submission marked private in a workspace other than the test
-    token's. Any access attempt returns ``403 SUBMISSION_PRIVATE``."""
+    token's. Any access attempt returns ``404 NOT_FOUND``, the same as for a missing
+    submission."""
     target_sha = seed_malicious_pe(fake, sha256=sha256)
     pending = fake._pending_seeds.get(target_sha)
     if pending is None:

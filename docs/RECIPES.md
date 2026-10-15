@@ -478,18 +478,17 @@ def fetch_indicators_safely(client: ThreatZone, submission_uuid: str) -> None:
         print("Invalid API key.")
     except PermissionDeniedError as exc:
         code = (exc.body or {}).get("code")
-        if code == "SUBMISSION_PRIVATE":
-            print("Submission belongs to a different workspace.")
+        if code == "LICENSE_INVALID":
+            print("The self-hosted deployment has no valid license.")
         else:
-            print(f"Access denied: {exc.message}")
-    except NotFoundError:
-        print("Submission does not exist.")
+            print(f"Access denied (plan permission or module): {exc.message}")
+    except NotFoundError as exc:
+        # A private submission of another workspace gives the same NOT_FOUND as a missing one.
+        print(f"Not found ({(exc.body or {}).get('code')}).")
     except BadRequestError as exc:
         code = (exc.body or {}).get("code")
-        if code == "INVALID_UUID":
-            print("UUID is not a valid v4 UUID.")
-        elif code == "INVALID_QUERY_PARAM":
-            print(f"Query parameter validation failed: {exc.message}")
+        if code == "INVALID_QUERY_PARAM":
+            print(f"A path or query parameter is not valid: {exc.message}")
         else:
             print(f"Bad request: {exc.message}")
     except ReportUnavailableError as exc:
@@ -497,7 +496,7 @@ def fetch_indicators_safely(client: ThreatZone, submission_uuid: str) -> None:
             print(f"Dynamic report state: {exc.current_status}")
     except RateLimitError as exc:
         wait = exc.retry_after or 60
-        print(f"Rate limited; retry after {wait}s.")
+        print(f"Rate limited ({exc.code}); retry after {wait}s.")
     except APIError as exc:
         print(f"Unhandled API error {exc.status_code}: {exc.message}")
     else:
@@ -510,12 +509,20 @@ with ThreatZone() as client:
 **Notes.**
 
 - `APIError.body["code"]` is the machine-readable discriminator. It's one of the values
-  in the `ApiErrorCode` literal union in `threatzone.types.errors`. Every code is stable
-  across releases; the `message` is not.
+  in the `ApiErrorCode` literal union in `threatzone.types.errors`, or a code that a newer
+  server adds. Every code is stable across releases; the `message` is not.
 - `ReportUnavailableError` already exposes `.code` as a typed attribute &mdash; no need
   to reach into `.body` for it.
-- `RateLimitError.retry_after` is parsed from the `Retry-After` response header; it's
-  `None` if the header was absent.
+- `RateLimitError.code` is `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request
+  limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit) or
+  `AI_REPORT_QUOTA_EXCEEDED`. `RateLimitError.retry_after` is parsed from the `Retry-After`
+  response header, or from the `retryAfter` body field when the header is absent or is not a
+  number. It is `None` when both are absent.
+- The create routes raise `QuotaUnavailableError` (503, `QUOTA_UNAVAILABLE`, a subclass of
+  `InternalServerError`) when the server cannot check the submission quota. Retry after
+  `retry_after` seconds.
+- The API never sends `SUBMISSION_PRIVATE` or `INVALID_UUID`. Code that checked them must
+  check `NotFoundError` with `NOT_FOUND`, and `BadRequestError` with `INVALID_QUERY_PARAM`.
 
 ---
 

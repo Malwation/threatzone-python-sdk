@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +27,10 @@ class LimitsCount(BaseModel):
     api_request_count: int = Field(alias="apiRequestCount")
     daily_submission_count: int = Field(alias="dailySubmissionCount")
     concurrent_submission_count: int = Field(alias="concurrentSubmissionCount")
+    ai_report_count: int | None = Field(default=None, alias="aiReportCount")
+    """AI report quota units used since 00:00 UTC. A report in progress counts as used."""
+    ai_report_resets_at: datetime | None = Field(default=None, alias="aiReportResetsAt")
+    """Time when the daily AI report quota resets (00:00 UTC)."""
 
 
 class UserInfoDetails(BaseModel):
@@ -56,6 +61,27 @@ class SubmissionLimits(BaseModel):
     api_limit: int = Field(alias="apiLimit")
     daily_limit: int = Field(alias="dailyLimit")
     concurrent_limit: int = Field(alias="concurrentLimit")
+    ai_report_limit: int | None = Field(default=None, alias="aiReportLimit")
+    """Daily AI report limit. The value is 0 when the plan has no AI report."""
+
+
+class PlanPermissions(BaseModel):
+    """Plan permissions.
+
+    A ``False`` value means that the matching routes return 403. A permission
+    that the plan does not store is ``False``.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    download_sample: bool | None = Field(default=None, alias="downloadSample")
+    html_report: bool | None = Field(default=None, alias="htmlReport")
+    stix_report: bool | None = Field(default=None, alias="stixReport")
+    pdf_report: bool | None = Field(default=None, alias="pdfReport")
+    download_report: bool | None = Field(default=None, alias="downloadReport")
+    """Download report files, for example the network capture and the raw analysis data."""
+    ai_report: bool | None = Field(default=None, alias="aiReport")
+    """Read and queue AI analyst reports."""
 
 
 class PlanInfo(BaseModel):
@@ -69,6 +95,7 @@ class PlanInfo(BaseModel):
     subs_time: str = Field(alias="subsTime")
     file_limits: FileLimits = Field(alias="fileLimits")
     submission_limits: SubmissionLimits = Field(alias="submissionLimits")
+    permissions: PlanPermissions | None = None
 
 
 class ModuleInfo(BaseModel):
@@ -115,3 +142,13 @@ class UserInfo(BaseModel):
     def workspace_alias(self) -> str:
         """Get workspace alias."""
         return self.user_info.workspace.alias
+
+    @property
+    def plan_permissions(self) -> PlanPermissions | None:
+        """Get the plan permissions. ``None`` when the server does not send them."""
+        return self.plan.permissions
+
+    @property
+    def ai_report_resets_at(self) -> datetime | None:
+        """Get the time when the daily AI report quota resets."""
+        return self.user_info.limits_count.ai_report_resets_at
