@@ -781,7 +781,6 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
             "threatDetails": [],
         },
         "pages": [state.final_url] if state.final_url else [target_url],
-        "verdictState": "final" if state.current_status() == "completed" else "provisional",
         "threatScore": _THREAT_SCORE_BY_LEVEL[state.level],
         "riskLevel": _RISK_LEVEL_BY_LEVEL[state.level],
         "privacyScore": 35,

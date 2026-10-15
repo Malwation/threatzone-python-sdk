@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `list_media_files()` and `get_media_file()` accept `source="dynamic"` or
   `source="url_analysis"`. The parameter is omitted from the request when unset.
 - `MediaFile.kind` reports `"video"`, `"screenshot"`, or `None`.
-- `UrlAnalysisResponse` carries the scoring fields: `verdict_state`, `threat_score`,
+- `UrlAnalysisResponse` carries the scoring fields: `threat_score`,
   `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`,
   `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`,
   `metafields`, and `scored_at`. Each is `None` or empty until scoring finishes.
