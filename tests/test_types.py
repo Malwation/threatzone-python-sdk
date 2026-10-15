@@ -2153,16 +2153,26 @@ class TestApiErrorEnvelope:
         assert err.details is not None
         assert err.details["requiredReport"] == "dynamic"
 
-    def test_api_error_rejects_unknown_code(self) -> None:
-        with pytest.raises(ValidationError):
-            ApiError.model_validate(
-                {
-                    "status_code": 500,
-                    "error": "Internal",
-                    "message": "boom",
-                    "code": "NOT_A_REAL_CODE",
-                }
-            )
+    def test_api_error_accepts_a_code_that_a_newer_server_adds(self) -> None:
+        err = ApiError.model_validate(
+            {
+                "status_code": 500,
+                "error": "Internal",
+                "message": "boom",
+                "code": "NOT_A_REAL_CODE",
+            }
+        )
+        assert err.code == "NOT_A_REAL_CODE"
+
+    @pytest.mark.parametrize(
+        "code",
+        ["LICENSE_INVALID", "CONFLICT", "QUOTA_UNAVAILABLE", "SAMPLE_INDEX_ERROR"],
+    )
+    def test_api_error_accepts_the_codes_of_the_api(self, code: str) -> None:
+        err = ApiError.model_validate(
+            {"status_code": 409, "error": "Conflict", "message": "no", "code": code}
+        )
+        assert err.code == code
 
 
 # ---------------------------------------------------------------------------

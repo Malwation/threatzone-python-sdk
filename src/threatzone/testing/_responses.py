@@ -29,6 +29,7 @@ from threatzone.types import (
     ArtifactJob,
     ArtifactsResponse,
     BehaviourFacets,
+    BehaviourMatches,
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
@@ -344,7 +345,7 @@ def build_indicators_response(
                 "description": f"Triggered MITRE technique {seed.attack_code}",
                 "category": ["default"],
                 "level": seed.level,
-                "score": 80 if seed.level == "malicious" else 50,
+                "score": _indicator_score(seed),
                 "pids": list(seed.pids),
                 "attackCodes": [seed.attack_code],
                 "eventIds": [100 + idx],
@@ -528,9 +529,8 @@ def build_artifacts_response(
     return ArtifactsResponse.model_validate({"items": items, "total": len(items)})
 
 
-def build_artifact_jobs(artifact_id: str) -> list[ArtifactJob]:
-    """Build the engine jobs of one artifact, oldest first."""
-    del artifact_id
+def build_artifact_jobs() -> list[ArtifactJob]:
+    """Build the engine jobs of one artifact, oldest first. Every artifact has the same jobs."""
     return [
         ArtifactJob.model_validate(
             {"engineType": "static_scan", "status": "success", "errorCode": None}
@@ -563,10 +563,55 @@ def build_eml_analysis(state: SubmissionState) -> list[EmlAnalysis]:
     return [EmlAnalysis.model_validate(payload)]
 
 
+_MITRE_CATALOG: dict[str, tuple[str, list[str]]] = {
+    "T1055": ("Process Injection", ["TA0004", "TA0005"]),
+    "T1059": ("Command and Scripting Interpreter", ["TA0002"]),
+    "T1059.001": ("PowerShell", ["TA0002"]),
+    "T1071": ("Application Layer Protocol", ["TA0011"]),
+    "T1112": ("Modify Registry", ["TA0005"]),
+    "T1547.001": ("Registry Run Keys / Startup Folder", ["TA0003", "TA0004"]),
+}
+
+
+def _indicator_score(seed: IndicatorSeed) -> int:
+    return 80 if seed.level == "malicious" else 50
+
+
+def _mitre_items(state: SubmissionState) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for technique_id in sorted(set(state.mitre_techniques)):
+        catalog_entry = _MITRE_CATALOG.get(technique_id)
+        if catalog_entry is None:
+            continue
+        name, tactic_ids = catalog_entry
+        carriers = [
+            (idx, seed)
+            for idx, seed in enumerate(state.indicators)
+            if seed.attack_code == technique_id
+        ]
+        items.append(
+            {
+                "techniqueId": technique_id,
+                "name": name,
+                "tacticIds": tactic_ids,
+                "score": max((_indicator_score(seed) for _, seed in carriers), default=0),
+                "scoreMaximum": 100,
+                "inVerdictChain": any(seed.level == "malicious" for _, seed in carriers),
+                "indicatorIds": [f"ind-{idx}" for idx, _ in carriers],
+            }
+        )
+    return items
+
+
 def build_mitre_response(state: SubmissionState) -> MitreResponse:
-    """Build the MITRE techniques response."""
+    """Build the MITRE techniques response. ``items`` holds the seeded techniques that are in
+    the small catalog of the fake, as a server leaves out codes that are not in its catalog."""
     return MitreResponse.model_validate(
-        {"techniques": list(state.mitre_techniques), "total": len(state.mitre_techniques)}
+        {
+            "techniques": list(state.mitre_techniques),
+            "total": len(state.mitre_techniques),
+            "items": _mitre_items(state),
+        }
     )
 
 
@@ -698,7 +743,8 @@ def build_static_scan_strings_page(
     needle = (search or "").strip().lower()
     matched = [item for item in _FAKE_STRING_ITEMS if needle in str(item["value"]).lower()]
     window_start = start if start is not None else 0
-    window_end = end if end is not None else window_start + STRINGS_WINDOW_MAX_SPAN
+    window_limit = window_start + STRINGS_WINDOW_MAX_SPAN
+    window_end = max(window_start, min(end if end is not None else window_limit, window_limit))
     return StringsPage.model_validate(
         {
             "items": matched[window_start:window_end],
@@ -1147,6 +1193,44 @@ def _syscall_lines(state: SubmissionState) -> list[str]:
         "Status=0xC0000034) // Process Name:cmd.exe PID:2044 TID:2050"
     )
     return [read if index % 2 == 0 else create for index in range(12)]
+
+
+def build_behaviour_matches(state: SubmissionState, texts: list[str]) -> BehaviourMatches:
+    """Count the events whose subject contains each text, without case. A repeated text gives
+    one entry; texts that differ only in case get the same counts."""
+    events = _behaviour_events(state)
+    if not events:
+        return BehaviourMatches.model_validate({"items": []})
+    items: list[dict[str, Any]] = []
+    for text in dict.fromkeys(texts):
+        needle = text.lower()
+        matched = [
+            event
+            for event in events
+            if isinstance(event.get("subject"), str) and needle in event["subject"].lower()
+        ]
+        items.append(
+            {
+                "needle": text,
+                "count": len(matched),
+                "firstEventId": min((event["eventId"] for event in matched), default=None),
+                "samples": list(dict.fromkeys(event["subject"] for event in matched))[:3],
+                "complete": True,
+                "scannedRows": len(events),
+            }
+        )
+    return BehaviourMatches.model_validate({"items": items})
+
+
+def build_artifact_yara_rule(state: SubmissionState, artifact_id: str) -> bytes:
+    """Build the generated YARA rule text of one artifact."""
+    rule_name = re.sub(r"[^A-Za-z0-9_]", "_", f"artifact_{artifact_id}")
+    return (
+        f"rule {rule_name} {{\n"
+        f'  meta:\n    submission = "{state.uuid}"\n'
+        f'  strings:\n    $a = "FAKE-ARTIFACT-BYTES"\n'
+        "  condition:\n    $a\n}\n"
+    ).encode()
 
 
 def build_syscalls_response(

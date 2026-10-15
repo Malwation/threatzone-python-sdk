@@ -91,6 +91,12 @@ def test_public_submission_of_another_workspace_can_be_annotated(
         sync_client.get_annotations(uuid)
     with pytest.raises(NotFoundError):
         sync_client.set_note(uuid, "note")
+    with pytest.raises(NotFoundError) as pin_error:
+        sync_client.pin_evidence(uuid, kind="process", ref="process:pid-1508", label="x")
+    assert (pin_error.value.body or {}).get("code") == "NOT_FOUND"
+    with pytest.raises(NotFoundError) as unpin_error:
+        sync_client.unpin_evidence(uuid, "0b5e8c1e-6a5f-4c33-9c1e-2f4b8d7e9a10")
+    assert (unpin_error.value.body or {}).get("code") == "NOT_FOUND"
 
     other_public = fake_api.register_previous_run(uuid, owning_workspace="other-workspace")
     annotations = sync_client.pin_evidence(
@@ -98,6 +104,15 @@ def test_public_submission_of_another_workspace_can_be_annotated(
     )
     assert isinstance(annotations, Annotations)
     assert len(annotations.pins) == 1
+
+
+def test_unpin_rejects_a_pin_id_that_is_not_uuid_v4(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    uuid = _submit(fake_api, sync_client)
+    with pytest.raises(BadRequestError) as exc_info:
+        sync_client.unpin_evidence(uuid, "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+    assert (exc_info.value.body or {}).get("code") == "INVALID_QUERY_PARAM"
 
 
 def test_previous_run_and_compare(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:

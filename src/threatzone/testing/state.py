@@ -105,6 +105,7 @@ class SubmissionState:
     )
     annotation_pins: list[dict[str, Any]] = field(default_factory=list)
     annotation_note: dict[str, Any] | None = None
+    artifact_yara_rules_started: set[str] = field(default_factory=set)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

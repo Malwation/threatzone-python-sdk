@@ -12,7 +12,6 @@ from threatzone import (
     AsyncThreatZone,
     BadRequestError,
     NotFoundError,
-    PermissionDeniedError,
     ReportUnavailableError,
     ThreatZone,
 )
@@ -228,9 +227,9 @@ def test_url_routes_reject_a_private_submission_of_another_workspace(
 ) -> None:
     uuid = _completed_url(fake_api, sync_client)
     fake_api.mark_private(uuid, owning_workspace="other-workspace")
-    with pytest.raises(PermissionDeniedError) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         call_route(sync_client, uuid)
-    assert _error_code(exc_info.value) == "SUBMISSION_PRIVATE"
+    assert _error_code(exc_info.value) == "NOT_FOUND"
     assert isinstance(exc_info.value.body, dict)
     assert {"snapshot", "text", "data"}.isdisjoint(exc_info.value.body)
 

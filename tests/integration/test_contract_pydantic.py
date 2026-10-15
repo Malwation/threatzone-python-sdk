@@ -20,6 +20,7 @@ from threatzone.types import (
     ArtifactsResponse,
     IndicatorsResponse,
     IoCsResponse,
+    MitreResponse,
     NetworkExfilRequest,
     NetworkSummary,
     OverviewSummary,
@@ -126,6 +127,39 @@ def test_indicator_v2_and_ioc_raw_type_contracts(
     for ioc in sync_client.get_iocs(created.uuid).items:
         assert ioc.raw_type is not None
         assert ioc.type == ioc.raw_type.lower()
+
+
+def test_mitre_items_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    mitre = sync_client.get_mitre_techniques(created.uuid)
+    assert mitre.items is not None
+    assert [item.technique_id for item in mitre.items] == sorted(mitre.techniques)
+    by_id = {item.technique_id: item for item in mitre.items}
+    injection = by_id["T1055"]
+    assert injection.name == "Process Injection"
+    assert injection.tactic_ids == ["TA0004", "TA0005"]
+    assert injection.score == 80
+    assert injection.score_maximum == 100
+    assert injection.in_verdict_chain is True
+    indicator_ids = {indicator.id for indicator in sync_client.get_indicators(created.uuid).items}
+    assert set(injection.indicator_ids) <= indicator_ids
+    assert by_id["T1112"].in_verdict_chain is False
+    assert by_id["T1059.001"].indicator_ids == []
+    assert by_id["T1059.001"].score == 0
+    round_trip = MitreResponse.model_validate(mitre.model_dump(by_alias=True))
+    assert round_trip == mitre
+
+
+def test_mitre_items_leave_out_codes_outside_the_catalog(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    fake_api.register_sample(sha256="e" * 64, mitre_techniques=["T1055", "T9999"])
+    created = sync_client.create_sandbox_submission(b"PE")
+    mitre = sync_client.get_mitre_techniques(created.uuid)
+    assert mitre.techniques == ["T1055", "T9999"]
+    assert mitre.items is not None
+    assert [item.technique_id for item in mitre.items] == ["T1055"]
 
 
 def test_artifact_analysis_and_jobs_contract(

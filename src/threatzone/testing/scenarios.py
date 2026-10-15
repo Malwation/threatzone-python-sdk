@@ -177,7 +177,8 @@ def seed_static_only_submission(fake: FakeThreatZoneAPI, *, sha256: str | None =
 
 def seed_private_cross_workspace(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> str:
     """Seed a submission marked private in a workspace other than the test
-    token's. Any access attempt returns ``403 SUBMISSION_PRIVATE``."""
+    token's. Any access attempt returns ``404 NOT_FOUND``, the same as for a missing
+    submission."""
     target_sha = seed_malicious_pe(fake, sha256=sha256)
     pending = fake._pending_seeds.get(target_sha)
     if pending is None:

@@ -240,11 +240,32 @@ for artifact in client.get_artifacts(uuid, source="dynamic_report").items:
     # The engine jobs of the artifact, oldest first.
     for job in client.get_artifact_jobs(uuid, artifact.id):
         print(job.engine_type, job.status, job.error_code)  # error_code: JOB_FAILED, ...
+
+# The generated YARA rule of one artifact. The first call starts the generation.
+import time
+
+from threatzone import YaraRulePendingError
+
+artifact_id = client.get_artifacts(uuid).items[0].id
+while True:
+    try:
+        with client.download_artifact_yara_rule(uuid, artifact_id) as download:
+            download.save(f"{artifact_id}.yar")
+        break
+    except YaraRulePendingError as pending:
+        time.sleep(pending.retry_after or 10)
+
+# MITRE techniques with names, tactics and the indicators that carry them.
+for technique in client.get_mitre_techniques(uuid).items or []:
+    print(technique.technique_id, technique.name, technique.tactic_ids, technique.indicator_ids)
 ```
 
 `ArtifactJob.error_code` is a fixed code (`JOB_FAILED`, `JOB_DEAD_LETTERED`, `JOB_SKIPPED`).
 The API never returns the platform error text. `Artifact.download_link` is the path of the
 artifact download route; `download_artifact()` needs the `downloadSample` plan permission.
+`download_artifact_yara_rule()` needs no plan permission. It raises `YaraRulePendingError` while
+the rule is generated, and `NotFoundError` when the artifact does not belong to the submission
+(`ARTIFACT_NOT_FOUND`) or an earlier generation failed (`NOT_FOUND`).
 
 ## Static scan, strings and CDR
 
@@ -297,7 +318,8 @@ killchain = client.get_killchain(uuid)
 for group in killchain.dropped_files:
     for dropped in group.files:
         if dropped.artifact_id is not None:  # None: no stored copy of this file
-            client.download_artifact(uuid, dropped.artifact_id).save(f"{dropped.artifact_id}.bin")
+            with client.download_artifact(uuid, dropped.artifact_id) as download:
+                download.save(f"{dropped.artifact_id}.bin")
 
 # Index filters: the same server-side filters and counts as the web UI.
 page = client.get_behaviours(
@@ -312,6 +334,14 @@ print(page.total, page.sorted_by, [event.subject for event in page.items])
 summary = client.get_behaviour_summary(uuid)  # totals, by type / operation / process, exits
 facets = client.get_behaviour_facets(uuid, "operation", contains="reg", first=20)
 
+# "Find in events": count the events whose subject contains each text (no case).
+matches = client.get_behaviour_matches(uuid, ["payload.dll", "HKCU\\Software\\Run"])
+for match in matches.items:
+    print(match.needle, match.count, match.first_event_id, match.samples, match.complete)
+    if match.first_event_id is not None:
+        first = client.get_behaviours(uuid, event_ids=[match.first_event_id]).items[0]
+        print(first.operation, first.subject)
+
 # Search the raw syscall log page by page.
 result = client.search_syscalls(uuid, query="NtCreateFile", failed_only=True)
 while True:
@@ -324,17 +354,26 @@ while True:
     )
 
 # Raw files (the plan needs the downloadReport permission).
-client.download_behaviour(uuid).save("behaviour.json")
-client.download_syscalls(uuid).save("syscalls.txt")
+with client.download_behaviour(uuid) as download:
+    download.save("behaviour.json")
+with client.download_syscalls(uuid) as download:
+    download.save("syscalls.txt")
 ```
 
-The index parameters (`pids` to `sort`) and the summary and facet routes read the behaviour
-index. The public API never builds the index; the index is built when the Behaviour view of
+The index parameters (`pids` to `sort`) and the summary, facet and match routes read the
+behaviour index. The public API never builds the index; the index is built when the Behaviour view of
 the report is opened. Without a current index these calls raise `BehaviourIndexingError`.
 `get_behaviours()` without the index parameters (`event_ids` is allowed) reads the behaviour
-file and does not need the index. `get_behaviour_summary()`, `get_behaviour_facets()` and
-`search_syscalls()` and `get_killchain()` are heavy routes: each API token can send a limited
-number of requests per minute, and `RateLimitError.retry_after` gives the seconds to wait.
+file and does not need the index. `get_behaviours()` with an index parameter,
+`get_behaviour_summary()`, `get_behaviour_facets()`, `get_behaviour_matches()`,
+`search_syscalls()`, `get_killchain()`, `download_behaviour()` and `download_syscalls()` are
+heavy routes: each API token can send 30 heavy-route requests per minute, summed over all heavy
+routes. Above the limit they raise `RateLimitError` with `code == "RATE_LIMIT_EXCEEDED"`, and
+`retry_after` gives the seconds to wait. `get_behaviour_matches()` sends each text as one `text`
+parameter (at most 200 texts, 2 to 260 characters each), so a comma is part of the text.
+`complete` is `False` when the read limit stopped the scan; then the counts are too low. An empty
+list filter (for example `pids=[]`) raises `ValueError` before the SDK sends the request; pass
+`None` to leave out a filter.
 `get_killchain()` returns `artifact_id` instead of a download link. `dump_collector_active` is
 `False` when the memory dump collector did not run; then an empty `mem_dumps` does not tell that
 no dump was possible.
@@ -373,7 +412,8 @@ for alert in flows.alerts:
 
 # Decrypted HTTPS capture (the plan needs the downloadReport permission).
 if client.get_network_summary(uuid).https_pcap_available:
-    client.download_https_pcap(uuid).save("https.pcap")
+    with client.download_https_pcap(uuid) as download:
+        download.save("https.pcap")
 ```
 
 `get_network_endpoints()` and `get_network_host_flows()` are heavy routes, with the same
@@ -387,18 +427,22 @@ match the rows of the endpoint. An unknown host returns an empty page. A packet 
 uuid = completed.uuid
 
 # PDF: wait for the background render (bounded by `timeout`, default 600 s).
-client.download_pdf_report(uuid).save("report.pdf")
+with client.download_pdf_report(uuid) as download:
+    download.save("report.pdf")
 
 # PDF without waiting: raises PdfReportPendingError while the render runs.
 status = client.get_pdf_report_status(uuid)  # analysis_in_progress / queued / generating / ready
 
-client.download_stix_report(uuid).save("bundle.json")  # STIX 2.1 bundle
-client.download_html_report(uuid).save("report.html")
+with client.download_stix_report(uuid) as download:  # STIX 2.1 bundle
+    download.save("bundle.json")
+with client.download_html_report(uuid) as download:
+    download.save("report.html")
 
 # IP, domain, URL and SHA-256 indicators as one file: csv, text, stix or misp.
 # stix and misp need the stixReport plan permission; without it the call raises
 # PermissionDeniedError. The values are not masked.
-client.download_iocs(uuid, format="csv").save("iocs.csv")
+with client.download_iocs(uuid, format="csv") as download:
+    download.save("iocs.csv")
 
 # AI analyst report: AiReport (HTTP 200) or AiReportPending (HTTP 202).
 from threatzone import AiReportPending
@@ -493,8 +537,8 @@ only; `removed` items are in `other_uuid` only. Each list holds at most 200 item
   (raw log lines).
 - **Artifacts** — files produced or extracted during analysis; keyed by `hashes.sha256`.
 - **Access control** — public submissions are visible to every API key; private
-  submissions are workspace-scoped. Cross-workspace reads of private submissions raise
-  `PermissionDeniedError` (403).
+  submissions are workspace-scoped. A private submission of another workspace raises
+  `NotFoundError` (404, `NOT_FOUND`), the same error as a missing submission.
 
 ## Async
 
@@ -524,16 +568,17 @@ Every error inherits from `ThreatZoneError`. HTTP errors additionally inherit fr
 |---|---|---|
 | — | `ThreatZoneError` | Base class. Catch for a single safety net. |
 | — | `APIError` | HTTP error base class. `.status_code`, `.body`, `.response`. |
-| 400 | `BadRequestError` | `INVALID_UUID`, `INVALID_QUERY_PARAM`. |
+| 400 | `BadRequestError` | `INVALID_QUERY_PARAM` (also for a malformed UUID or ID). |
 | 401 | `AuthenticationError` | Missing/invalid API key. |
 | 402 | `PaymentRequiredError` | Workspace subscription inactive. |
-| 403 | `PermissionDeniedError` | Cross-workspace private read, or module not enabled. |
-| 404 | `NotFoundError` | Submission, artifact, or media missing. |
+| 403 | `PermissionDeniedError` | `FORBIDDEN` (plan permission or module missing), `LICENSE_INVALID`. |
+| 404 | `NotFoundError` | `NOT_FOUND` for a missing submission and for a private submission of another workspace; `ARTIFACT_NOT_FOUND`, `MEDIA_NOT_FOUND` and other route codes. |
 | 409 | `ReportUnavailableError` | Required report not yet available. Carries `.code`, `.submission_uuid`, `.required_report`, `.current_status`, `.available_reports`. |
 | 409 | `BehaviourIndexingError` | `BEHAVIOUR_INDEXING`: the behaviour index is not ready. Subclass of `ReportUnavailableError`. Has `.retry_after`. |
 | 413 | `BehaviourTooLargeError` | `BEHAVIOUR_TOO_LARGE`: the behaviour file or the index scan is above the read limit. `.size_bytes`, `.max_bytes`, `.download_route`. |
-| 429 | `RateLimitError` | API quota or heavy-route limit exceeded. Has `.retry_after`. |
+| 429 | `RateLimitError` | `.code`: `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit), `AI_REPORT_QUOTA_EXCEEDED`. Has `.retry_after`. |
 | 502 | `BehaviourUnreadableError` | `BEHAVIOUR_UNREADABLE`: the stored behaviour file is not valid. Subclass of `InternalServerError`. |
+| 503 | `QuotaUnavailableError` | `QUOTA_UNAVAILABLE`: the server cannot check the submission quota. No submission was created. Subclass of `InternalServerError`. Has `.retry_after`. |
 | 5xx | `InternalServerError` | Server-side failure. |
 | — | `TimeoutError` | HTTP request timed out. |
 | — | `ConnectionError` | Network-level failure. |
@@ -564,7 +609,8 @@ for the recommended retry loop.
 
 ## Testing utilities
 
-The SDK ships a stateful in-process fake Threat.Zone API for consumer-side tests:
+The SDK ships a stateful in-process fake Threat.Zone API for consumer-side tests. A private
+submission of another workspace returns 404 `NOT_FOUND`, as the API does.
 
 ```python
 from threatzone import ThreatZone
@@ -582,6 +628,10 @@ client = ThreatZone(
 
 Available scenarios: `seed_malicious_pe`, `seed_benign_document`, `seed_cdr_document`,
 `seed_phishing_url`, `seed_static_only_submission`, `seed_private_cross_workspace`.
+
+Switches for error paths: `fake.rate_limit_heavy_routes(retry_after=60)` makes the heavy routes
+return 429 `RATE_LIMIT_EXCEEDED`, and `fake.mark_quota_unavailable(retry_after=30)` makes the
+create routes return 503 `QUOTA_UNAVAILABLE`. `fake.reset()` ends both.
 
 ## Development
 

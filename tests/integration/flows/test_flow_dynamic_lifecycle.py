@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import pytest
 
 from threatzone import (
     AsyncThreatZone,
+    BadRequestError,
     BehaviourIndexingError,
+    NotFoundError,
     PermissionDeniedError,
     ThreatZone,
+    YaraRulePendingError,
 )
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
     ArtifactsResponse,
+    BehaviourMatches,
     BehavioursResponse,
     IndicatorsResponse,
     IoCsResponse,
@@ -169,6 +174,107 @@ async def test_async_behaviour_index_and_syscall_search(
     download = await async_client.download_syscalls(uuid)
     async with download as dl:
         assert len(await dl.read()) > 0
+
+
+def test_behaviour_matches(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
+    uuid = _submit(fake_api, sync_client)
+    texts = ["DROPPED.EXE", "currentversion\\run", "dropped.exe", "not-in-the-run", "DROPPED.EXE"]
+    matches = sync_client.get_behaviour_matches(uuid, texts)
+    assert isinstance(matches, BehaviourMatches)
+    assert [item.needle for item in matches.items] == texts[:4]
+    upper, run_key, lower, missing = matches.items
+    assert (upper.count, upper.first_event_id) == (1, 1)
+    assert upper.samples == ["C:\\Users\\test\\dropped.exe"]
+    assert (lower.count, lower.first_event_id, lower.samples) == (
+        upper.count,
+        upper.first_event_id,
+        upper.samples,
+    )
+    assert (run_key.count, run_key.first_event_id) == (1, 2)
+    assert (missing.count, missing.first_event_id, missing.samples) == (0, None, [])
+    assert all(item.complete and item.scanned_rows == 2 for item in matches.items)
+    [first] = sync_client.get_behaviours(uuid, event_ids=[run_key.first_event_id or 0]).items
+    assert first.subject is not None
+    assert "currentversion\\run" in first.subject.lower()
+    single = sync_client.get_behaviour_matches(uuid, "dropped.exe,other")
+    assert [item.needle for item in single.items] == ["dropped.exe,other"]
+    assert single.items[0].count == 0
+
+
+def test_behaviour_matches_reject_bad_texts(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    uuid = _submit(fake_api, sync_client)
+    requests_before = len(fake_api.request_log)
+    with pytest.raises(ValueError, match="texts"):
+        sync_client.get_behaviour_matches(uuid, [])
+    assert len(fake_api.request_log) == requests_before
+    with pytest.raises(BadRequestError) as exc_info:
+        sync_client.get_behaviour_matches(uuid, ["x"])
+    assert (exc_info.value.body or {}).get("code") == "INVALID_QUERY_PARAM"
+    fake_api.mark_behaviour_index_missing(uuid)
+    with pytest.raises(BehaviourIndexingError):
+        sync_client.get_behaviour_matches(uuid, ["dropped.exe"])
+
+
+@pytest.mark.parametrize(
+    "call_route",
+    [
+        pytest.param(
+            lambda client, uuid: client.get_behaviours(uuid, event_ids=[]), id="event_ids"
+        ),
+        pytest.param(lambda client, uuid: client.get_behaviours(uuid, pids=[]), id="pids"),
+        pytest.param(lambda client, uuid: client.get_behaviours(uuid, types=[]), id="types"),
+        pytest.param(
+            lambda client, uuid: client.get_behaviours(uuid, fields={"path": []}), id="fields"
+        ),
+        pytest.param(
+            lambda client, uuid: client.search_syscalls(uuid, query="NtCreateFile", apis=[]),
+            id="apis",
+        ),
+    ],
+)
+def test_empty_filters_are_refused_before_the_request(
+    fake_api: FakeThreatZoneAPI,
+    sync_client: ThreatZone,
+    call_route: Callable[[ThreatZone, str], object],
+) -> None:
+    uuid = _submit(fake_api, sync_client)
+    requests_before = len(fake_api.request_log)
+    with pytest.raises(ValueError, match="must not be empty"):
+        call_route(sync_client, uuid)
+    assert len(fake_api.request_log) == requests_before
+
+
+def test_artifact_yara_rule(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
+    uuid = _submit(fake_api, sync_client)
+    artifact_id = sync_client.get_artifacts(uuid).items[0].id
+    with pytest.raises(YaraRulePendingError) as exc_info:
+        sync_client.download_artifact_yara_rule(uuid, artifact_id)
+    assert exc_info.value.retry_after == 10.0
+    assert exc_info.value.message == "YARA rule generation is in progress. Retry shortly."
+    with sync_client.download_artifact_yara_rule(uuid, artifact_id) as dl:
+        assert dl.filename == f"{uuid}_{artifact_id}.yar"
+        assert dl.read().startswith(b"rule ")
+    with pytest.raises(NotFoundError) as not_found:
+        sync_client.download_artifact_yara_rule(uuid, "no-such-artifact")
+    assert (not_found.value.body or {}).get("code") == "ARTIFACT_NOT_FOUND"
+
+
+async def test_async_behaviour_matches_and_artifact_yara_rule(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone, async_client: AsyncThreatZone
+) -> None:
+    uuid = _submit(fake_api, sync_client)
+    matches = await async_client.get_behaviour_matches(uuid, ["malware", "dropped.exe"])
+    assert [item.count for item in matches.items] == [0, 1]
+    artifact_id = (await async_client.get_artifacts(uuid)).items[0].id
+    with pytest.raises(YaraRulePendingError):
+        await async_client.download_artifact_yara_rule(uuid, artifact_id)
+    download = await async_client.download_artifact_yara_rule(uuid, artifact_id)
+    async with download as dl:
+        assert (await dl.read()).startswith(b"rule ")
+    with pytest.raises(ValueError, match="must not be empty"):
+        await async_client.get_behaviour_facets(uuid, "type", pids=[])
 
 
 def test_indicators_iocs_yara_artifacts(

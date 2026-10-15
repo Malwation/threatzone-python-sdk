@@ -21,7 +21,7 @@ from ._exceptions import (
     PdfReportPendingError,
     YaraRulePendingError,
 )
-from ._params import behaviour_filter_params, syscall_search_params
+from ._params import behaviour_filter_params, behaviour_match_params, syscall_search_params
 from ._streaming import AsyncDownloadResponse
 from .types import (
     AiReport,
@@ -35,6 +35,7 @@ from .types import (
     BehaviourEventSort,
     BehaviourFacetField,
     BehaviourFacets,
+    BehaviourMatches,
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
@@ -299,6 +300,14 @@ class AsyncThreatZone:
 
         Returns:
             SubmissionCreated with the new submission UUID.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         extra_fields: dict[str, Any] = {}
         if auto_select_environment:
@@ -341,6 +350,14 @@ class AsyncThreatZone:
 
         Returns:
             SubmissionCreated with the new submission UUID.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         multipart = self._http._build_multipart_data(
             file,
@@ -376,6 +393,14 @@ class AsyncThreatZone:
 
         Returns:
             SubmissionCreated with the new submission UUID.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         multipart = self._http._build_multipart_data(
             file,
@@ -414,6 +439,14 @@ class AsyncThreatZone:
 
         Returns:
             SubmissionCreated with the new submission UUID.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         payload: dict[str, Any] = {
             "url": url,
@@ -460,6 +493,14 @@ class AsyncThreatZone:
 
         Returns:
             SubmissionCreated with the new submission UUID.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         payload: dict[str, Any] = {"url": url, "private": private}
         normalized_metafields = _normalize_metafields_json(metafields)
@@ -857,7 +898,10 @@ class AsyncThreatZone:
             uuid: Submission UUID.
 
         Returns:
-            MITRE response containing the matched technique IDs and total count.
+            MITRE response with the matched technique IDs, the total count and ``items``:
+            one ``MitreTechniqueUsage`` (name, tactic IDs, score, verdict chain flag and
+            indicator IDs) for each matched technique that is in the ATT&CK catalog.
+            ``items`` is ``None`` when an older server omits it.
         """
         response = await self._http.get(f"/submissions/{uuid}/mitre")
         return MitreResponse.model_validate(response.json())
@@ -1140,6 +1184,9 @@ class AsyncThreatZone:
             BehaviourTooLargeError: When an index filter needs a scan above the read
                 limit.
             BehaviourUnreadableError: When the stored behaviour file is not valid.
+            RateLimitError: When the request has an index parameter and the API token is
+                above the heavy-route limit. ``retry_after`` gives the seconds to wait.
+            ValueError: When a list filter is empty. The SDK does not send the request.
         """
         params: dict[str, Any] = {}
         if type is not None:
@@ -1274,6 +1321,7 @@ class AsyncThreatZone:
                 limit.
             RateLimitError: When the API token is above the heavy-route limit.
                 ``retry_after`` gives the seconds to wait.
+            ValueError: When a list filter is empty. The SDK does not send the request.
         """
         params: dict[str, Any] = {"field": field}
         if contains is not None:
@@ -1299,6 +1347,47 @@ class AsyncThreatZone:
 
         response = await self._http.get(f"/submissions/{uuid}/behaviours/facets", params=params)
         return BehaviourFacets.model_validate(response.json())
+
+    async def get_behaviour_matches(
+        self, uuid: str, texts: str | Sequence[str]
+    ) -> BehaviourMatches:
+        """
+        Count the behaviour events whose subject contains each text.
+
+        This is the "find in events" summary of the web UI. Use it to check if a file
+        path, registry key, command line or host is in the behaviour events. The match
+        does not use case and reads only ``BehaviourEvent.subject``. The route reads the
+        behaviour index and is a heavy route (a limited number of requests per minute for
+        each API token).
+
+        Args:
+            uuid: Submission UUID.
+            texts: One text, or a list of texts (at most 200, 2 to 260 characters each).
+                The SDK sends each text as one ``text`` parameter, so a comma is part of
+                the text.
+
+        Returns:
+            One ``BehaviourMatch`` for each distinct text, in the request order. ``complete``
+            is ``False`` when the read limit stopped the row scan, so the counts are too
+            low. ``items`` is empty when the run has no behaviour file.
+
+        Raises:
+            ValueError: When ``texts`` is empty. The SDK does not send the request.
+            BadRequestError: When a text is too short or too long, or there are more
+                than 200 texts (``INVALID_QUERY_PARAM``).
+            NotFoundError: When the submission does not exist or is private and belongs
+                to another workspace.
+            ReportUnavailableError: When the dynamic report is not yet available.
+            BehaviourIndexingError: When the behaviour index is not ready. Retry after
+                ``retry_after`` seconds.
+            BehaviourTooLargeError: When the behaviour index is above the read limit.
+            RateLimitError: When the API token is above the heavy-route limit.
+                ``retry_after`` gives the seconds to wait.
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/behaviours/match", params=behaviour_match_params(texts)
+        )
+        return BehaviourMatches.model_validate(response.json())
 
     async def get_syscalls(
         self,
@@ -1372,6 +1461,8 @@ class AsyncThreatZone:
             ReportUnavailableError: When the dynamic report is not yet available.
             RateLimitError: When the API token is above the heavy-route limit.
                 ``retry_after`` gives the seconds to wait.
+            ValueError: When ``pids`` or ``apis`` is empty. The SDK does not send the
+                request.
         """
         response = await self._http.get(
             f"/submissions/{uuid}/syscalls/search",
@@ -1476,6 +1567,14 @@ class AsyncThreatZone:
 
         Returns:
             Message acknowledging the request.
+
+        Raises:
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
         """
         response = await self._http.post(f"/submissions/{uuid}/restart/url_analysis")
         return Message.model_validate(response.json())
@@ -1520,7 +1619,9 @@ class AsyncThreatZone:
         The API needs the ``job_id`` and ``scored_at`` of the snapshot that holds
         the indicator. When one of them is None, the SDK reads
         get_url_analysis_indicators() first and uses the snapshot values. Pass
-        both to skip that extra request.
+        both to skip that extra request. When the explanation has no snapshot
+        (state ``pending`` or ``unavailable``), the SDK sends the request
+        without the missing values and the API raises ``BadRequestError``.
 
         Args:
             uuid: Submission UUID (must be a URL submission).
@@ -1722,6 +1823,13 @@ class AsyncThreatZone:
                 and belongs to another workspace (``NOT_FOUND``), or your
                 workspace has no pin with this ID on the submission
                 (``ANNOTATION_PIN_NOT_FOUND``).
+
+        Note:
+            The SDK sends a request again after a timeout or a connection
+            error. When the first DELETE reached the server, the second one
+            raises ``NotFoundError`` with ``ANNOTATION_PIN_NOT_FOUND``, but the
+            pin is removed. ``pin_evidence()`` and ``set_note()`` are safe to
+            send again.
         """
         response = await self._http.delete(
             f"/submissions/{uuid}/annotations/pins/{quote(pin_id, safe='')}"
@@ -2380,6 +2488,9 @@ class AsyncThreatZone:
                 permission.
             NotFoundError: When the dynamic report has no behaviour file.
             ReportUnavailableError: When the dynamic report is not yet available.
+            RateLimitError: When the API token is above the heavy-route limit. The
+                server checks the access, the report state and the permission first.
+                ``retry_after`` gives the seconds to wait.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/behaviour")
 
@@ -2402,6 +2513,9 @@ class AsyncThreatZone:
                 permission.
             NotFoundError: When the dynamic report has no syscall log.
             ReportUnavailableError: When the dynamic report is not yet available.
+            RateLimitError: When the API token is above the heavy-route limit. The
+                server checks the access, the report state and the permission first.
+                ``retry_after`` gives the seconds to wait.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/syscalls")
 
@@ -2414,8 +2528,50 @@ class AsyncThreatZone:
 
         Returns:
             AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            YaraRulePendingError: When the rule is still being generated (HTTP 202).
+                Retry after ``retry_after`` seconds.
         """
-        download = await self._http.get_stream(f"/submissions/{uuid}/download/yara-rule")
+        return await self._open_yara_rule(f"/submissions/{uuid}/download/yara-rule")
+
+    async def download_artifact_yara_rule(
+        self, uuid: str, artifact_id: str
+    ) -> AsyncDownloadResponse:
+        """
+        Download the generated YARA rule for one artifact of a submission.
+
+        The artifact is a dropped or downloaded file, an extracted file or a memory dump.
+        The web UI shows the same rule in the "Generate YARA rule" window of the artifact.
+        The first request starts the generation and raises ``YaraRulePendingError``. A
+        later request returns the ``{uuid}_{artifact_id}.yar`` file. The rule text has
+        the artifact filename in place of the ``%original_filename%`` marker. The route
+        needs no plan permission.
+
+        Args:
+            uuid: Submission UUID.
+            artifact_id: Artifact ID from get_artifacts().
+
+        Returns:
+            AsyncDownloadResponse for streaming or saving the file.
+
+        Raises:
+            YaraRulePendingError: When the rule is still being generated (HTTP 202).
+                Retry after ``retry_after`` seconds.
+            BadRequestError: When ``artifact_id`` is not a valid artifact ID
+                (``INVALID_QUERY_PARAM``).
+            NotFoundError: When the submission does not exist or is private and belongs
+                to another workspace (``NOT_FOUND``), when the artifact does not belong to
+                the submission (``ARTIFACT_NOT_FOUND``), or when an earlier generation
+                failed (``NOT_FOUND``). The server does not start a new generation after a
+                failure.
+        """
+        return await self._open_yara_rule(
+            f"/submissions/{uuid}/artifacts/{quote(artifact_id, safe='')}/yara-rule"
+        )
+
+    async def _open_yara_rule(self, path: str) -> AsyncDownloadResponse:
+        download = await self._http.get_stream(path)
 
         if download.status_code == 202:
             try:

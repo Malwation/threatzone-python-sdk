@@ -161,3 +161,33 @@ class BehaviourFacets(BaseModel):
     """``False`` when the read limit stopped the row scan. The counts are then too low."""
     scanned_rows: int = Field(alias="scannedRows")
     """Rows that the request examined."""
+
+
+class BehaviourMatch(BaseModel):
+    """The behaviour events whose subject contains one text."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    needle: str
+    """The text of the request, as sent."""
+    count: int
+    """Number of events whose ``subject`` contains the text. The match does not use case."""
+    first_event_id: int | None = Field(alias="firstEventId")
+    """The smallest ``event_id`` of the matching events. ``None`` when no event matches.
+    Read the event with ``get_behaviours(uuid, event_ids=[first_event_id])``."""
+    samples: list[str]
+    """Up to three distinct matching subjects, in file order. The values are not masked."""
+    complete: bool
+    """``False`` when the read limit stopped the row scan. The count is then too low."""
+    scanned_rows: int = Field(alias="scannedRows")
+    """Rows that the request examined."""
+
+
+class BehaviourMatches(BaseModel):
+    """The "find in events" counts that the web UI shows for a list of texts."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: list[BehaviourMatch]
+    """One entry for each distinct text, in the request order. Texts that differ only in
+    case get the same counts. Empty when the run has no behaviour file."""

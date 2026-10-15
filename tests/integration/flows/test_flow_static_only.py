@@ -106,6 +106,11 @@ def test_strings_page_window_and_search(
     assert matched.download_link == (f"/public-api/submissions/{created.uuid}/static-scan/strings")
     reversed_window = sync_client.get_static_scan_strings_page(created.uuid, start=3, end=1)
     assert reversed_window.items == []
+    assert reversed_window.start == 3
+    assert reversed_window.end == 3
+    capped = sync_client.get_static_scan_strings_page(created.uuid, end=1500)
+    assert capped.start == 0
+    assert capped.end == 1000
 
 
 @pytest.mark.parametrize(

@@ -93,7 +93,7 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 
 **Discriminative fields.**
 
-- `Indicator.level` is `IndicatorLevel = Literal["malicious", "suspicious", "benign"]`.
+- `Indicator.level` is `IndicatorLevel = Literal["malicious", "suspicious", "benign"] | str`. A new server value does not fail the parse.
 - `Indicator.author` is `Literal["system", "user"]`.
 - `Indicator.score` is `float`. The API can send a fractional score. An integer score keeps its value.
 - `Indicator.score_maximum` is `int | None`: the scale of `score` (10 legacy, 100 Windows V2). `None` when the API does not send it. Divide `score` by `score_maximum` before comparing rows from different scales.
@@ -112,7 +112,7 @@ in this group is envelope-wrapped (`items`, `total`) for server-side pagination.
 - `Artifact.source` is `ArtifactSource` (`dynamic_report`, `static_report`, `url_report`, `unpacker`, `config_extractor`, `yara_generator`, `user_upload`, `manual`, or a new value). `get_artifacts(uuid, source=...)` returns only the artifacts with that value. An unknown value raises `BadRequestError`.
 - `Artifact.analysis_status` is `ArtifactAnalysisStatus` (`not_analyzed`, `analyzing`, `analyzed`, `failed`, `skipped`, or a new value). `not_analyzed` means no engine job was created. `Artifact.analysis_trigger` is `ArtifactAnalysisTrigger` (`auto`, `manual`, or a new value), `None` when no analysis started. `Artifact.analysis_reason` is the reason text of a `skipped` or `failed` analysis, as the web UI shows it. `Artifact.download_link` is the path of the artifact download route; that route needs the `downloadSample` plan permission. All four are `None` when an older server omits them.
 - `ArtifactJob.engine_type` is `ArtifactJobEngineType` (`ioc_extractor`, `yara_scanner`, `config_extractor`, `dynamic_scan`, `static_scan`, `signature_checker`, `cdr`, `eml_analyzer`, `url_analysis`, or a new value). `ArtifactJob.status` is `ArtifactJobStatus` (`pending`, `queued`, `running`, `waiting_callback`, `success`, `retrying`, `failed`, `skipped`, or a new value). `ArtifactJob.error_code` is `ArtifactJobErrorCode` (`JOB_FAILED`, `JOB_DEAD_LETTERED`, `JOB_SKIPPED`, or a new value) or `None` for every other status. The API never returns the platform error text.
-- `IoC.type` is `IoCType = Literal["ip", "domain", "url", "email", "sha512", "sha256", "sha1", "md5", "registry", "path", "uuid"]`. The server compares the stored type text without case, so a stored `IP` is `ip`. Unexpected values become `path`.
+- `IoC.type` is `IoCType = Literal["ip", "domain", "url", "email", "sha512", "sha256", "sha1", "md5", "registry", "path", "uuid"] | str`. The server compares the stored type text without case, so a stored `IP` is `ip`. Unexpected values become `path` today; a new server value does not fail the parse.
 - `IoC.raw_type` is `str | None`: the type text as the extractor stored it, before the server maps it to `type`. `None` when the extractor stored no type, and when an older server omits it.
 - `YaraRule.category` is `YaraRuleCategory = Literal["malicious", "suspicious", "benign"]`.
 - `Artifact.type` is `ArtifactType` (17-value literal including `sample`, `dropped_file`,
@@ -178,6 +178,8 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 | `BehavioursResponse` | `{items, total, page, limit, total_pages, sorted_by, many_processes_match}`. `sorted_by` is `BehaviourPageOrder` (`eventId`, `time`, `file`, or a new value). The last two fields are set only when the request used an index parameter. | same |
 | `BehaviourSummary` | `{total_count, first_timestamp, last_timestamp, by_type, by_operation, by_process, exits}`. The counts that the web UI shows above the Behaviour view. `by_type` and `by_operation` hold at most 200 `BehaviourValueCount` values; `by_process` holds at most 500 `BehaviourProcessCount` rows (`process_id`, `process_name`, `count`, `first_timestamp`, `last_timestamp`); `exits` holds `BehaviourExit` rows (`process_id`, `event_id`, `status`). | `GET /submissions/:uuid/behaviours/summary` |
 | `BehaviourFacets` | `{items, complete, scanned_rows}`. `items` are `BehaviourValueCount` (`value`, `count`), most frequent first. `complete` is `False` when the read limit stopped the scan, so the counts are too low. | `GET /submissions/:uuid/behaviours/facets` |
+| `BehaviourMatches` | `{items}`. One `BehaviourMatch` for each distinct text of `get_behaviour_matches()`, in the request order; empty when the run has no behaviour file. The "find in events" counts of the web UI. Heavy route. | `GET /submissions/:uuid/behaviours/match` |
+| `BehaviourMatch` | `{needle, count, first_event_id, samples, complete, scanned_rows}`. `count` is the number of events whose `subject` contains `needle`, without case. `first_event_id` is the smallest matching `event_id`, or `None`. `samples` holds up to three distinct matching subjects, in file order, not masked. `complete` is `False` when the read limit stopped the scan, so the count is too low. Texts that differ only in case get the same counts. | nested in `BehaviourMatches` |
 | `BehaviourEventSort` / `BehaviourFacetField` / `BehaviourFieldFilterKey` | Parameter values of `get_behaviours(sort=...)` (`eventId`, `time`), `get_behaviour_facets(field)` (`operation`, `type`, `processName`, `function`, `subject`) and the `fields` keys (`path`, `key`, `mutex`, `cmd`, `status`, `value`, &hellip;). | parameters |
 | `BehaviourOs` | Deprecated compatibility alias; the endpoint derives the OS from the submission. | same |
 | `SyscallsResponse` | `{items: List[str], total, page, limit, total_pages, first_line}`. `items` are raw unparsed log lines. `items[i]` is line `first_line + i`, the same number as `BehaviourEvent.syscall_line_number`. `first_line` is `None` when `items` is empty. `page`, `limit`, `total_pages` and `first_line` are `None` when an older server omits them. | `GET /submissions/:uuid/syscalls` |
@@ -440,33 +442,41 @@ Typed error surface. Import from the top-level `threatzone` module or from
 | `APIError` | Base class for HTTP errors. | `status_code`, `response`, `body` |
 | `AuthenticationError` (401) | Invalid/missing API key. | inherits from `APIError` |
 | `PaymentRequiredError` (402) | Workspace subscription inactive. | inherits from `APIError` |
-| `PermissionDeniedError` (403) | Module not enabled or cross-workspace access. | inherits from `APIError` |
-| `NotFoundError` (404) | Submission/artifact/media not found. | inherits from `APIError` |
-| `BadRequestError` (400) | Validation failure. | inherits from `APIError` |
-| `RateLimitError` (429) | API quota or heavy-route limit exceeded. | `retry_after` (from the `Retry-After` header, else the `retryAfter` body field) |
+| `PermissionDeniedError` (403) | Plan permission or module missing (`FORBIDDEN`), or an unlicensed self-hosted deployment (`LICENSE_INVALID`). | inherits from `APIError` |
+| `NotFoundError` (404) | `NOT_FOUND` for a missing submission and for a private submission of another workspace. Route codes such as `ARTIFACT_NOT_FOUND` and `MEDIA_NOT_FOUND`. | inherits from `APIError` |
+| `BadRequestError` (400) | Validation failure (`INVALID_QUERY_PARAM`, also for a malformed UUID or ID). | inherits from `APIError` |
+| `RateLimitError` (429) | `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit) or `AI_REPORT_QUOTA_EXCEEDED`. | `code`, `retry_after` (from the `Retry-After` header; else, or when the header is not a number, the `retryAfter` body field) |
 | `ReportUnavailableError` (409) | Required report not yet available. | `code`, `submission_uuid`, `required_report`, `current_status`, `available_reports` |
 | `BehaviourIndexingError` (409) | `BEHAVIOUR_INDEXING`: the behaviour index is not ready. Subclass of `ReportUnavailableError`. | `code`, `retry_after` |
 | `BehaviourTooLargeError` (413) | `BEHAVIOUR_TOO_LARGE`: the behaviour file or the index scan is above the read limit. Use `download_behaviour()`. | `code`, `size_bytes`, `max_bytes`, `download_route` |
 | `BehaviourUnreadableError` (502) | `BEHAVIOUR_UNREADABLE`: the stored behaviour file is not a valid JSON array. Subclass of `InternalServerError`. | `code` |
 | `YaraRulePendingError` (202) | YARA rule generation still in progress. | `retry_after` |
 | `PdfReportPendingError` (202) | The PDF report is not ready: `download_pdf_report(wait=False)` got 202, or `download_pdf_report(wait=True)` reached its timeout. | `retry_after` |
+| `QuotaUnavailableError` (503) | `QUOTA_UNAVAILABLE`: the server cannot check the submission quota, so it did not create the submission. Subclass of `InternalServerError`. | `code`, `retry_after` |
 | `InternalServerError` (5xx) | Server-side failure. | inherits from `APIError` |
 | `TimeoutError` | HTTP request timed out. | `message` |
 | `ConnectionError` | Network-level failure. | `message` |
 | `AnalysisTimeoutError` | `wait_for_completion()` exceeded its timeout. | `uuid`, `elapsed` |
 | `ApiError` (model) | Pydantic model of the canonical error envelope: `status_code`, `error`, `message`, `code`, `details`. | &mdash; |
-| `ApiErrorCode` (literal) | Closed enum of all possible error codes. | &mdash; |
+| `ApiErrorCode` (literal) | The known error codes of the API, or any other string. A code that a newer server adds does not fail the parse. | &mdash; |
 
 **ApiErrorCode values:**
 
-`INVALID_UUID`, `INVALID_QUERY_PARAM`, `UNAUTHORIZED`, `SUBMISSION_PRIVATE`,
-`FORBIDDEN`, `NOT_FOUND`, `ANNOTATION_PIN_LIMIT_REACHED`, `ANNOTATION_PIN_NOT_FOUND`,
-`SUBMISSION_NOT_FOUND`, `ARTIFACT_NOT_FOUND`, `SAMPLE_NOT_AVAILABLE`, `MEDIA_NOT_FOUND`,
+`INVALID_QUERY_PARAM`, `UNAUTHORIZED`, `LICENSE_INVALID`, `FORBIDDEN`, `NOT_FOUND`,
+`METHOD_NOT_ALLOWED`, `CONFLICT`, `ANNOTATION_PIN_LIMIT_REACHED`, `ANNOTATION_PIN_NOT_FOUND`,
+`ARTIFACT_NOT_FOUND`, `SAMPLE_NOT_AVAILABLE`, `MEDIA_NOT_FOUND`,
 `NETWORK_ROW_NOT_FOUND`, `URL_SCORE_EVIDENCE_NOT_FOUND`, `URL_BROWSER_SECTION_NOT_FOUND`,
-`URL_BROWSER_SECTION_UNAVAILABLE`, `DYNAMIC_REPORT_UNAVAILABLE`, `STATIC_REPORT_UNAVAILABLE`, `CDR_REPORT_UNAVAILABLE`,
-`URL_ANALYSIS_REPORT_UNAVAILABLE`, `RATE_LIMIT_EXCEEDED`, `SUBMISSION_LIMIT_EXCEEDED`,
-`INTERNAL_ERROR`, `STORAGE_UNAVAILABLE`, `BEHAVIOUR_INDEXING`, `BEHAVIOUR_TOO_LARGE`,
-`BEHAVIOUR_UNREADABLE`.
+`URL_BROWSER_SECTION_UNAVAILABLE`, `DYNAMIC_REPORT_UNAVAILABLE`, `STATIC_REPORT_UNAVAILABLE`,
+`CDR_REPORT_UNAVAILABLE`, `URL_ANALYSIS_REPORT_UNAVAILABLE`, `RATE_LIMIT_EXCEEDED`,
+`SUBMISSION_LIMIT_EXCEEDED`, `QUOTA_UNAVAILABLE`, `INTERNAL_ERROR`, `STORAGE_UNAVAILABLE`,
+`BEHAVIOUR_INDEXING`, `BEHAVIOUR_TOO_LARGE`, `BEHAVIOUR_UNREADABLE`, `SAMPLE_INDEX_UNAVAILABLE`,
+`SAMPLE_INDEX_ERROR`, `SESSION_SERVICE_UNAVAILABLE`, `SESSION_NOT_FOUND`, `AI_REPORT_NOT_FOUND`,
+`AI_REPORTS_DISABLED`, `AI_REPORT_NOT_FINALIZED`, `AI_REPORT_IN_PROGRESS`,
+`AI_REPORT_QUOTA_EXCEEDED`, `AI_REPORT_QUEUE_UNAVAILABLE`.
+
+The API never sends `INVALID_UUID`, `SUBMISSION_PRIVATE` or `SUBMISSION_NOT_FOUND`, so they
+are not in the list. A malformed UUID gives `INVALID_QUERY_PARAM`. A missing submission gives
+`404 NOT_FOUND`. A private submission of another workspace gives the same response.
 
 Always branch on `code`, never on `message`. See
 [recipe 9](./RECIPES.md#9-discriminate-errors-by-their-code-field) for the full pattern.
@@ -512,7 +522,12 @@ from `threatzone._streaming`. Both are context managers; both expose `filename`,
 `content_type`, `size`, `status_code`, `read()`, `iter_bytes()`, and `save(path)`.
 `download_behaviour()` and `download_syscalls()` stream the raw `behaviour.json` and
 `syscalls.txt` files of the dynamic analysis without changes. Both need the
-`downloadReport` plan permission.
+`downloadReport` plan permission. Both are heavy routes and raise `RateLimitError` above the
+per-token limit.
+`download_artifact_yara_rule()` streams the generated YARA rule of one artifact
+(`{uuid}_{artifact_id}.yar`). The first request starts the generation and raises
+`YaraRulePendingError`; retry after `retry_after` seconds. The route needs no plan
+permission.
 `download_iocs()` streams the IP, domain, URL and SHA-256 indicators of a submission as one
 file (`threatzone_iocs_{uuid}.csv`, `.txt`, or a `.json` STIX or MISP file). The file has no
 grade field. The server reads at most the first 50,000 IoC records. The values are not masked.

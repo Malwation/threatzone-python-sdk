@@ -1379,6 +1379,24 @@ class TestDynamicReport:
 
 
 class TestBehaviourIndexAndSyscallSearch:
+    def test_get_behaviours_sends_a_single_text_filter_unchanged(
+        self, api_key: str, sample_indexed_behaviours_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_indexed_behaviours_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_behaviours("sub-789", types="file", operations=["RegSetValue"])
+        assert _call_params(mock) == {"types": "file", "operations": "RegSetValue"}
+
+    def test_get_behaviours_refuses_an_empty_list_filter(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, {}))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ValueError, match="event_ids must not be empty"),
+        ):
+            client.get_behaviours("sub-789", event_ids=[])
+        mock.assert_not_called()
+
     def test_get_behaviours_sends_every_index_filter(
         self, api_key: str, sample_indexed_behaviours_response: dict[str, Any]
     ) -> None:
@@ -1982,6 +2000,105 @@ class _StreamCtx:
 def _patched_stream(response: httpx.Response) -> tuple[Any, MagicMock]:
     mock = MagicMock(side_effect=lambda *_a, **_kw: _StreamCtx(response))
     return patch.object(httpx.Client, "stream", mock), mock
+
+
+class TestBehaviourMatchesAndArtifactYaraRule:
+    def test_get_behaviour_matches_repeats_the_text_parameter(self, api_key: str) -> None:
+        ctx, mock = _patched_client(
+            _make_response(
+                200,
+                {
+                    "items": [
+                        {
+                            "needle": "payload.dll",
+                            "count": 3,
+                            "firstEventId": 1024,
+                            "samples": ["C:\\Temp\\payload.dll"],
+                            "complete": True,
+                            "scannedRows": 1337,
+                        },
+                        {
+                            "needle": "a,b",
+                            "count": 0,
+                            "firstEventId": None,
+                            "samples": [],
+                            "complete": True,
+                            "scannedRows": 1337,
+                        },
+                    ]
+                },
+            )
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            matches = client.get_behaviour_matches("sub-789", ["payload.dll", "a,b"])
+        assert _call_url(mock).endswith("/submissions/sub-789/behaviours/match")
+        assert _call_params(mock) == {"text": ["payload.dll", "a,b"]}
+        first, second = matches.items
+        assert (first.first_event_id, first.scanned_rows, first.samples) == (
+            1024,
+            1337,
+            ["C:\\Temp\\payload.dll"],
+        )
+        assert second.first_event_id is None
+
+    def test_get_behaviour_matches_accepts_one_text(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, {"items": []}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            assert client.get_behaviour_matches("sub-789", "payload.dll").items == []
+        assert _call_params(mock) == {"text": ["payload.dll"]}
+
+    def test_get_behaviour_matches_refuses_no_text(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, {"items": []}))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ValueError):
+            client.get_behaviour_matches("sub-789", [])
+        mock.assert_not_called()
+
+    def test_get_behaviour_matches_429_carries_the_code(self, api_key: str) -> None:
+        body = {
+            "statusCode": 429,
+            "error": "Too Many Requests",
+            "message": "Heavy route rate limit exceeded",
+            "code": "RATE_LIMIT_EXCEEDED",
+            "retryAfter": 12,
+        }
+        ctx, _ = _patched_client(_make_response(429, body, headers={"Retry-After": "12"}))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(RateLimitError) as exc_info,
+        ):
+            client.get_behaviour_matches("sub-789", "payload.dll")
+        assert (exc_info.value.code, exc_info.value.retry_after) == ("RATE_LIMIT_EXCEEDED", 12.0)
+
+    def test_download_artifact_yara_rule_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b"rule X {}")
+        ctx, mock = _patched_stream(response)
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.download_artifact_yara_rule("sub-789", "507f1f77bcf86cd799439011")
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/artifacts/507f1f77bcf86cd799439011/yara-rule")
+
+    def test_download_artifact_yara_rule_pending_202(self, api_key: str) -> None:
+        body = {
+            "status": "accepted",
+            "message": "YARA rule generation is in progress. Retry shortly.",
+            "retryAfter": 10,
+        }
+        ctx, _ = _patched_stream(_make_response(202, json_data=body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(YaraRulePendingError) as exc_info,
+        ):
+            client.download_artifact_yara_rule("sub-789", "507f1f77bcf86cd799439011")
+        assert exc_info.value.retry_after == 10.0
+        assert exc_info.value.body == body
+
+    def test_download_artifact_yara_rule_404(self, api_key: str) -> None:
+        body = {"statusCode": 404, "message": "no", "code": "ARTIFACT_NOT_FOUND"}
+        ctx, _ = _patched_stream(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.download_artifact_yara_rule("sub-789", "507f1f77bcf86cd799439011")
 
 
 class TestDownloads:

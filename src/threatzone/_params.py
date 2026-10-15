@@ -6,10 +6,22 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
-def _join(values: Sequence[int | str] | None) -> str | None:
+def _join(name: str, values: Sequence[int | str] | None) -> str | None:
     if values is None:
         return None
+    if isinstance(values, str):
+        return values
+    if not values:
+        raise ValueError(f"{name} must not be empty. Pass None to leave out the filter.")
     return ",".join(str(value) for value in values)
+
+
+def _field_value(key: str, value: str | Sequence[str]) -> str | list[str]:
+    if isinstance(value, str):
+        return value
+    if not value:
+        raise ValueError(f"fields[{key!r}] must not be empty. Leave out the key instead.")
+    return list(value)
 
 
 def behaviour_filter_params(
@@ -29,12 +41,12 @@ def behaviour_filter_params(
 ) -> dict[str, Any]:
     """Build the behaviour index filter parameters. Unset filters are left out."""
     params: dict[str, Any] = {
-        "eventIds": _join(event_ids),
-        "pids": _join(pids),
-        "parentPids": _join(parent_pids),
-        "types": _join(types),
-        "operations": _join(operations),
-        "statuses": _join(statuses),
+        "eventIds": _join("event_ids", event_ids),
+        "pids": _join("pids", pids),
+        "parentPids": _join("parent_pids", parent_pids),
+        "types": _join("types", types),
+        "operations": _join("operations", operations),
+        "statuses": _join("statuses", statuses),
         "processNameContains": process_name_contains,
         "fromTimestamp": from_timestamp,
         "toTimestamp": to_timestamp,
@@ -42,7 +54,7 @@ def behaviour_filter_params(
         "syscallLineTo": syscall_line_to,
     }
     for key, value in (fields or {}).items():
-        params[f"field.{key}"] = value if isinstance(value, str) else list(value)
+        params[f"field.{key}"] = _field_value(key, value)
     return {name: value for name, value in params.items() if value is not None}
 
 
@@ -58,10 +70,18 @@ def syscall_search_params(
     """Build the syscall search parameters. Unset parameters are left out."""
     params: dict[str, Any] = {
         "query": query,
-        "pids": _join(pids),
+        "pids": _join("pids", pids),
         "failedOnly": None if failed_only is None else str(failed_only).lower(),
-        "apis": _join(apis),
+        "apis": _join("apis", apis),
         "afterLine": after_line,
         "limit": limit,
     }
     return {name: value for name, value in params.items() if value is not None}
+
+
+def behaviour_match_params(texts: str | Sequence[str]) -> dict[str, Any]:
+    """Build the behaviour match parameters. Each text is one ``text`` parameter."""
+    values = [texts] if isinstance(texts, str) else list(texts)
+    if not values:
+        raise ValueError("texts must not be empty.")
+    return {"text": values}

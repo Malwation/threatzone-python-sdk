@@ -94,6 +94,19 @@ _ANNOTATION_REF_MAX_LENGTH = 512
 _ANNOTATION_LABEL_MAX_LENGTH = 200
 _ANNOTATION_NOTE_MAX_LENGTH = 10000
 
+_QUOTA_CHECKED_ROUTES: frozenset[str] = frozenset(
+    {
+        "create_sandbox",
+        "create_static",
+        "create_cdr",
+        "create_url_analysis",
+        "create_open_in_browser",
+        "restart_url_analysis",
+    }
+)
+
+_BEHAVIOUR_MATCH_TEXTS_MAX = 200
+
 _BEHAVIOUR_FACET_FIELDS: frozenset[str] = frozenset(
     {"operation", "type", "processName", "function", "subject"}
 )
@@ -272,6 +285,8 @@ class FakeThreatZoneAPI:
         self._pending_seeds: dict[str, SubmissionState] = {}
         self._request_log: list[httpx.Request] = []
         self._poll_counts: Counter[str] = Counter()
+        self._heavy_route_retry_after: int | None = None
+        self._quota_retry_after: int | None = None
         self._transport = httpx.MockTransport(self._handle)
 
     @property
@@ -303,6 +318,8 @@ class FakeThreatZoneAPI:
         self._pending_seeds.clear()
         self._request_log.clear()
         self._poll_counts.clear()
+        self._heavy_route_retry_after = None
+        self._quota_retry_after = None
 
     def register_sample(
         self,
@@ -401,6 +418,17 @@ class FakeThreatZoneAPI:
         if state is None:
             raise KeyError(f"Unknown submission uuid: {submission_uuid}")
         state.behaviour_index_ready = False
+
+    def rate_limit_heavy_routes(self, retry_after: int = 60) -> None:
+        """Answer the heavy routes with 429 ``RATE_LIMIT_EXCEEDED``, as a token above the
+        heavy-route limit does. The response has a ``Retry-After`` header. ``reset()`` ends it."""
+        self._heavy_route_retry_after = retry_after
+
+    def mark_quota_unavailable(self, retry_after: int = 30) -> None:
+        """Answer the create routes and the URL analysis restart with 503
+        ``QUOTA_UNAVAILABLE``, as a server that cannot check the submission quota does.
+        ``reset()`` ends it."""
+        self._quota_retry_after = retry_after
 
     def deny_download_report(self, submission_uuid: str) -> None:
         """Answer the raw behaviour, syscall and HTTPS capture downloads with 403, as a plan
@@ -586,7 +614,7 @@ class FakeThreatZoneAPI:
                 404,
                 "Not Found",
                 f"Route not handled by fake: {request.method} {path}",
-                "SUBMISSION_NOT_FOUND",
+                "NOT_FOUND",
             )
 
         handler = self._handlers().get(match.name)
@@ -595,8 +623,12 @@ class FakeThreatZoneAPI:
                 404,
                 "Not Found",
                 f"No handler for route: {match.name}",
-                "SUBMISSION_NOT_FOUND",
+                "NOT_FOUND",
             )
+        if match.name in _QUOTA_CHECKED_ROUTES:
+            quota_error = self._quota_check()
+            if quota_error is not None:
+                return quota_error
         return handler(request, match)
 
     def _handlers(self) -> dict[str, Callable[[httpx.Request, RouteMatch], httpx.Response]]:
@@ -637,6 +669,7 @@ class FakeThreatZoneAPI:
             "get_syscalls": self._handle_get_syscalls,
             "get_behaviour_summary": self._handle_get_behaviour_summary,
             "get_behaviour_facets": self._handle_get_behaviour_facets,
+            "get_behaviour_matches": self._handle_get_behaviour_matches,
             "search_syscalls": self._handle_search_syscalls,
             "download_behaviour": self._handle_download_behaviour,
             "download_syscalls": self._handle_download_syscalls,
@@ -668,6 +701,7 @@ class FakeThreatZoneAPI:
             "download_sample": self._handle_download_sample,
             "download_artifact": self._handle_download_artifact,
             "download_yara_rule": self._handle_download_yara_rule,
+            "download_artifact_yara_rule": self._handle_download_artifact_yara_rule,
             "download_html_report": self._handle_download_html,
             "download_stix_report": self._handle_download_stix,
             "get_pdf_report_status": self._handle_get_pdf_report_status,
@@ -787,24 +821,52 @@ class FakeThreatZoneAPI:
     def _require_state(
         self, uuid_param: str
     ) -> tuple[SubmissionState | None, httpx.Response | None]:
+        """A private submission of another workspace returns the same 404 as a missing one, so
+        the caller cannot tell that the submission exists."""
         state = self._states.get(uuid_param)
-        if state is None:
-            return None, _error(
-                404,
-                "Not Found",
-                "Submission not found",
-                "SUBMISSION_NOT_FOUND",
-                {"submissionUuid": uuid_param},
-            )
-        if state.private and state.owning_workspace != "test-workspace":
-            return None, _error(
-                403,
-                "Forbidden",
-                "Submission is private",
-                "SUBMISSION_PRIVATE",
-                {"submissionUuid": uuid_param},
-            )
+        if state is None or (state.private and state.owning_workspace != _CALLER_WORKSPACE):
+            return None, _error(404, "Not Found", "Submission not found", "NOT_FOUND")
         return state, None
+
+    @staticmethod
+    def _limit_response(
+        status_code: int, error: str, message: str, code: str, retry_after: int
+    ) -> httpx.Response:
+        response = _json_payload(
+            {
+                "statusCode": status_code,
+                "error": error,
+                "message": message,
+                "code": code,
+                "retryAfter": retry_after,
+            },
+            status_code=status_code,
+        )
+        response.headers["Retry-After"] = str(retry_after)
+        return response
+
+    def _heavy_route_limit(self) -> httpx.Response | None:
+        if self._heavy_route_retry_after is None:
+            return None
+        return self._limit_response(
+            429,
+            "Too Many Requests",
+            "Heavy route rate limit exceeded: 30 requests per minute for each API token. "
+            f"Retry after {self._heavy_route_retry_after} seconds.",
+            "RATE_LIMIT_EXCEEDED",
+            self._heavy_route_retry_after,
+        )
+
+    def _quota_check(self) -> httpx.Response | None:
+        if self._quota_retry_after is None:
+            return None
+        return self._limit_response(
+            503,
+            "Service Unavailable",
+            "Submission quota cannot be checked right now. Retry shortly.",
+            "QUOTA_UNAVAILABLE",
+            self._quota_retry_after,
+        )
 
     def _require_dynamic(self, state: SubmissionState) -> httpx.Response | None:
         if not state.has_dynamic_report:
@@ -1274,7 +1336,7 @@ class FakeThreatZoneAPI:
                 "ARTIFACT_NOT_FOUND",
                 {"submissionUuid": state.uuid, "artifactId": artifact_id},
             )
-        jobs = _responses.build_artifact_jobs(artifact_id)
+        jobs = _responses.build_artifact_jobs()
         return _json_payload(
             {"items": [job.model_dump(mode="json", by_alias=True) for job in jobs]}
         )
@@ -1326,6 +1388,9 @@ class FakeThreatZoneAPI:
         guard = self._require_static(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         try:
             query = self._query(request)
             start = self._int(query, "start")
@@ -1336,8 +1401,11 @@ class FakeThreatZoneAPI:
             return self._bad_query_param("start", "start must not be less than 0")
         if end is not None and end < 0:
             return self._bad_query_param("end", "end must not be less than 0")
-        window_start = start if start is not None else 0
-        if end is not None and end - window_start > _responses.STRINGS_WINDOW_MAX_SPAN:
+        if (
+            start is not None
+            and end is not None
+            and end - start > _responses.STRINGS_WINDOW_MAX_SPAN
+        ):
             return self._bad_query_param(
                 "end", f"end - start must not exceed {_responses.STRINGS_WINDOW_MAX_SPAN}"
             )
@@ -1361,6 +1429,9 @@ class FakeThreatZoneAPI:
         guard = self._require_static(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         return _json(_responses.build_static_scan_string_facts(state))
 
     def _handle_get_cdr_report(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
@@ -1415,6 +1486,9 @@ class FakeThreatZoneAPI:
         guard = self._require_dynamic(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         return _json(_responses.build_killchain_response(state))
 
     def _handle_get_behaviours(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
@@ -1425,8 +1499,13 @@ class FakeThreatZoneAPI:
         guard = self._require_dynamic(state)
         if guard is not None:
             return guard
+        query = self._query(request)
+        uses_index = any(key in _BEHAVIOUR_INDEX_KEYS or key.startswith("field.") for key in query)
+        if uses_index:
+            limited = self._heavy_route_limit()
+            if limited is not None:
+                return limited
         try:
-            query = self._query(request)
             page = self._int(query, "page")
             limit = self._int(query, "limit")
             behaviour_filter = self._behaviour_filter(query)
@@ -1434,9 +1513,6 @@ class FakeThreatZoneAPI:
             return self._bad_query_param(exc.param)
         if limit is not None and (limit < 1 or limit > 500):
             return self._bad_query_param("limit", "limit must be between 1 and 500")
-        uses_index = any(key in query for key in _BEHAVIOUR_INDEX_KEYS) or bool(
-            behaviour_filter.fields
-        )
         if uses_index and not state.behaviour_index_ready:
             return self._behaviour_indexing_error()
         return _json(
@@ -1460,6 +1536,9 @@ class FakeThreatZoneAPI:
         guard = self._require_dynamic(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         if not state.behaviour_index_ready:
             return self._behaviour_indexing_error()
         return _json(_responses.build_behaviour_summary(state))
@@ -1474,6 +1553,9 @@ class FakeThreatZoneAPI:
         guard = self._require_dynamic(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         try:
             query = self._query(request)
             first = self._int(query, "first")
@@ -1498,6 +1580,30 @@ class FakeThreatZoneAPI:
                 first=first,
             )
         )
+
+    def _handle_get_behaviour_matches(
+        self, request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_dynamic(state)
+        if guard is not None:
+            return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
+        texts = self._query(request).get("text", [])
+        if not 1 <= len(texts) <= _BEHAVIOUR_MATCH_TEXTS_MAX:
+            return self._bad_query_param(
+                "text", f"text must have 1 to {_BEHAVIOUR_MATCH_TEXTS_MAX} values"
+            )
+        if any(not 2 <= len(text) <= 260 for text in texts):
+            return self._bad_query_param("text", "each text must have 2 to 260 characters")
+        if not state.behaviour_index_ready:
+            return self._behaviour_indexing_error()
+        return _json(_responses.build_behaviour_matches(state, texts))
 
     def _handle_get_syscalls(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
@@ -1537,6 +1643,9 @@ class FakeThreatZoneAPI:
         guard = self._require_dynamic(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         try:
             query = self._query(request)
             pids = self._int_list(query, "pids")
@@ -1727,6 +1836,9 @@ class FakeThreatZoneAPI:
         if state is None:
             assert err is not None
             return err
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         query = self._query(request)
         try:
             limit = self._int(query, "limit")
@@ -1748,6 +1860,9 @@ class FakeThreatZoneAPI:
         if state is None:
             assert err is not None
             return err
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         query = self._query(request)
         try:
             first = self._int(query, "first")
@@ -1802,18 +1917,8 @@ class FakeThreatZoneAPI:
         state.ai_report_reason = "regenerate"
         return _json(_responses.build_ai_report_regenerate_result(), status_code=202)
 
-    def _require_visible_state(
-        self, uuid_param: str
-    ) -> tuple[SubmissionState | None, httpx.Response | None]:
-        """Resolve a submission the way the newer routes do: a private submission of another
-        workspace returns the same 404 as a missing one."""
-        state = self._states.get(uuid_param)
-        if state is None or (state.private and state.owning_workspace != _CALLER_WORKSPACE):
-            return None, _error(404, "Not Found", "Submission not found", "NOT_FOUND")
-        return state, None
-
     def _handle_get_verdict(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1823,7 +1928,7 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_verdict(state))
 
     def _handle_get_run(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1833,7 +1938,7 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_run_notes(state))
 
     def _handle_get_annotations(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1852,7 +1957,7 @@ class FakeThreatZoneAPI:
         return _error(400, "Bad Request", message, "INVALID_QUERY_PARAM")
 
     def _handle_pin_evidence(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1892,15 +1997,13 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_annotations(state))
 
     def _handle_unpin_evidence(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
         pin_id = match.params["pin_id"]
-        try:
-            uuid.UUID(pin_id)
-        except ValueError:
-            return self._bad_query_param("pinId", "pinId must be a UUID.")
+        if not _is_uuid_v4(pin_id):
+            return self._bad_query_param("pinId", "pinId must be a version 4 UUID.")
         remaining = [pin for pin in state.annotation_pins if pin["id"] != pin_id]
         if len(remaining) == len(state.annotation_pins):
             return _error(
@@ -1913,7 +2016,7 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_annotations(state))
 
     def _handle_set_note(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1936,7 +2039,7 @@ class FakeThreatZoneAPI:
     def _handle_get_previous_run(
         self, _request: httpx.Request, match: RouteMatch
     ) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -1954,18 +2057,18 @@ class FakeThreatZoneAPI:
         return _json(_responses.build_previous_run(latest.uuid if latest else None))
 
     def _handle_compare_runs(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
-        other, other_err = self._require_visible_state(match.params["other_uuid"])
+        other, other_err = self._require_state(match.params["other_uuid"])
         if other_err is not None or other is None:
             assert other_err is not None
             return other_err
         return _json(_responses.build_run_comparison(state, other))
 
     def _handle_download_iocs(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
-        state, err = self._require_visible_state(match.params["uuid"])
+        state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None
             return err
@@ -2041,6 +2144,9 @@ class FakeThreatZoneAPI:
         guard = self._require_download_report(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         return _binary(_responses.build_raw_behaviour_file(state), "application/json")
 
     def _handle_download_syscalls(
@@ -2053,6 +2159,9 @@ class FakeThreatZoneAPI:
         guard = self._require_download_report(state)
         if guard is not None:
             return guard
+        limited = self._heavy_route_limit()
+        if limited is not None:
+            return limited
         return _binary(_responses.build_raw_syscall_log(state), "text/plain; charset=utf-8")
 
     def _handle_download_sample(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
@@ -2089,18 +2198,47 @@ class FakeThreatZoneAPI:
             assert err is not None
             return err
         if not state.yara_rules:
-            return httpx.Response(
-                202,
-                content=json.dumps(
-                    {
-                        "message": "YARA rule generation in progress",
-                        "retryAfter": 5,
-                    }
-                ).encode("utf-8"),
-                headers={"content-type": "application/json"},
-            )
+            return self._yara_rule_pending()
         rule_text = "\n".join(f"rule {seed.rule} {{ }}" for seed in state.yara_rules)
         return _binary(rule_text.encode("utf-8"), "text/plain")
+
+    @staticmethod
+    def _yara_rule_pending() -> httpx.Response:
+        return _json_payload(
+            {
+                "status": "accepted",
+                "message": "YARA rule generation is in progress. Retry shortly.",
+                "retryAfter": 10,
+            },
+            status_code=202,
+        )
+
+    def _handle_download_artifact_yara_rule(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        """The first request starts the generation and returns 202. Later requests return the
+        rule, as the API does after the generation job completes."""
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        artifact_id = match.params["artifact_id"]
+        if artifact_id not in state.artifact_ids:
+            return _error(
+                404,
+                "Not Found",
+                "Artifact not found for the given submission.",
+                "ARTIFACT_NOT_FOUND",
+                {"submissionUuid": state.uuid, "artifactId": artifact_id},
+            )
+        if artifact_id not in state.artifact_yara_rules_started:
+            state.artifact_yara_rules_started.add(artifact_id)
+            return self._yara_rule_pending()
+        response = _binary(_responses.build_artifact_yara_rule(state, artifact_id), "text/plain")
+        response.headers["content-disposition"] = (
+            f'attachment; filename="{state.uuid}_{artifact_id}.yar"'
+        )
+        return response
 
     def _handle_download_html(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
@@ -2206,6 +2344,13 @@ class FakeThreatZoneAPI:
     def _handle_get_url_analysis_indicator_evidence(
         self, request: httpx.Request, match: RouteMatch
     ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_analysis(state)
+        if guard is not None:
+            return guard
         indicator_id = match.params["indicator_id"]
         reference_id = match.params["reference_id"]
         query = self._query(request)
@@ -2220,13 +2365,6 @@ class FakeThreatZoneAPI:
                 "INVALID_QUERY_PARAM",
                 {"param": invalid_param},
             )
-        state, err = self._require_state(match.params["uuid"])
-        if err is not None or state is None:
-            assert err is not None
-            return err
-        guard = self._require_url_analysis(state)
-        if guard is not None:
-            return guard
         snapshot = _responses.build_url_analysis_indicators(state).snapshot
         ref_available = (
             _responses.url_score_evidence_ref_available(state, indicator_id, reference_id)
@@ -2401,6 +2539,13 @@ _URL_EVIDENCE_ID_MAX_LENGTH = 256
 _URL_SCORED_AT_MAX_LENGTH = 40
 _MONGO_ID = re.compile(r"^[0-9a-fA-F]{24}$")
 _ISO_8601 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$")
+
+
+def _is_uuid_v4(value: str) -> bool:
+    try:
+        return uuid.UUID(value).version == 4
+    except ValueError:
+        return False
 
 
 def _in_search_scope(state: SubmissionState, scope: str) -> bool:

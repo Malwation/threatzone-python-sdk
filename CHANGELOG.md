@@ -319,6 +319,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   private submission of another workspace returns 404 `NOT_FOUND`. New helpers:
   `register_previous_run(uuid, ...)` seeds an earlier run of the same sample, and
   `deny_stix_report(uuid)` makes the `stix` and `misp` exports return 403.
+- `download_artifact_yara_rule(uuid, artifact_id)` downloads the generated YARA rule of one
+  artifact (`{uuid}_{artifact_id}.yar`), as the "Generate YARA rule" window of the web UI
+  shows it. The first request starts the generation and raises `YaraRulePendingError` with
+  `retry_after`. The route needs no plan permission. An artifact of another submission raises
+  `NotFoundError` (`ARTIFACT_NOT_FOUND`); a failed generation raises `NotFoundError`
+  (`NOT_FOUND`).
+- `get_behaviour_matches(uuid, texts)` returns the "find in events" counts of the web UI as
+  `BehaviourMatches` (new type `BehaviourMatch`: `needle`, `count`, `first_event_id`,
+  `samples`, `complete`, `scanned_rows`). The SDK sends each text as one `text` parameter, so
+  a comma is part of the text. The route reads the behaviour index, raises
+  `BehaviourIndexingError` when the index is not ready, and is a heavy route.
+- `RateLimitError.code` holds the code of the `429` body: `RATE_LIMIT_EXCEEDED`,
+  `SUBMISSION_LIMIT_EXCEEDED` or `AI_REPORT_QUOTA_EXCEEDED`. It is `None` when an older server
+  omits the code.
+- New exception: `QuotaUnavailableError` (503 `QUOTA_UNAVAILABLE`, subclass of
+  `InternalServerError`, `code`, `retry_after`). The create methods and
+  `restart_url_analysis()` raise it when the server cannot check the submission quota.
+  Code that catches `InternalServerError` still catches it.
+- `ApiErrorCode` adds the codes that the API declares: `LICENSE_INVALID`,
+  `METHOD_NOT_ALLOWED`, `CONFLICT`, `QUOTA_UNAVAILABLE`, `SAMPLE_INDEX_UNAVAILABLE`,
+  `SAMPLE_INDEX_ERROR`, `SESSION_SERVICE_UNAVAILABLE`, `SESSION_NOT_FOUND`,
+  `AI_REPORT_NOT_FOUND`, `AI_REPORTS_DISABLED`, `AI_REPORT_NOT_FINALIZED`,
+  `AI_REPORT_IN_PROGRESS`, `AI_REPORT_QUOTA_EXCEEDED` and `AI_REPORT_QUEUE_UNAVAILABLE`.
+- The bundled `FakeThreatZoneAPI` serves the artifact YARA rule and behaviour match routes,
+  and sends `items` on `GET /submissions/{uuid}/mitre` for the seeded techniques that are in a
+  small built-in catalog. `rate_limit_heavy_routes(retry_after=60)` makes the heavy routes
+  return 429 `RATE_LIMIT_EXCEEDED` with a `Retry-After` header, after the access, report and
+  permission checks. `mark_quota_unavailable(retry_after=30)` makes the create routes and the
+  URL analysis restart return 503 `QUOTA_UNAVAILABLE`. `reset()` ends both.
 
 Every method above is mirrored on `AsyncThreatZone`.
 
@@ -331,9 +360,36 @@ Every method above is mirrored on `AsyncThreatZone`.
 - `BehaviourEvent.timestamp` changes from `int` to `float | None`.
 - `Artifact.source` changes from `str` to `ArtifactSource` (the known values, or any other
   string). Runtime values do not change.
+- `ApiErrorCode`, `IoCType` and `IndicatorLevel` accept any other string, so a value that a
+  newer server adds does not fail the parse. Before, `ApiError.model_validate()` failed on
+  codes that the API already sends, for example `LICENSE_INVALID` and `CONFLICT`.
+- A private submission of another workspace raises `NotFoundError` with code `NOT_FOUND`, the
+  same error as a missing submission. Before, the API returned `403` and the SDK raised
+  `PermissionDeniedError`. The API does not tell the caller that the private submission
+  exists. Code that catches `PermissionDeniedError` for this case must catch `NotFoundError`.
+  The bundled `FakeThreatZoneAPI` follows the API on every route, and returns `NOT_FOUND` for
+  a missing submission and for an unknown route.
+- An empty list filter (`event_ids`, `pids`, `parent_pids`, `types`, `operations`,
+  `statuses`, a `fields` value, or `apis` of `search_syscalls()`) raises `ValueError` before
+  the SDK sends the request. Before, the SDK sent an empty value and the server returned
+  `400`. Pass `None` to leave out a filter. A single string is sent as it is, not split into
+  characters.
+- `RateLimitError.retry_after` and `QuotaUnavailableError.retry_after` read the `retryAfter`
+  body field when the `Retry-After` header is not a number (for example an HTTP date). Before,
+  such a header made the SDK raise `ValueError` instead of `RateLimitError`.
+- `download_yara_rule()` documents `YaraRulePendingError`. The docstrings of the create
+  methods, `restart_url_analysis()`, `get_behaviours()`, `download_behaviour()`,
+  `download_syscalls()`, `get_mitre_techniques()`, `unpin_evidence()` and
+  `get_url_analysis_indicator_evidence()` name the errors and fields that the API now sends.
 
 ### Removed
 
+- `ApiErrorCode` no longer lists `INVALID_UUID`, `SUBMISSION_PRIVATE` and
+  `SUBMISSION_NOT_FOUND`. The API never sends them: a malformed UUID gives
+  `INVALID_QUERY_PARAM`, and a missing submission or a private submission of another
+  workspace gives `NOT_FOUND`. `ApiErrorCode` accepts any string, so code that compares
+  `code` with the old values still type-checks, but the comparison is never true. The SDK
+  keeps no alias, because the codes were literal values, not names.
 - `UrlAnalysisResponse.verdict_state` is removed. The API no longer sends `verdictState`.
   Read `UrlAnalysisResponse.status`: the URL report stays `in_progress` until the final score
   and is `completed` after that. Code that reads `verdict_state` now raises `AttributeError`.
@@ -360,6 +416,12 @@ Every method above is mirrored on `AsyncThreatZone`.
 - Server fix: `IoC.type` is always lowercase. The server compares the stored type text without
   case, so an IoC stored as `IP` returns `type == "ip"` instead of `path`, and
   `get_iocs(uuid, type="ip")` also returns it. Read `IoC.raw_type` for the stored text.
+- `FakeThreatZoneAPI` follows the API window rule of `get_static_scan_strings_page()`: a
+  request with `end` below `start` returns `end == start`, and a request without `start`
+  and with `end` above 1000 returns the window `0` to `1000` instead of `400`.
+- `FakeThreatZoneAPI` checks the access and the URL report of
+  `get_url_analysis_indicator_evidence()` before the parameters, as the API guards do, and
+  `unpin_evidence()` accepts only a version 4 UUID as the pin ID, as the API does.
 
 ## 1.1.1
 

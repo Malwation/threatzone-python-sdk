@@ -61,7 +61,14 @@ class RateLimitError(APIError):
     """Raised when rate limit is exceeded (HTTP 429).
 
     Attributes:
-        retry_after: Seconds until the rate limit resets (from Retry-After header).
+        code: The machine-readable error code from the response envelope:
+            ``RATE_LIMIT_EXCEEDED`` for the heavy-route limit and the monthly API request
+            limit, ``SUBMISSION_LIMIT_EXCEEDED`` for the daily and concurrent submission
+            limits, or ``AI_REPORT_QUOTA_EXCEEDED`` for the daily AI report quota. ``None``
+            when an older server omits the code.
+        retry_after: Seconds until the rate limit resets. The SDK reads the
+            ``Retry-After`` header, and the ``retryAfter`` body field when the header is
+            absent or is not a number.
     """
 
     def __init__(
@@ -72,8 +79,10 @@ class RateLimitError(APIError):
         response: httpx.Response | None = None,
         body: dict[str, Any] | None = None,
         retry_after: float | None = None,
+        code: str | None = None,
     ) -> None:
         self.retry_after = retry_after
+        self.code = code
         super().__init__(message, status_code=status_code, response=response, body=body)
 
     def __str__(self) -> str:
@@ -250,6 +259,41 @@ class InternalServerError(APIError):
     """Raised when a server error occurs (HTTP 5xx)."""
 
 
+class QuotaUnavailableError(InternalServerError):
+    """Raised when the server cannot check the submission quota (HTTP 503).
+
+    Maps the code ``QUOTA_UNAVAILABLE``. The create routes and
+    ``restart_url_analysis()`` raise it. The server did not create a submission. Retry
+    after ``retry_after`` seconds.
+
+    Attributes:
+        code: The machine-readable error code from the response envelope.
+        retry_after: Seconds to wait before a retry. The SDK reads the ``Retry-After``
+            header, and the ``retryAfter`` body field when the header is absent or is
+            not a number.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 503,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "QUOTA_UNAVAILABLE",
+        retry_after: float | None = None,
+    ) -> None:
+        self.code = code
+        self.retry_after = retry_after
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
 class BehaviourUnreadableError(InternalServerError):
     """Raised when the stored behaviour file is not a valid JSON array (HTTP 502).
 
@@ -311,6 +355,20 @@ def _body_number(body: dict[str, Any] | None, key: str) -> float | None:
 
 def _detail_number(body: dict[str, Any] | None, key: str) -> float | None:
     return _as_number(_details(body).get(key))
+
+
+def _header_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _retry_after(response: httpx.Response, body: dict[str, Any] | None) -> float | None:
+    seconds = _header_seconds(response.headers.get("retry-after"))
+    return seconds if seconds is not None else _body_number(body, "retryAfter")
 
 
 def raise_for_status(response: httpx.Response) -> None:
@@ -404,13 +462,21 @@ def raise_for_status(response: httpx.Response) -> None:
             download_route=download_route if isinstance(download_route, str) else None,
         )
     elif status_code == 429:
-        retry_after = response.headers.get("retry-after")
         raise RateLimitError(
             message,
             status_code=status_code,
             response=response,
             body=body,
-            retry_after=float(retry_after) if retry_after else _body_number(body, "retryAfter"),
+            retry_after=_retry_after(response, body),
+            code=_body_code(body),
+        )
+    elif status_code == 503 and _body_code(body) == "QUOTA_UNAVAILABLE":
+        raise QuotaUnavailableError(
+            message,
+            status_code=status_code,
+            response=response,
+            body=body,
+            retry_after=_retry_after(response, body),
         )
     elif status_code == 502 and _body_code(body) == "BEHAVIOUR_UNREADABLE":
         raise BehaviourUnreadableError(

@@ -88,6 +88,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/behaviours/facets$"),
     ),
     (
+        "get_behaviour_matches",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/behaviours/match$"),
+    ),
+    (
         "search_syscalls",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/syscalls/search$"),
     ),
@@ -179,6 +183,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
     (
         "download_yara_rule",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/yara-rule$"),
+    ),
+    (
+        "download_artifact_yara_rule",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/artifacts/(?P<artifact_id>[^/]+)/yara-rule$"),
     ),
     (
         "download_html_report",

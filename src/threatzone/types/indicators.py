@@ -13,7 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .network import NetworkAvailability, NetworkSourceScope
 
-IndicatorLevel = Literal["malicious", "suspicious", "benign"]
+IndicatorLevel = Literal["malicious", "suspicious", "benign"] | str
+"""Indicator level. Any other string is also accepted, so a new server value does not fail
+the parse."""
 IndicatorAuthor = Literal["system", "user"]
 
 
@@ -129,19 +131,24 @@ class IndicatorsResponse(BaseModel):
     levels: IndicatorLevels
 
 
-IoCType = Literal[
-    "ip",
-    "domain",
-    "url",
-    "email",
-    "sha512",
-    "sha256",
-    "sha1",
-    "md5",
-    "registry",
-    "path",
-    "uuid",
-]
+IoCType = (
+    Literal[
+        "ip",
+        "domain",
+        "url",
+        "email",
+        "sha512",
+        "sha256",
+        "sha1",
+        "md5",
+        "registry",
+        "path",
+        "uuid",
+    ]
+    | str
+)
+"""IoC type. Any other string is also accepted, so a new server value does not fail the
+parse. ``IoC.raw_type`` keeps the type text as the extractor stored it."""
 
 
 class IoC(BaseModel):

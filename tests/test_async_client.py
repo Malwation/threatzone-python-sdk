@@ -2039,6 +2039,68 @@ def _patched_async_stream(
     return patch.object(httpx.AsyncClient, "stream", mock), mock
 
 
+class TestAsyncBehaviourMatchesAndArtifactYaraRule:
+    async def test_get_behaviour_matches_repeats_the_text_parameter(self, api_key: str) -> None:
+        ctx, mock = _patched_async_client(
+            _make_response(
+                200,
+                {
+                    "items": [
+                        {
+                            "needle": "payload.dll",
+                            "count": 3,
+                            "firstEventId": 1024,
+                            "samples": ["C:\\Temp\\payload.dll"],
+                            "complete": True,
+                            "scannedRows": 1337,
+                        },
+                        {
+                            "needle": "a,b",
+                            "count": 0,
+                            "firstEventId": None,
+                            "samples": [],
+                            "complete": True,
+                            "scannedRows": 1337,
+                        },
+                    ]
+                },
+            )
+        )
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                matches = await client.get_behaviour_matches("sub-789", ["payload.dll", "a,b"])
+        assert _call_url(mock).endswith("/submissions/sub-789/behaviours/match")
+        assert _call_params(mock) == {"text": ["payload.dll", "a,b"]}
+        assert [item.count for item in matches.items] == [3, 0]
+
+    async def test_get_behaviour_matches_refuses_no_text(self, api_key: str) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, {"items": []}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ValueError):
+                    await client.get_behaviour_matches("sub-789", ())
+        mock.assert_not_called()
+
+    async def test_download_artifact_yara_rule_happy(self, api_key: str) -> None:
+        response = _make_response(200, content=b"rule X {}")
+        ctx, mock = _patched_async_stream(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.download_artifact_yara_rule("sub-789", "507f1f77bcf86cd799439011")
+        url_arg = mock.call_args.args[1]
+        assert url_arg.endswith("/submissions/sub-789/artifacts/507f1f77bcf86cd799439011/yara-rule")
+
+    async def test_download_artifact_yara_rule_pending_202(self, api_key: str) -> None:
+        response = _make_response(202, json_data={"status": "accepted", "retryAfter": 10})
+        ctx, _ = _patched_async_stream(response)
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(YaraRulePendingError) as exc_info:
+                    await client.download_artifact_yara_rule("sub-789", "507f1f77bcf86cd799439011")
+        assert exc_info.value.retry_after == 10.0
+        assert exc_info.value.message == "YARA rule generation is in progress. Please retry later."
+
+
 class TestAsyncDownloads:
     async def test_download_sample_happy(self, api_key: str) -> None:
         response = _make_response(200, content=b"PE\x00\x00binary")

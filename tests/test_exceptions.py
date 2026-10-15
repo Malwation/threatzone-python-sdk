@@ -17,6 +17,7 @@ from threatzone._exceptions import (
     NotFoundError,
     PaymentRequiredError,
     PermissionDeniedError,
+    QuotaUnavailableError,
     RateLimitError,
     ReportUnavailableError,
     ThreatZoneError,
@@ -451,3 +452,72 @@ class TestBehaviourErrors:
         with pytest.raises(RateLimitError) as exc_info:
             raise_for_status(response)
         assert exc_info.value.retry_after == 23.0
+
+    @pytest.mark.parametrize(
+        "code", ["RATE_LIMIT_EXCEEDED", "SUBMISSION_LIMIT_EXCEEDED", "AI_REPORT_QUOTA_EXCEEDED"]
+    )
+    def test_429_carries_the_code(self, code: str):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many", "code": code, "retryAfter": 60},
+            headers={"Retry-After": "60"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.code == code
+        assert exc_info.value.retry_after == 60.0
+
+    def test_429_without_a_code_from_an_older_server(self):
+        response = httpx.Response(429, json={"statusCode": 429, "message": "Too many"})
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.code is None
+        assert exc_info.value.retry_after is None
+
+    def test_429_with_an_http_date_header_reads_the_body(self):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many", "retryAfter": 31},
+            headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after == 31.0
+
+    def test_429_with_an_http_date_header_and_no_body_field(self):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many"},
+            headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after is None
+
+    def test_503_quota_unavailable_raises_typed_error(self):
+        response = httpx.Response(
+            503,
+            json={
+                "statusCode": 503,
+                "error": "Service Unavailable",
+                "message": "Submission quota cannot be checked right now. Retry shortly.",
+                "code": "QUOTA_UNAVAILABLE",
+                "retryAfter": 30,
+            },
+            headers={"Retry-After": "30"},
+        )
+        with pytest.raises(QuotaUnavailableError) as exc_info:
+            raise_for_status(response)
+        err = exc_info.value
+        assert isinstance(err, InternalServerError)
+        assert (err.status_code, err.code, err.retry_after) == (503, "QUOTA_UNAVAILABLE", 30.0)
+        assert "retry_after=30.0s" in str(err)
+
+    def test_503_with_another_code_stays_internal_server_error(self):
+        response = httpx.Response(
+            503,
+            json={"statusCode": 503, "message": "down", "code": "STORAGE_UNAVAILABLE"},
+        )
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert not isinstance(exc_info.value, QuotaUnavailableError)
