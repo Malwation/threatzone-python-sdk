@@ -2164,6 +2164,27 @@ class TestApiErrorEnvelope:
         )
         assert err.code == "NOT_A_REAL_CODE"
 
+    def test_api_error_parses_a_500_body_without_error_field(self) -> None:
+        err = ApiError.model_validate(
+            {
+                "statusCode": 500,
+                "message": "An internal error occurred.",
+                "code": "INTERNAL_ERROR",
+                "details": {"requestId": "req-1"},
+            }
+        )
+        assert err.status_code == 500
+        assert err.error is None
+        assert err.message == "An internal error occurred."
+        assert err.details == {"requestId": "req-1"}
+
+    def test_api_error_parses_the_camel_case_status_code(
+        self, report_unavailable_409_body: dict[str, Any]
+    ) -> None:
+        err = ApiError.model_validate(report_unavailable_409_body)
+        assert err.status_code == 409
+        assert err.error == report_unavailable_409_body["error"]
+
     @pytest.mark.parametrize(
         "code",
         ["LICENSE_INVALID", "CONFLICT", "QUOTA_UNAVAILABLE", "SAMPLE_INDEX_ERROR"],

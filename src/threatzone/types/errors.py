@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 ApiErrorCode = (
     Literal[
@@ -63,8 +63,9 @@ class ApiError(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    status_code: int
-    error: str
+    status_code: int = Field(alias="statusCode")
+    # The documented 500 body of the API has no error field.
+    error: str | None = None
     message: str
     code: ApiErrorCode
     # Structured context. Free-form: shape depends on the error code.

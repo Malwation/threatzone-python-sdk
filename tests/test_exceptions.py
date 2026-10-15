@@ -137,6 +137,26 @@ class TestRaiseForStatus:
             raise_for_status(response)
         assert exc_info.value.status_code == 500
 
+    def test_500_body_without_error_field_keeps_the_body_message(self):
+        body = {
+            "statusCode": 500,
+            "message": "An internal error occurred. Reference the requestId for support "
+            "correlation.",
+            "code": "INTERNAL_ERROR",
+            "details": {"requestId": "req-1"},
+        }
+        response = httpx.Response(500, json=body)
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.message == body["message"]
+        assert exc_info.value.body == body
+
+    def test_500_body_without_message_falls_back_to_the_reason_phrase(self):
+        response = httpx.Response(500, json={"statusCode": 500, "code": "INTERNAL_ERROR"})
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.message == "Internal Server Error"
+
     def test_502_raises_internal_server_error(self):
         response = httpx.Response(502, json={"message": "Bad gateway"})
         with pytest.raises(InternalServerError) as exc_info:

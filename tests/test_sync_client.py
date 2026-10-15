@@ -1397,6 +1397,16 @@ class TestBehaviourIndexAndSyscallSearch:
             client.get_behaviours("sub-789", event_ids=[])
         mock.assert_not_called()
 
+    def test_get_behaviours_refuses_an_empty_string_filter(self, api_key: str) -> None:
+        ctx, mock = _patched_client(_make_response(200, {}))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ValueError, match="types must not be empty"),
+        ):
+            client.get_behaviours("sub-789", types="")
+        mock.assert_not_called()
+
     def test_get_behaviours_sends_every_index_filter(
         self, api_key: str, sample_indexed_behaviours_response: dict[str, Any]
     ) -> None:

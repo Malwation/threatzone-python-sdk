@@ -9,10 +9,10 @@ from typing import Any
 def _join(name: str, values: Sequence[int | str] | None) -> str | None:
     if values is None:
         return None
-    if isinstance(values, str):
-        return values
     if not values:
         raise ValueError(f"{name} must not be empty. Pass None to leave out the filter.")
+    if isinstance(values, str):
+        return values
     return ",".join(str(value) for value in values)
 
 

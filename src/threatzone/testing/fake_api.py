@@ -2224,6 +2224,15 @@ class FakeThreatZoneAPI:
             return err
         artifact_id = match.params["artifact_id"]
         if artifact_id not in state.artifact_ids:
+            # Seeded artifact IDs are not Mongo IDs, so the format check skips them.
+            if not _MONGO_ID.match(artifact_id):
+                return _error(
+                    400,
+                    "Bad Request",
+                    "Invalid artifact ID format.",
+                    "INVALID_QUERY_PARAM",
+                    {"artifactId": artifact_id},
+                )
             return _error(
                 404,
                 "Not Found",

@@ -422,6 +422,16 @@ Every method above is mirrored on `AsyncThreatZone`.
 - `FakeThreatZoneAPI` checks the access and the URL report of
   `get_url_analysis_indicator_evidence()` before the parameters, as the API guards do, and
   `unpin_evidence()` accepts only a version 4 UUID as the pin ID, as the API does.
+- An empty string filter (for example `types=""` or `apis=""`) raises `ValueError` before the
+  request, as an empty list does. Before, the SDK sent an empty value and the server returned
+  `400`.
+- `ApiError.error` is optional (`None` default). The documented `500` body of the API has no
+  `error` field, so `ApiError.model_validate()` failed on it. `ApiError.status_code` also reads
+  the `statusCode` key of the raw body. `raise_for_status()` does not change: the exception
+  message is the body `message`, or the HTTP reason phrase when the body has no message.
+- `FakeThreatZoneAPI` returns `400` `INVALID_QUERY_PARAM` for a malformed artifact ID on
+  `download_artifact_yara_rule()`, as the API does. An unknown well-formed ID still returns
+  `404` `ARTIFACT_NOT_FOUND`. The seeded artifact IDs of the fake keep their format and work.
 
 ## 1.1.1
 

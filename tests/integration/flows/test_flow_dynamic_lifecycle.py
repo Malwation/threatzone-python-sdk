@@ -226,11 +226,18 @@ def test_behaviour_matches_reject_bad_texts(
         pytest.param(lambda client, uuid: client.get_behaviours(uuid, pids=[]), id="pids"),
         pytest.param(lambda client, uuid: client.get_behaviours(uuid, types=[]), id="types"),
         pytest.param(
+            lambda client, uuid: client.get_behaviours(uuid, types=""), id="types-empty-string"
+        ),
+        pytest.param(
             lambda client, uuid: client.get_behaviours(uuid, fields={"path": []}), id="fields"
         ),
         pytest.param(
             lambda client, uuid: client.search_syscalls(uuid, query="NtCreateFile", apis=[]),
             id="apis",
+        ),
+        pytest.param(
+            lambda client, uuid: client.search_syscalls(uuid, query="NtCreateFile", apis=""),
+            id="apis-empty-string",
         ),
     ],
 )
@@ -257,8 +264,11 @@ def test_artifact_yara_rule(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
         assert dl.filename == f"{uuid}_{artifact_id}.yar"
         assert dl.read().startswith(b"rule ")
     with pytest.raises(NotFoundError) as not_found:
-        sync_client.download_artifact_yara_rule(uuid, "no-such-artifact")
+        sync_client.download_artifact_yara_rule(uuid, "507f1f77bcf86cd799439011")
     assert (not_found.value.body or {}).get("code") == "ARTIFACT_NOT_FOUND"
+    with pytest.raises(BadRequestError) as malformed:
+        sync_client.download_artifact_yara_rule(uuid, "no-such-artifact")
+    assert (malformed.value.body or {}).get("code") == "INVALID_QUERY_PARAM"
 
 
 async def test_async_behaviour_matches_and_artifact_yara_rule(
