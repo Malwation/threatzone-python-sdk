@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BehaviourIndexingError` and of `ServiceUnavailableError`.
 - `ApiErrorCode` adds `WORKSPACE_INACTIVE`, `PLAN_API_ACCESS_DENIED` and
   `BEHAVIOUR_INDEX_BUILDING`. `DnsStatus` adds `UNKNOWN` and accepts any other string.
+- `list_envelope=True` on `ThreatZone` and `AsyncThreatZone` sends `envelope=1` to every list
+  route. The methods return the same types: the flat lists read `items` and take
+  `total_count` from the envelope, and the list models add `page_size` and `next` (new base
+  model `ListEnvelopeFields`; new generic model `ListEnvelope`). The default is `False`,
+  because servers before the 2026-10-19 Public API reject the parameter. The fake API
+  supports the envelope.
+- `search_by_sha256()` returns a `TotalCountList[Submission]`. `total_count` is the number of
+  matching submissions on all pages (`X-Total-Count`).
+- `get_network_exfil_requests()` accepts `attribution=[...]`.
 
 - Network rows (`DnsQuery`, `HttpRequest`, `Connection`, `NetworkThreat`) add `attribution`,
   `attribution_reason`, `process_id` and `process_image` (new base model `NetworkRowSource`,
@@ -374,6 +383,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Every method above is mirrored on `AsyncThreatZone`.
 
 ### Changed
+
+- Retries. A `POST` is never sent again after a read or write timeout, so an upload is not
+  submitted twice; the `TimeoutError` says so. A connect failure, a connect timeout and a pool
+  timeout are still retried for every method, because the request was not sent. `GET`, `PUT`
+  and `DELETE` requests, also downloads, are retried on `429` and `503` after the
+  `Retry-After` wait (or `1`, `2`, `4`... seconds without the header). A wait above 60 seconds
+  is not retried; the error is raised at once. `max_retries` (default `2`) bounds every retry,
+  also with `http_client=`; `max_retries=0` turns retries off.
+- A download error keeps the error body, so the exception has `code` and the server message.
 
 - `retry_after` on `RateLimitError` and the `503` errors falls back to
   `details.retryAfterSeconds` when the header and the `retryAfter` body field are absent.

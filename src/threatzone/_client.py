@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import json
+import re
 import time
 from collections.abc import Mapping
 from io import IOBase
@@ -12,14 +15,81 @@ from typing import Any, BinaryIO
 import httpx
 
 from ._config import ClientConfig
+from ._constants import MAX_RETRY_AFTER_SECONDS
 from ._exceptions import (
     ConnectionError,
     TimeoutError,
     raise_for_status,
+    retry_after_seconds,
 )
 from ._streaming import AsyncDownloadResponse, DownloadResponse
 
 FileInput = BinaryIO | bytes | str | Path | IOBase
+
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+_RETRY_STATUSES = frozenset({429, 503})
+_SAFE_TIMEOUTS = (httpx.ConnectTimeout, httpx.PoolTimeout)
+
+_LIST_ROUTE = re.compile(
+    r"^/(?:"
+    r"config/(?:metafields/[^/]+|environments|device-presets)"
+    r"|(?:v1/)?network-configs"
+    r"|submissions(?:/search/sha256/[^/]+)?"
+    r"|submissions/[^/]+/(?:behaviours|media|indicators|iocs|yara-rules|extracted-configs"
+    r"|artifacts|artifacts/[^/]+/jobs|eml-analysis|processes|syscalls"
+    r"|network/(?:dns|http|tcp|udp|threats|exfil-requests|endpoints))"
+    r")$"
+)
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+async def _async_sleep(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+def _is_idempotent(method: str) -> bool:
+    return method.upper() in _IDEMPOTENT_METHODS
+
+
+def _timeout_error(method: str, exc: httpx.TimeoutException) -> TimeoutError:
+    if _is_idempotent(method) or isinstance(exc, _SAFE_TIMEOUTS):
+        return TimeoutError(f"Request timed out: {exc}")
+    return TimeoutError(
+        f"Request timed out: {exc}. The server can have received the request, "
+        "so the SDK did not send it again. Check the result before you send it again."
+    )
+
+
+def _may_retry_timeout(method: str, exc: httpx.TimeoutException) -> bool:
+    return _is_idempotent(method) or isinstance(exc, _SAFE_TIMEOUTS)
+
+
+def _response_body(response: httpx.Response) -> dict[str, Any] | None:
+    try:
+        body = response.json()
+    except (json.JSONDecodeError, ValueError, httpx.ResponseNotRead):
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _status_retry_delay(method: str, response: httpx.Response, attempt: int) -> float | None:
+    """Return the wait before a retry of a busy idempotent request, or ``None`` for no retry."""
+    if response.status_code not in _RETRY_STATUSES or not _is_idempotent(method):
+        return None
+    delay = retry_after_seconds(response, _response_body(response))
+    if delay is None:
+        return float(2**attempt)
+    if delay < 0 or delay > MAX_RETRY_AFTER_SECONDS:
+        return None
+    return delay
+
+
+def is_list_route(path: str) -> bool:
+    """``True`` for a list route that accepts the ``envelope`` parameter."""
+    return _LIST_ROUTE.match(path) is not None
 
 
 class BaseClient:
@@ -55,6 +125,14 @@ class BaseClient:
             raise TypeError(f"Unsupported file type: {type(file)}")
 
         return field_name, (filename, content, "application/octet-stream")
+
+    def _query_params(
+        self, method: str, path: str, params: Mapping[str, Any] | None
+    ) -> dict[str, Any] | None:
+        filtered = {k: v for k, v in (params or {}).items() if v is not None}
+        if self._config.list_envelope and method.upper() == "GET" and is_list_route(path):
+            filtered["envelope"] = 1
+        return filtered or None
 
     def _cleanup_files(self) -> None:
         """Close any file handles opened during file upload preparation."""
@@ -152,43 +230,49 @@ class SyncHTTPClient(BaseClient):
         files: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
-        """Make an HTTP request with error handling and retries."""
+        """Make an HTTP request with error handling and retries.
+
+        Connection failures are retried for every method. A timeout is retried only for an
+        idempotent method, or when the request was not sent (connect or pool timeout). A
+        ``429`` or ``503`` response to an idempotent request is retried after its
+        ``Retry-After`` wait when the wait is at most ``MAX_RETRY_AFTER_SECONDS``.
+        """
         url = self._config.build_url(path)
         request_headers = {**self._config.get_headers(), **(headers or {})}
+        query = self._query_params(method, path, params)
+        max_retries = self._config.max_retries
 
-        filtered_params = None
-        if params:
-            filtered_params = {k: v for k, v in params.items() if v is not None}
-
-        last_error: Exception | None = None
-
-        for attempt in range(self._config.max_retries + 1):
+        for attempt in range(max_retries + 1):
+            last_attempt = attempt == max_retries
             try:
                 response = self._client.request(
                     method,
                     url,
-                    params=filtered_params,
+                    params=query,
                     json=json,
                     data=data,
                     files=files,
                     headers=request_headers,
                 )
+            except httpx.TimeoutException as e:
+                if last_attempt or not _may_retry_timeout(method, e):
+                    raise _timeout_error(method, e) from e
+                _sleep(2**attempt)
+                continue
+            except httpx.ConnectError as e:
+                if last_attempt:
+                    raise ConnectionError(f"Failed to connect: {e}") from e
+                _sleep(2**attempt)
+                continue
+
+            delay = None if last_attempt else _status_retry_delay(method, response, attempt)
+            if delay is None:
                 raise_for_status(response)
                 return response
-            except httpx.TimeoutException as e:
-                last_error = TimeoutError(f"Request timed out: {e}")
-                if attempt == self._config.max_retries:
-                    raise last_error from e
-            except httpx.ConnectError as e:
-                last_error = ConnectionError(f"Failed to connect: {e}")
-                if attempt == self._config.max_retries:
-                    raise last_error from e
-            except Exception:
-                raise
+            response.close()
+            _sleep(delay)
 
-            time.sleep(2**attempt)
-
-        raise last_error or RuntimeError("Unexpected error in request retry loop")
+        raise RuntimeError("Unexpected end of the request retry loop")
 
     def get(
         self,
@@ -227,32 +311,47 @@ class SyncHTTPClient(BaseClient):
         *,
         params: Mapping[str, Any] | None = None,
     ) -> DownloadResponse:
-        """Make a GET request and return a streaming response."""
+        """Make a GET request and return a streaming response.
+
+        An error response is read before it is raised, so the error keeps its ``code``.
+        Retries follow the rules of ``_request()`` for a ``GET``.
+        """
         url = self._config.build_url(path)
         headers = self._config.get_headers()
+        query = self._query_params("GET", path, params)
+        max_retries = self._config.max_retries
 
-        filtered_params = None
-        if params:
-            filtered_params = {k: v for k, v in params.items() if v is not None}
+        for attempt in range(max_retries + 1):
+            last_attempt = attempt == max_retries
+            stream_context = self._client.stream("GET", url, params=query, headers=headers)
+            try:
+                response = stream_context.__enter__()
+            except httpx.TimeoutException as e:
+                if last_attempt:
+                    raise TimeoutError(f"Request timed out: {e}") from e
+                _sleep(2**attempt)
+                continue
+            except httpx.ConnectError as e:
+                if last_attempt:
+                    raise ConnectionError(f"Failed to connect: {e}") from e
+                _sleep(2**attempt)
+                continue
 
-        stream_context = self._client.stream(
-            "GET",
-            url,
-            params=filtered_params,
-            headers=headers,
-        )
-        try:
-            response = stream_context.__enter__()
-        except httpx.TimeoutException as e:
-            raise TimeoutError(f"Request timed out: {e}") from e
-        except httpx.ConnectError as e:
-            raise ConnectionError(f"Failed to connect: {e}") from e
-        try:
-            raise_for_status(response)
-            return DownloadResponse(response, stream_context=stream_context)
-        except Exception:
+            if response.is_success:
+                return DownloadResponse(response, stream_context=stream_context)
+            try:
+                response.read()
+                delay = None if last_attempt else _status_retry_delay("GET", response, attempt)
+                if delay is None:
+                    raise_for_status(response)
+                    return DownloadResponse(response, stream_context=stream_context)
+            except BaseException:
+                stream_context.__exit__(None, None, None)
+                raise
             stream_context.__exit__(None, None, None)
-            raise
+            _sleep(delay)
+
+        raise RuntimeError("Unexpected end of the download retry loop")
 
 
 class AsyncHTTPClient(BaseClient):
@@ -302,45 +401,49 @@ class AsyncHTTPClient(BaseClient):
         files: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
-        """Make an HTTP request with error handling and retries."""
-        import asyncio
+        """Make an HTTP request with error handling and retries.
 
+        Connection failures are retried for every method. A timeout is retried only for an
+        idempotent method, or when the request was not sent (connect or pool timeout). A
+        ``429`` or ``503`` response to an idempotent request is retried after its
+        ``Retry-After`` wait when the wait is at most ``MAX_RETRY_AFTER_SECONDS``.
+        """
         url = self._config.build_url(path)
         request_headers = {**self._config.get_headers(), **(headers or {})}
+        query = self._query_params(method, path, params)
+        max_retries = self._config.max_retries
 
-        filtered_params = None
-        if params:
-            filtered_params = {k: v for k, v in params.items() if v is not None}
-
-        last_error: Exception | None = None
-
-        for attempt in range(self._config.max_retries + 1):
+        for attempt in range(max_retries + 1):
+            last_attempt = attempt == max_retries
             try:
                 response = await self._client.request(
                     method,
                     url,
-                    params=filtered_params,
+                    params=query,
                     json=json,
                     data=data,
                     files=files,
                     headers=request_headers,
                 )
+            except httpx.TimeoutException as e:
+                if last_attempt or not _may_retry_timeout(method, e):
+                    raise _timeout_error(method, e) from e
+                await _async_sleep(2**attempt)
+                continue
+            except httpx.ConnectError as e:
+                if last_attempt:
+                    raise ConnectionError(f"Failed to connect: {e}") from e
+                await _async_sleep(2**attempt)
+                continue
+
+            delay = None if last_attempt else _status_retry_delay(method, response, attempt)
+            if delay is None:
                 raise_for_status(response)
                 return response
-            except httpx.TimeoutException as e:
-                last_error = TimeoutError(f"Request timed out: {e}")
-                if attempt == self._config.max_retries:
-                    raise last_error from e
-            except httpx.ConnectError as e:
-                last_error = ConnectionError(f"Failed to connect: {e}")
-                if attempt == self._config.max_retries:
-                    raise last_error from e
-            except Exception:
-                raise
+            await response.aclose()
+            await _async_sleep(delay)
 
-            await asyncio.sleep(2**attempt)
-
-        raise last_error or RuntimeError("Unexpected error in request retry loop")
+        raise RuntimeError("Unexpected end of the request retry loop")
 
     async def get(
         self,
@@ -379,29 +482,44 @@ class AsyncHTTPClient(BaseClient):
         *,
         params: Mapping[str, Any] | None = None,
     ) -> AsyncDownloadResponse:
-        """Make a GET request and return a streaming response."""
+        """Make a GET request and return a streaming response.
+
+        An error response is read before it is raised, so the error keeps its ``code``.
+        Retries follow the rules of ``_request()`` for a ``GET``.
+        """
         url = self._config.build_url(path)
         headers = self._config.get_headers()
+        query = self._query_params("GET", path, params)
+        max_retries = self._config.max_retries
 
-        filtered_params = None
-        if params:
-            filtered_params = {k: v for k, v in params.items() if v is not None}
+        for attempt in range(max_retries + 1):
+            last_attempt = attempt == max_retries
+            stream_context = self._client.stream("GET", url, params=query, headers=headers)
+            try:
+                response = await stream_context.__aenter__()
+            except httpx.TimeoutException as e:
+                if last_attempt:
+                    raise TimeoutError(f"Request timed out: {e}") from e
+                await _async_sleep(2**attempt)
+                continue
+            except httpx.ConnectError as e:
+                if last_attempt:
+                    raise ConnectionError(f"Failed to connect: {e}") from e
+                await _async_sleep(2**attempt)
+                continue
 
-        stream_context = self._client.stream(
-            "GET",
-            url,
-            params=filtered_params,
-            headers=headers,
-        )
-        try:
-            response = await stream_context.__aenter__()
-        except httpx.TimeoutException as e:
-            raise TimeoutError(f"Request timed out: {e}") from e
-        except httpx.ConnectError as e:
-            raise ConnectionError(f"Failed to connect: {e}") from e
-        try:
-            raise_for_status(response)
-            return AsyncDownloadResponse(response, stream_context=stream_context)
-        except Exception:
+            if response.is_success:
+                return AsyncDownloadResponse(response, stream_context=stream_context)
+            try:
+                await response.aread()
+                delay = None if last_attempt else _status_retry_delay("GET", response, attempt)
+                if delay is None:
+                    raise_for_status(response)
+                    return AsyncDownloadResponse(response, stream_context=stream_context)
+            except BaseException:
+                await stream_context.__aexit__(None, None, None)
+                raise
             await stream_context.__aexit__(None, None, None)
-            raise
+            await _async_sleep(delay)
+
+        raise RuntimeError("Unexpected end of the download retry loop")

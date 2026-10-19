@@ -20,6 +20,7 @@ from ._exceptions import (
     PdfReportPendingError,
     YaraRulePendingError,
 )
+from ._lists import list_page
 from ._params import behaviour_filter_params, behaviour_match_params, syscall_search_params
 from ._streaming import DownloadResponse
 from .types import (
@@ -133,16 +134,6 @@ def _pending_body(raw: bytes) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _total_count(response: httpx.Response) -> int | None:
-    value = response.headers.get("x-total-count")
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
-
-
 class ThreatZone:
     """Synchronous client for the Threat.Zone Public API."""
 
@@ -154,6 +145,7 @@ class ThreatZone:
         timeout: float | None = None,
         max_retries: int | None = None,
         verify_ssl: bool = False,
+        list_envelope: bool = False,
         http_client: httpx.Client | None = None,
     ) -> None:
         """
@@ -168,13 +160,22 @@ class ThreatZone:
             timeout: Request timeout in seconds. Defaults to 60. Ignored when
                 ``http_client`` is supplied.
             max_retries: Maximum number of retries for failed requests. Defaults to 2.
-                Ignored when ``http_client`` is supplied.
+                The SDK retries connection failures, timeouts of idempotent requests, and
+                ``429`` and ``503`` responses to idempotent requests after their
+                ``Retry-After`` wait (at most 60 seconds). It never sends a ``POST`` again
+                after a read or write timeout, so an upload is not submitted twice. Set
+                ``0`` to turn off retries. Applies also with ``http_client``.
             verify_ssl: Whether to verify SSL certificates. Set to False for self-signed
                 certificates in on-premise deployments. Defaults to False. Ignored when
                 ``http_client`` is supplied.
+            list_envelope: Send ``envelope=1`` to every list route. The route then returns
+                ``{items, total, page, pageSize, next}``, and the SDK reads ``items``. The
+                methods return the same types. ``total_count``, ``page_size`` and ``next``
+                come from the envelope. Servers before the 2026-10-19 Public API reject the
+                parameter with ``400``, so keep the default (False) for an older server.
             http_client: Optional pre-configured ``httpx.Client`` to use for every
-                request. When provided, the SDK uses it as-is and the ``timeout``,
-                ``verify_ssl``, and ``max_retries`` arguments are ignored — the caller
+                request. When provided, the SDK uses it as-is and the ``timeout`` and
+                ``verify_ssl`` arguments are ignored — the caller
                 is expected to have configured them on the supplied client. The SDK
                 will not close a caller-supplied client; the caller retains ownership.
                 When ``None`` (the default), the SDK builds and owns its own client.
@@ -185,6 +186,7 @@ class ThreatZone:
             timeout=timeout,
             max_retries=max_retries,
             verify_ssl=verify_ssl,
+            list_envelope=list_envelope,
         )
         self._http = SyncHTTPClient(self._config, http_client=http_client)
 
@@ -229,7 +231,7 @@ class ThreatZone:
         """
         if scan_type:
             response = self._http.get(f"/config/metafields/{scan_type}")
-            return [MetafieldOption.model_validate(item) for item in response.json()]
+            return [MetafieldOption.model_validate(item) for item in list_page(response)[0]]
         else:
             response = self._http.get("/config/metafields")
             return Metafields.model_validate(response.json())
@@ -237,7 +239,7 @@ class ThreatZone:
     def get_environments(self) -> list[EnvironmentOption]:
         """Get available sandbox environments."""
         response = self._http.get("/config/environments")
-        return [EnvironmentOption.model_validate(item) for item in response.json()]
+        return [EnvironmentOption.model_validate(item) for item in list_page(response)[0]]
 
     def list_network_configs(self) -> list[NetworkConfigListItem]:
         """List the workspace's available network configurations (proxy/openvpn/wireguard).
@@ -255,7 +257,7 @@ class ThreatZone:
         create_url_submission().
         """
         response = self._http.get("/config/device-presets")
-        return [DevicePresetOption.model_validate(item) for item in response.json()]
+        return [DevicePresetOption.model_validate(item) for item in list_page(response)[0]]
 
     # =========================================================================
     # Submissions - Create
@@ -600,7 +602,7 @@ class ThreatZone:
         page: int | None = None,
         limit: int | None = None,
         scope: SubmissionSearchScope | None = None,
-    ) -> list[Submission]:
+    ) -> TotalCountList[Submission]:
         """
         Search submissions by SHA256 hash.
 
@@ -622,7 +624,9 @@ class ThreatZone:
 
         Returns:
             List of matching submissions on the requested page. The rows do
-            not have the detail-only fields.
+            not have the detail-only fields. ``total_count`` is the number of
+            matching submissions on all pages (the ``X-Total-Count`` header),
+            or ``None`` when the server does not send it.
 
         Raises:
             BadRequestError: When the hash, ``page``, ``limit`` or ``scope`` is
@@ -640,7 +644,11 @@ class ThreatZone:
             f"/submissions/search/sha256/{sha256}",
             params=params if params else None,
         )
-        return [Submission.model_validate(item) for item in response.json()]
+        items, total = list_page(response)
+        return TotalCountList(
+            (Submission.model_validate(item) for item in items),
+            total_count=total,
+        )
 
     def wait_for_completion(
         self,
@@ -885,7 +893,7 @@ class ThreatZone:
             One ``EmlAnalysis`` per .eml artifact extracted from the submission.
         """
         response = self._http.get(f"/submissions/{uuid}/eml-analysis")
-        return [EmlAnalysis.model_validate(item) for item in response.json()]
+        return [EmlAnalysis.model_validate(item) for item in list_page(response)[0]]
 
     def get_mitre_techniques(self, uuid: str) -> MitreResponse:
         """
@@ -2023,9 +2031,10 @@ class ThreatZone:
             f"/submissions/{uuid}/network/dns",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (DnsQuery.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (DnsQuery.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_http_requests(
@@ -2069,9 +2078,10 @@ class ThreatZone:
             f"/submissions/{uuid}/network/http",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (HttpRequest.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (HttpRequest.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_tcp_connections(
@@ -2111,9 +2121,10 @@ class ThreatZone:
             f"/submissions/{uuid}/network/tcp",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (Connection.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (Connection.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_udp_connections(
@@ -2153,9 +2164,10 @@ class ThreatZone:
             f"/submissions/{uuid}/network/udp",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (Connection.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (Connection.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_network_threats(
@@ -2195,9 +2207,10 @@ class ThreatZone:
             f"/submissions/{uuid}/network/threats",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (NetworkThreat.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (NetworkThreat.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_network_exfil_requests(
@@ -2206,6 +2219,7 @@ class ThreatZone:
         *,
         limit: int | None = None,
         skip: int | None = None,
+        attribution: Sequence[str] | None = None,
     ) -> TotalCountList[NetworkExfilRequest]:
         """
         Get chat bot and webhook requests read from the decrypted HTTPS capture.
@@ -2219,6 +2233,9 @@ class ThreatZone:
             uuid: Submission UUID.
             limit: Maximum number of items to return (1-1000).
             skip: Number of items to skip.
+            attribution: Row sources to return: "sample", "sample_child",
+                "sensor_only", "windows_background". When unset, the server
+                returns every row except "windows_background".
 
         Returns:
             Chat bot and webhook requests, in the order of the first request.
@@ -2231,14 +2248,17 @@ class ThreatZone:
             params["limit"] = limit
         if skip is not None:
             params["skip"] = skip
+        if attribution is not None:
+            params["attribution"] = ",".join(attribution)
 
         response = self._http.get(
             f"/submissions/{uuid}/network/exfil-requests",
             params=params if params else None,
         )
+        items, total = list_page(response)
         return TotalCountList(
-            (NetworkExfilRequest.model_validate(item) for item in response.json()),
-            total_count=_total_count(response),
+            (NetworkExfilRequest.model_validate(item) for item in items),
+            total_count=total,
         )
 
     def get_http_request_packets(self, uuid: str, request_id: str) -> NetworkHttpPackets:
@@ -2800,7 +2820,7 @@ class ThreatZone:
             "video", "screenshot", or None.
         """
         response = self._http.get(f"/submissions/{uuid}/media", params={"source": source})
-        return [MediaFile.model_validate(item) for item in response.json()]
+        return [MediaFile.model_validate(item) for item in list_page(response)[0]]
 
     def get_media_file(self, uuid: str, file_id: str, *, source: str | None = None) -> bytes:
         """

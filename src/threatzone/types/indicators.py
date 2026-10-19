@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import ListEnvelopeFields
 from .network import NetworkAvailability, NetworkSourceScope
 
 IndicatorLevel = Literal["malicious", "suspicious", "benign"] | str
@@ -126,7 +127,7 @@ class Indicator(BaseModel):
     dynamic_indicator_id: str | None = Field(default=None, alias="dynamicIndicatorId")
 
 
-class IndicatorsResponse(BaseModel):
+class IndicatorsResponse(ListEnvelopeFields):
     """Paginated indicator list with severity rollup."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -171,7 +172,7 @@ class IoC(BaseModel):
     """Type text as the extractor stored it, before the API maps it to ``type``."""
 
 
-class IoCsResponse(BaseModel):
+class IoCsResponse(ListEnvelopeFields):
     """Paginated IoC list."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -196,7 +197,7 @@ class YaraRule(BaseModel):
     artifacts: list[str]
 
 
-class YaraRulesResponse(BaseModel):
+class YaraRulesResponse(ListEnvelopeFields):
     """Paginated YARA rule matches."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -220,7 +221,7 @@ class ExtractedConfig(BaseModel):
     artifacts: list[str]
 
 
-class ExtractedConfigsResponse(BaseModel):
+class ExtractedConfigsResponse(ListEnvelopeFields):
     """Paginated extracted configurations."""
 
     model_config = ConfigDict(populate_by_name=True)
@@ -306,7 +307,7 @@ class Artifact(BaseModel):
     """Path of the artifact download route. The route needs the ``downloadSample`` permission."""
 
 
-class ArtifactsResponse(BaseModel):
+class ArtifactsResponse(ListEnvelopeFields):
     """Paginated artifact list."""
 
     model_config = ConfigDict(populate_by_name=True)

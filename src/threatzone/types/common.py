@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +29,34 @@ TagOrigin = (
 TagAuthor = Literal["system", "user"] | str
 MetafieldValue = bool | int | float | str
 """A stored analysis option value with its type."""
+
+
+_RowT = TypeVar("_RowT")
+
+
+class ListEnvelopeFields(BaseModel):
+    """Paging fields that a list route adds when the request has ``envelope=1``.
+
+    Create the client with ``list_envelope=True`` to send it. Both fields are ``None``
+    without the envelope and on older servers.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    page_size: int | None = Field(default=None, alias="pageSize")
+    """Page size of the request."""
+    next: str | None = None
+    """Path and query of the next page, or ``None`` on the last page."""
+
+
+class ListEnvelope(ListEnvelopeFields, Generic[_RowT]):
+    """The shared list envelope ``{items, total, page, pageSize, next}`` of ``envelope=1``."""
+
+    items: list[_RowT]
+    total: int
+    """Rows that match the request on all pages."""
+    page: int
+    """1-based page number."""
 
 
 class Message(BaseModel):
