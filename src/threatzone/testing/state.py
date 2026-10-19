@@ -90,6 +90,22 @@ class SubmissionState:
     session_device_preset_name: str | None = None
     session_network_config_id: str | None = None
     session_duration_seconds: int | None = None
+    pdf_report_ready: bool = False
+    score_breakdown: dict[str, Any] | None = None
+    filename_history: list[str] = field(default_factory=list)
+    report_metafields: dict[str, dict[str, str]] = field(default_factory=dict)
+    ai_report_reason: str = "finalized"
+    ai_report_queued: bool = False
+    behaviour_index_ready: bool = True
+    download_report_allowed: bool = True
+    https_pcap_available: bool = True
+    stix_report_allowed: bool = True
+    dropped_files: list[tuple[str, str | None]] = field(
+        default_factory=lambda: [("C:\\Users\\test\\dropped.exe", f"{0:064x}")]
+    )
+    annotation_pins: list[dict[str, Any]] = field(default_factory=list)
+    annotation_note: dict[str, Any] | None = None
+    artifact_yara_rules_started: set[str] = field(default_factory=set)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

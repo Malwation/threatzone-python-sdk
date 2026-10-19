@@ -6,11 +6,34 @@ Mirrors the `url-analysis.response.dto.ts` DTO in the Threat.Zone Public API.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .common import ReportStatusValue, ThreatLevel
+
+UrlAnalysisNetworkConfigSource = Literal["submit", "admin-default"] | str
+UrlScoreIndicatorsState = Literal["available", "pending", "unavailable"] | str
+UrlScoreExplanationUnavailableReason = Literal["legacy", "size_limit", "scoring_error"] | str
+UrlScoreEvidenceKind = Literal["network", "finding", "intel", "report"] | str
+UrlScoreIndicatorAvailability = Literal["measured", "not_measured", "unavailable"] | str
+UrlScoreIndicatorConfidence = Literal["high", "heuristic"] | str
+UrlScoreIndicatorDisposition = (
+    Literal[
+        "contributing",
+        "informational",
+        "suppressed",
+        "no_match",
+        "not_measured",
+        "unavailable",
+    ]
+    | str
+)
+UrlScoreVerdict = Literal["unknown", "benign", "suspicious", "malicious"] | str
+UrlScorePass = Literal["submit", "final"] | str
+UrlScoreCreditScope = Literal["heuristic", "all"] | str
+UrlScoreEvidenceState = Literal["available", "unavailable"] | str
+UrlAnalysisBrowserSectionName = Literal["overview", "findings", "tls", "network-summary"]
 
 
 class UrlAnalysisThreatStatus(BaseModel):
@@ -141,7 +164,7 @@ class UrlAnalysisPrivacyFactor(BaseModel):
 
     factor: str
     label: str
-    delta: int
+    delta: float
     detail: str | None = None
 
 
@@ -197,6 +220,10 @@ class UrlAnalysisSessionConfig(BaseModel):
 
     device_profile_id: str | None = Field(default=None, alias="deviceProfileId")
     network_config_id: str | None = Field(default=None, alias="networkConfigId")
+    network_config_source: UrlAnalysisNetworkConfigSource | None = Field(
+        default=None, alias="networkConfigSource"
+    )
+    network_config_name: str | None = Field(default=None, alias="networkConfigName")
     session_duration_seconds: int | None = Field(default=None, alias="sessionDurationSeconds")
     device_preset_id: str | None = Field(default=None, alias="devicePresetId")
     device_preset_name: str | None = Field(default=None, alias="devicePresetName")
@@ -232,6 +259,7 @@ class UrlAnalysisResponse(BaseModel):
 
     level: ThreatLevel
     status: ReportStatusValue
+    job_id: str | None = Field(default=None, alias="jobId")
     general_info: UrlAnalysisGeneralInfo = Field(alias="generalInfo")
     screenshot: UrlAnalysisScreenshot
     ip_info: UrlAnalysisIpInfo | None = Field(default=None, alias="ipInfo")
@@ -243,9 +271,9 @@ class UrlAnalysisResponse(BaseModel):
     extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
     threat_analysis: UrlAnalysisThreatAnalysis | None = Field(default=None, alias="threatAnalysis")
     pages: list[str]
-    threat_score: int | None = Field(default=None, alias="threatScore")
+    threat_score: float | None = Field(default=None, alias="threatScore")
     risk_level: str | None = Field(default=None, alias="riskLevel")
-    privacy_score: int | None = Field(default=None, alias="privacyScore")
+    privacy_score: float | None = Field(default=None, alias="privacyScore")
     privacy_risk_level: str | None = Field(default=None, alias="privacyRiskLevel")
     privacy_breakdown: list[UrlAnalysisPrivacyFactor] | None = Field(
         default=None, alias="privacyBreakdown"
@@ -262,3 +290,145 @@ class UrlAnalysisResponse(BaseModel):
     )
     metafields: dict[str, Any] | None = None
     scored_at: datetime | None = Field(default=None, alias="scoredAt")
+
+
+class UrlScoreBrowserSnapshot(BaseModel):
+    """Browser snapshot that the URL score used."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="jobId")
+    manifest_hash: str = Field(alias="manifestHash")
+
+
+class UrlScoreEvidenceRef(BaseModel):
+    """Reference to one evidence item of a score indicator."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    kind: UrlScoreEvidenceKind
+    id: str
+    available: bool
+
+
+class UrlScoreIndicator(BaseModel):
+    """One indicator of the URL score explanation.
+
+    ``title`` and ``reason`` are display text and can change between scoring
+    versions. Use ``id`` and ``rule_id`` in automation.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    rule_id: str = Field(alias="ruleId")
+    source: str | None = None
+    family: str | None = None
+    title: str
+    reason: str | None = None
+    availability: UrlScoreIndicatorAvailability
+    confidence: UrlScoreIndicatorConfidence
+    original_rule_score: float = Field(alias="originalRuleScore")
+    weighted_points: float = Field(alias="weightedPoints")
+    disposition: UrlScoreIndicatorDisposition
+    suppressed_by: str | None = Field(default=None, alias="suppressedBy")
+    evidence_refs: list[UrlScoreEvidenceRef] = Field(default_factory=list, alias="evidenceRefs")
+
+
+class UrlScoreReputationCredit(BaseModel):
+    """A reputation credit that can reduce the URL score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    rule_id: str = Field(alias="ruleId")
+    eligible: bool
+    nominal_points: float = Field(alias="nominalPoints")
+    reason: str
+
+
+class UrlScoreAggregation(BaseModel):
+    """How the indicator points add up to the URL threat score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    high_points: float = Field(alias="highPoints")
+    heuristic_points: float = Field(alias="heuristicPoints")
+    reputation_credits: list[UrlScoreReputationCredit] = Field(
+        default_factory=list, alias="reputationCredits"
+    )
+    credit_scope: UrlScoreCreditScope = Field(alias="creditScope")
+    effective_credit: float = Field(alias="effectiveCredit")
+    score_before_clamp: float = Field(alias="scoreBeforeClamp")
+    score_after_clamp: float = Field(alias="scoreAfterClamp")
+    rounding_adjustment: float = Field(alias="roundingAdjustment")
+    impersonation_floor_adjustment: float = Field(alias="impersonationFloorAdjustment")
+
+
+class UrlScoreVerdictAdjustment(BaseModel):
+    """A rule that changed the URL verdict after scoring."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    rule_id: str = Field(alias="ruleId")
+    from_: UrlScoreVerdict = Field(alias="from")
+    to: UrlScoreVerdict
+    reason: str
+
+
+class UrlScoreExplanation(BaseModel):
+    """Stored explanation of the URL threat score of one scoring pass."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_version: int = Field(alias="schemaVersion")
+    scoring_version: str = Field(alias="scoringVersion")
+    job_id: str = Field(alias="jobId")
+    pass_: UrlScorePass = Field(alias="pass")
+    # The evidence route compares this text exactly, so the SDK keeps the server text.
+    scored_at: str = Field(alias="scoredAt")
+    browser_snapshot: UrlScoreBrowserSnapshot | None = Field(default=None, alias="browserSnapshot")
+    threat_score: float = Field(alias="threatScore")
+    verdict: UrlScoreVerdict
+    indicators: list[UrlScoreIndicator] = Field(default_factory=list)
+    aggregation: UrlScoreAggregation
+    verdict_adjustments: list[UrlScoreVerdictAdjustment] = Field(
+        default_factory=list, alias="verdictAdjustments"
+    )
+
+
+class UrlAnalysisIndicators(BaseModel):
+    """Response of ``GET /submissions/{uuid}/url-analysis/indicators``."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: UrlScoreIndicatorsState
+    unavailable_reason: UrlScoreExplanationUnavailableReason | None = Field(
+        default=None, alias="unavailableReason"
+    )
+    snapshot: UrlScoreExplanation | None = None
+
+
+class UrlAnalysisIndicatorEvidence(BaseModel):
+    """One evidence item of a URL score indicator.
+
+    ``text`` is pretty-printed JSON of 8192 characters or fewer.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: UrlScoreEvidenceState
+    text: str | None = None
+    truncated: bool = False
+
+
+class UrlAnalysisBrowserSection(BaseModel):
+    """One approved section of the browser snapshot of the current URL run."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    section: UrlAnalysisBrowserSectionName | str
+    job_id: str = Field(alias="jobId")
+    revision: str
+    updated_at: int | None = Field(default=None, alias="updatedAt")
+    # Free-form: the section data follows the report page and can add fields.
+    data: dict[str, Any] = Field(default_factory=dict)

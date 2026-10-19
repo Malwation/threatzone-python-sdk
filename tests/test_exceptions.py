@@ -10,10 +10,14 @@ from threatzone._exceptions import (
     APIError,
     AuthenticationError,
     BadRequestError,
+    BehaviourIndexingError,
+    BehaviourTooLargeError,
+    BehaviourUnreadableError,
     InternalServerError,
     NotFoundError,
     PaymentRequiredError,
     PermissionDeniedError,
+    QuotaUnavailableError,
     RateLimitError,
     ReportUnavailableError,
     ThreatZoneError,
@@ -132,6 +136,26 @@ class TestRaiseForStatus:
         with pytest.raises(InternalServerError) as exc_info:
             raise_for_status(response)
         assert exc_info.value.status_code == 500
+
+    def test_500_body_without_error_field_keeps_the_body_message(self):
+        body = {
+            "statusCode": 500,
+            "message": "An internal error occurred. Reference the requestId for support "
+            "correlation.",
+            "code": "INTERNAL_ERROR",
+            "details": {"requestId": "req-1"},
+        }
+        response = httpx.Response(500, json=body)
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.message == body["message"]
+        assert exc_info.value.body == body
+
+    def test_500_body_without_message_falls_back_to_the_reason_phrase(self):
+        response = httpx.Response(500, json={"statusCode": 500, "code": "INTERNAL_ERROR"})
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.message == "Internal Server Error"
 
     def test_502_raises_internal_server_error(self):
         response = httpx.Response(502, json={"message": "Bad gateway"})
@@ -353,3 +377,167 @@ class TestReportUnavailableError:
         assert err.status_code == 409
         assert err.code is None
         assert err.required_report is None
+
+
+class TestBehaviourErrors:
+    """Typed errors of the behaviour routes and the heavy-route limit."""
+
+    def test_409_behaviour_indexing_raises_behaviour_indexing_error(self):
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "The behaviour index of this submission is not ready.",
+            "code": "BEHAVIOUR_INDEXING",
+            "details": {"retryAfterSeconds": 60},
+        }
+        with pytest.raises(BehaviourIndexingError) as exc_info:
+            raise_for_status(httpx.Response(409, json=body))
+        err = exc_info.value
+        assert isinstance(err, ReportUnavailableError)
+        assert err.code == "BEHAVIOUR_INDEXING"
+        assert err.retry_after == 60.0
+        assert "retry_after=60.0s" in str(err)
+
+    def test_409_behaviour_indexing_without_details(self):
+        body = {"statusCode": 409, "message": "not ready", "code": "BEHAVIOUR_INDEXING"}
+        with pytest.raises(BehaviourIndexingError) as exc_info:
+            raise_for_status(httpx.Response(409, json=body))
+        assert exc_info.value.retry_after is None
+
+    def test_409_other_code_keeps_report_unavailable_error(self):
+        body = {"statusCode": 409, "message": "no", "code": "DYNAMIC_REPORT_UNAVAILABLE"}
+        with pytest.raises(ReportUnavailableError) as exc_info:
+            raise_for_status(httpx.Response(409, json=body))
+        assert not isinstance(exc_info.value, BehaviourIndexingError)
+
+    def test_413_behaviour_too_large_raises_typed_error(self):
+        body = {
+            "statusCode": 413,
+            "error": "Payload Too Large",
+            "message": "The behaviour file is 98566144 bytes.",
+            "code": "BEHAVIOUR_TOO_LARGE",
+            "details": {
+                "sizeBytes": 98566144,
+                "maxBytes": 67108864,
+                "downloadRoute": "GET /public-api/submissions/abc/download/behaviour",
+            },
+        }
+        with pytest.raises(BehaviourTooLargeError) as exc_info:
+            raise_for_status(httpx.Response(413, json=body))
+        err = exc_info.value
+        assert err.status_code == 413
+        assert err.code == "BEHAVIOUR_TOO_LARGE"
+        assert err.size_bytes == 98566144
+        assert err.max_bytes == 67108864
+        assert err.download_route == "GET /public-api/submissions/abc/download/behaviour"
+
+    def test_413_without_behaviour_code_raises_api_error(self):
+        with pytest.raises(APIError) as exc_info:
+            raise_for_status(httpx.Response(413, json={"message": "too large"}))
+        assert not isinstance(exc_info.value, BehaviourTooLargeError)
+
+    def test_502_behaviour_unreadable_raises_typed_error(self):
+        body = {
+            "statusCode": 502,
+            "error": "Bad Gateway",
+            "message": "The stored behaviour file is not a valid JSON array of events.",
+            "code": "BEHAVIOUR_UNREADABLE",
+        }
+        with pytest.raises(BehaviourUnreadableError) as exc_info:
+            raise_for_status(httpx.Response(502, json=body))
+        err = exc_info.value
+        assert isinstance(err, InternalServerError)
+        assert err.code == "BEHAVIOUR_UNREADABLE"
+        assert err.status_code == 502
+
+    def test_429_reads_retry_after_from_the_header(self):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Heavy route rate limit exceeded"},
+            headers={"Retry-After": "17"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after == 17.0
+
+    def test_429_reads_retry_after_from_the_body_without_the_header(self):
+        response = httpx.Response(
+            429,
+            json={
+                "statusCode": 429,
+                "message": "Heavy route rate limit exceeded",
+                "retryAfter": 23,
+            },
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after == 23.0
+
+    @pytest.mark.parametrize(
+        "code", ["RATE_LIMIT_EXCEEDED", "SUBMISSION_LIMIT_EXCEEDED", "AI_REPORT_QUOTA_EXCEEDED"]
+    )
+    def test_429_carries_the_code(self, code: str):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many", "code": code, "retryAfter": 60},
+            headers={"Retry-After": "60"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.code == code
+        assert exc_info.value.retry_after == 60.0
+
+    def test_429_without_a_code_from_an_older_server(self):
+        response = httpx.Response(429, json={"statusCode": 429, "message": "Too many"})
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.code is None
+        assert exc_info.value.retry_after is None
+
+    def test_429_with_an_http_date_header_reads_the_body(self):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many", "retryAfter": 31},
+            headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after == 31.0
+
+    def test_429_with_an_http_date_header_and_no_body_field(self):
+        response = httpx.Response(
+            429,
+            json={"statusCode": 429, "message": "Too many"},
+            headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        )
+        with pytest.raises(RateLimitError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.retry_after is None
+
+    def test_503_quota_unavailable_raises_typed_error(self):
+        response = httpx.Response(
+            503,
+            json={
+                "statusCode": 503,
+                "error": "Service Unavailable",
+                "message": "Submission quota cannot be checked right now. Retry shortly.",
+                "code": "QUOTA_UNAVAILABLE",
+                "retryAfter": 30,
+            },
+            headers={"Retry-After": "30"},
+        )
+        with pytest.raises(QuotaUnavailableError) as exc_info:
+            raise_for_status(response)
+        err = exc_info.value
+        assert isinstance(err, InternalServerError)
+        assert (err.status_code, err.code, err.retry_after) == (503, "QUOTA_UNAVAILABLE", 30.0)
+        assert "retry_after=30.0s" in str(err)
+
+    def test_503_with_another_code_stays_internal_server_error(self):
+        response = httpx.Response(
+            503,
+            json={"statusCode": 503, "message": "down", "code": "STORAGE_UNAVAILABLE"},
+        )
+        with pytest.raises(InternalServerError) as exc_info:
+            raise_for_status(response)
+        assert not isinstance(exc_info.value, QuotaUnavailableError)

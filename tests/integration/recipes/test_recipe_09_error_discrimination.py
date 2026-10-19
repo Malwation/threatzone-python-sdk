@@ -11,7 +11,6 @@ import pytest
 from threatzone import (
     BadRequestError,
     NotFoundError,
-    PermissionDeniedError,
     ReportUnavailableError,
     ThreatZone,
 )
@@ -43,16 +42,16 @@ def test_unknown_submission_is_404(fake_api: FakeThreatZoneAPI, sync_client: Thr
         sync_client.get_submission("00000000-0000-0000-0000-000000000000")
 
 
-def test_private_cross_workspace_is_403(
+def test_private_cross_workspace_is_404(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
 ) -> None:
-    """A private submission in another workspace is 403/``SUBMISSION_PRIVATE``."""
+    """A private submission in another workspace is 404/``NOT_FOUND``, as a missing one is."""
     scenarios.seed_private_cross_workspace(fake_api)
     created = sync_client.create_sandbox_submission(b"PE")
 
-    with pytest.raises(PermissionDeniedError) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         sync_client.get_submission(created.uuid)
-    assert (exc_info.value.body or {}).get("code") == "SUBMISSION_PRIVATE"
+    assert (exc_info.value.body or {}).get("code") == "NOT_FOUND"
 
 
 def test_bad_query_param_is_400(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:

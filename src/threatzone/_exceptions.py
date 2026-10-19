@@ -61,7 +61,14 @@ class RateLimitError(APIError):
     """Raised when rate limit is exceeded (HTTP 429).
 
     Attributes:
-        retry_after: Seconds until the rate limit resets (from Retry-After header).
+        code: The machine-readable error code from the response envelope:
+            ``RATE_LIMIT_EXCEEDED`` for the heavy-route limit and the monthly API request
+            limit, ``SUBMISSION_LIMIT_EXCEEDED`` for the daily and concurrent submission
+            limits, or ``AI_REPORT_QUOTA_EXCEEDED`` for the daily AI report quota. ``None``
+            when an older server omits the code.
+        retry_after: Seconds until the rate limit resets. The SDK reads the
+            ``Retry-After`` header, and the ``retryAfter`` body field when the header is
+            absent or is not a number.
     """
 
     def __init__(
@@ -72,8 +79,10 @@ class RateLimitError(APIError):
         response: httpx.Response | None = None,
         body: dict[str, Any] | None = None,
         retry_after: float | None = None,
+        code: str | None = None,
     ) -> None:
         self.retry_after = retry_after
+        self.code = code
         super().__init__(message, status_code=status_code, response=response, body=body)
 
     def __str__(self) -> str:
@@ -130,8 +139,102 @@ class ReportUnavailableError(APIError):
         return base
 
 
+class BehaviourIndexingError(ReportUnavailableError):
+    """Raised when the behaviour index of a submission is not ready (HTTP 409).
+
+    The routes that read the behaviour index raise it with the code
+    ``BEHAVIOUR_INDEXING``: ``get_behaviours()`` with an index parameter,
+    ``get_behaviour_summary()`` and ``get_behaviour_facets()``. The public API
+    never builds the index. The index is built when the Behaviour view of the
+    report is opened. Retry after ``retry_after`` seconds, or call
+    ``get_behaviours()`` without the index parameters.
+
+    Attributes:
+        retry_after: Seconds to wait before a retry (``details.retryAfterSeconds``).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 409,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "BEHAVIOUR_INDEXING",
+        retry_after: float | None = None,
+    ) -> None:
+        self.retry_after = retry_after
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
+class BehaviourTooLargeError(APIError):
+    """Raised when behaviour data is too large for the route (HTTP 413).
+
+    Maps the code ``BEHAVIOUR_TOO_LARGE``. The behaviour file is above the
+    read limit of ``get_behaviours()``, or an index filter needs a scan above
+    that limit. Narrow the filter, or call ``download_behaviour()``.
+
+    Attributes:
+        code: The machine-readable error code from the response envelope.
+        size_bytes: The size of the file, or of the row scan, in bytes.
+        max_bytes: The read limit of the route in bytes.
+        download_route: The raw download route that the server names.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 413,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "BEHAVIOUR_TOO_LARGE",
+        size_bytes: int | None = None,
+        max_bytes: int | None = None,
+        download_route: str | None = None,
+    ) -> None:
+        self.code = code
+        self.size_bytes = size_bytes
+        self.max_bytes = max_bytes
+        self.download_route = download_route
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+
 class YaraRulePendingError(APIError):
     """Raised when YARA rule generation is still in progress (HTTP 202)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 202,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        retry_after: float | None = None,
+    ) -> None:
+        self.retry_after = retry_after
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
+class PdfReportPendingError(APIError):
+    """Raised when the PDF report is not ready (HTTP 202).
+
+    ``download_pdf_report(wait=False)`` raises it when the server answers 202.
+    ``download_pdf_report(wait=True)`` raises it when the report is not ready
+    before the timeout.
+    """
 
     def __init__(
         self,
@@ -156,6 +259,63 @@ class InternalServerError(APIError):
     """Raised when a server error occurs (HTTP 5xx)."""
 
 
+class QuotaUnavailableError(InternalServerError):
+    """Raised when the server cannot check the submission quota (HTTP 503).
+
+    Maps the code ``QUOTA_UNAVAILABLE``. The create routes and
+    ``restart_url_analysis()`` raise it. The server did not create a submission. Retry
+    after ``retry_after`` seconds.
+
+    Attributes:
+        code: The machine-readable error code from the response envelope.
+        retry_after: Seconds to wait before a retry. The SDK reads the ``Retry-After``
+            header, and the ``retryAfter`` body field when the header is absent or is
+            not a number.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 503,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "QUOTA_UNAVAILABLE",
+        retry_after: float | None = None,
+    ) -> None:
+        self.code = code
+        self.retry_after = retry_after
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
+class BehaviourUnreadableError(InternalServerError):
+    """Raised when the stored behaviour file is not a valid JSON array (HTTP 502).
+
+    Maps the code ``BEHAVIOUR_UNREADABLE``.
+
+    Attributes:
+        code: The machine-readable error code from the response envelope.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 502,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "BEHAVIOUR_UNREADABLE",
+    ) -> None:
+        self.code = code
+        super().__init__(message, status_code=status_code, response=response, body=body)
+
+
 class TimeoutError(ThreatZoneError):
     """Raised when a request times out."""
 
@@ -171,6 +331,44 @@ class AnalysisTimeoutError(ThreatZoneError):
         self.uuid = uuid
         self.elapsed = elapsed
         super().__init__(message)
+
+
+def _body_code(body: dict[str, Any] | None) -> str | None:
+    code = body.get("code") if body is not None else None
+    return code if isinstance(code, str) else None
+
+
+def _details(body: dict[str, Any] | None) -> dict[str, Any]:
+    details = body.get("details") if body is not None else None
+    return details if isinstance(details, dict) else {}
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _body_number(body: dict[str, Any] | None, key: str) -> float | None:
+    return _as_number(body.get(key)) if body is not None else None
+
+
+def _detail_number(body: dict[str, Any] | None, key: str) -> float | None:
+    return _as_number(_details(body).get(key))
+
+
+def _header_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _retry_after(response: httpx.Response, body: dict[str, Any] | None) -> float | None:
+    seconds = _header_seconds(response.headers.get("retry-after"))
+    return seconds if seconds is not None else _body_number(body, "retryAfter")
 
 
 def raise_for_status(response: httpx.Response) -> None:
@@ -230,6 +428,15 @@ def raise_for_status(response: httpx.Response) -> None:
                 raw_available = details.get("availableReports")
                 if isinstance(raw_available, list):
                     available_reports = [item for item in raw_available if isinstance(item, str)]
+        if code == "BEHAVIOUR_INDEXING":
+            raise BehaviourIndexingError(
+                message,
+                status_code=status_code,
+                response=response,
+                body=body,
+                code=code,
+                retry_after=_detail_number(body, "retryAfterSeconds"),
+            )
         raise ReportUnavailableError(
             message,
             status_code=status_code,
@@ -241,14 +448,39 @@ def raise_for_status(response: httpx.Response) -> None:
             current_status=current_status,
             available_reports=available_reports,
         )
+    elif status_code == 413 and _body_code(body) == "BEHAVIOUR_TOO_LARGE":
+        size_bytes = _detail_number(body, "sizeBytes")
+        max_bytes = _detail_number(body, "maxBytes")
+        download_route = _details(body).get("downloadRoute")
+        raise BehaviourTooLargeError(
+            message,
+            status_code=status_code,
+            response=response,
+            body=body,
+            size_bytes=int(size_bytes) if size_bytes is not None else None,
+            max_bytes=int(max_bytes) if max_bytes is not None else None,
+            download_route=download_route if isinstance(download_route, str) else None,
+        )
     elif status_code == 429:
-        retry_after = response.headers.get("retry-after")
         raise RateLimitError(
             message,
             status_code=status_code,
             response=response,
             body=body,
-            retry_after=float(retry_after) if retry_after else None,
+            retry_after=_retry_after(response, body),
+            code=_body_code(body),
+        )
+    elif status_code == 503 and _body_code(body) == "QUOTA_UNAVAILABLE":
+        raise QuotaUnavailableError(
+            message,
+            status_code=status_code,
+            response=response,
+            body=body,
+            retry_after=_retry_after(response, body),
+        )
+    elif status_code == 502 and _body_code(body) == "BEHAVIOUR_UNREADABLE":
+        raise BehaviourUnreadableError(
+            message, status_code=status_code, response=response, body=body
         )
     elif status_code >= 500:
         raise InternalServerError(message, status_code=status_code, response=response, body=body)
