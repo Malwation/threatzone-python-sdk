@@ -1297,6 +1297,7 @@ class TestDynamicReport:
         params = _call_params(mock)
         assert "os" not in params
 
+    @pytest.mark.filterwarnings("ignore:get_behaviours:DeprecationWarning")
     def test_get_behaviours_with_filters(
         self, api_key: str, sample_behaviours_response: dict[str, Any]
     ) -> None:
@@ -1316,6 +1317,7 @@ class TestDynamicReport:
         assert params["page"] == 2
         assert params["limit"] == 50
 
+    @pytest.mark.filterwarnings("ignore:get_behaviours:DeprecationWarning")
     def test_get_behaviours_sends_type_and_process_name(
         self, api_key: str, sample_behaviours_response: dict[str, Any]
     ) -> None:

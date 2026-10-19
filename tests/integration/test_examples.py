@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
+import pytest
+
 from examples import (
     recipe_01_submit_and_wait,
     recipe_02_url_analysis,
@@ -179,3 +182,28 @@ def test_recipe_12_mitre_cross_reference(
     assert "indicator_attack_codes" in result
     assert "intersection" in result
     assert "T1055" in result["intersection"]
+
+
+@pytest.mark.parametrize(
+    ("status", "code", "expected"),
+    [
+        (402, "WORKSPACE_INACTIVE", "WORKSPACE_INACTIVE:WORKSPACE_INACTIVE"),
+        (403, "PLAN_API_ACCESS_DENIED", "PERMISSION_DENIED:PLAN_API_ACCESS_DENIED"),
+        (400, "INVALID_QUERY_PARAM", "BAD_REQUEST:INVALID_QUERY_PARAM"),
+    ],
+)
+def test_recipe_09_reads_the_current_codes(status: int, code: str, expected: str) -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status, json={"statusCode": status, "message": "Refused", "code": code}
+        )
+
+    client = ThreatZone(
+        api_key="test-key",
+        base_url="https://fake.threat.zone/public-api",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    assert (
+        recipe_09_discriminate_errors_by_code.main(client, "00000000-0000-4000-8000-000000000001")
+        == expected
+    )

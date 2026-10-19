@@ -2,8 +2,27 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+_SINGULAR_BEHAVIOUR_FILTERS = (
+    ("type", "types"),
+    ("pid", "pids"),
+    ("operation", "operations"),
+    ("process_name", "process_name_contains"),
+)
+
+
+def warn_singular_behaviour_filters(**filters: object) -> None:
+    """Warn once for each deprecated singular filter of ``get_behaviours()`` that is set."""
+    for name, replacement in _SINGULAR_BEHAVIOUR_FILTERS:
+        if filters.get(name) is not None:
+            warnings.warn(
+                f"get_behaviours({name}=...) is deprecated. Use {replacement}=... instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
 
 
 def _join(name: str, values: Sequence[int | str] | None) -> str | None:

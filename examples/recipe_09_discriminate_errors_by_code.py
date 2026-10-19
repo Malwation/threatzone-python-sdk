@@ -21,6 +21,7 @@ from threatzone import (
     AuthenticationError,
     BadRequestError,
     NotFoundError,
+    PaymentRequiredError,
     PermissionDeniedError,
     RateLimitError,
     ReportUnavailableError,
@@ -34,15 +35,15 @@ def main(client: ThreatZone, submission_uuid: str) -> str:
         response = client.get_indicators(submission_uuid)
     except AuthenticationError:
         return "AUTHENTICATION_ERROR"
+    except PaymentRequiredError as exc:
+        return f"WORKSPACE_INACTIVE:{exc.code or 'unknown'}"
     except PermissionDeniedError as exc:
-        code = (exc.body or {}).get("code") if exc.body else None
-        return f"PERMISSION_DENIED:{code or 'unknown'}"
+        return f"PERMISSION_DENIED:{exc.code or 'unknown'}"
     except NotFoundError:
         # A private submission of another workspace also arrives here, not at PermissionDeniedError.
         return "NOT_FOUND"
     except BadRequestError as exc:
-        code = (exc.body or {}).get("code") if exc.body else None
-        return f"BAD_REQUEST:{code or 'unknown'}"
+        return f"BAD_REQUEST:{exc.code or 'unknown'}"
     except ReportUnavailableError as exc:
         return f"REPORT_UNAVAILABLE:{exc.code or 'unknown'}"
     except RateLimitError as exc:

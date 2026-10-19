@@ -52,6 +52,7 @@ def test_processes_and_tree(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
     assert isinstance(tree, ProcessTreeResponse)
 
 
+@pytest.mark.filterwarnings("ignore:get_behaviours:DeprecationWarning")
 def test_behaviours_without_os_parameter(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
 ) -> None:
