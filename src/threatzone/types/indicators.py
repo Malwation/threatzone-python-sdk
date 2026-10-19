@@ -79,6 +79,10 @@ class Indicator(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
+    source: str | None = None
+    """Engine of the row: ``dynamic_scan`` for every dynamic row, else the engine of an overview
+    row (for example ``static_scan`` or ``yara_scanner``). ``None`` when the row does not record
+    one and on older servers."""
     name: str
     description: str
     summary: str | None = None
@@ -88,8 +92,12 @@ class Indicator(BaseModel):
     level: IndicatorLevel
     score: float
     score_maximum: int | None = Field(default=None, alias="scoreMaximum")
+    """Deprecated: every score is on the 0-100 scale, so the value is always ``100``."""
     pids: list[int]
     attack_codes: list[str] = Field(alias="attackCodes")
+    attempted_attack_codes: list[str] | None = Field(default=None, alias="attemptedAttackCodes")
+    """Techniques of ``attack_codes`` that the row marks attempted: the evidence is a request
+    that the sandbox did not confirm. ``None`` when the row has none and on older servers."""
     event_ids: list[int] = Field(alias="eventIds")
     syscall_line_numbers: list[int] = Field(alias="syscallLineNumbers")
     author: IndicatorAuthor

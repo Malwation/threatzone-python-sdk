@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Public API fields of the 2026-10-19 release. Every new field is `None` when an older server
+  omits it:
+  - `Connection.connect_outcome` (`ConnectOutcome`: `established`, `no_response`, `refused`,
+    `not_captured`), `DnsQuery.answered`, and `timeshift_seconds` on `DnsQuery`, `Connection`
+    and `NetworkThreat`.
+  - `NetworkEndpoint.max_alert_severity_level` (`1` high to `4` info).
+  - `MitreResponse.attack_version` and `MitreResponse.domain` (`AttackDomain`),
+    `MitreTechniqueUsage.attempted`, `Indicator.attempted_attack_codes` and `Indicator.source`.
+  - `SubmissionListItem.url`, `ReportStatus.metafield_values` (`MetafieldValue`) and
+    `ReportStatus.execution_duration_seconds`.
+  - `PlanInfo.starts_at`, `PlanInfo.ends_at`, `ModuleInfo.starts_at`, `ModuleInfo.ends_at`
+    and `FileLimits.file_size_bytes`.
+  - `SyscallSearchResult.retry_after_seconds`.
+- `APIError.code` holds the error code of every HTTP error, for example `WORKSPACE_INACTIVE`
+  (402) or `PLAN_API_ACCESS_DENIED` (403). `BadRequestError.field` gives `details.field`.
+- `ServiceUnavailableError` (503, subclass of `InternalServerError`) with `retry_after`.
+  `QuotaUnavailableError` is now its subclass.
+- `BehaviourIndexBuildingError` for `503 BEHAVIOUR_INDEX_BUILDING`. It is a subclass of
+  `BehaviourIndexingError` and of `ServiceUnavailableError`.
+- `ApiErrorCode` adds `WORKSPACE_INACTIVE`, `PLAN_API_ACCESS_DENIED` and
+  `BEHAVIOUR_INDEX_BUILDING`. `DnsStatus` adds `UNKNOWN` and accepts any other string.
+
 - Network rows (`DnsQuery`, `HttpRequest`, `Connection`, `NetworkThreat`) add `attribution`,
   `attribution_reason`, `process_id` and `process_image` (new base model `NetworkRowSource`,
   new type `NetworkAttribution`). `DnsQuery` adds `status_text`. `NetworkSummary` adds
@@ -352,6 +374,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Every method above is mirrored on `AsyncThreatZone`.
 
 ### Changed
+
+- `retry_after` on `RateLimitError` and the `503` errors falls back to
+  `details.retryAfterSeconds` when the header and the `retryAfter` body field are absent.
+- The fake API (`threatzone.testing`) sends the new fields.
+- `ApiErrorCode` no longer lists `SAMPLE_INDEX_UNAVAILABLE` and `SAMPLE_INDEX_ERROR`. The API
+  never sent them.
 
 - `ReportStatus.score`, `Indicator.score`, `UrlAnalysisResponse.threat_score`,
   `UrlAnalysisResponse.privacy_score` and `UrlAnalysisPrivacyFactor.delta` change from `int`

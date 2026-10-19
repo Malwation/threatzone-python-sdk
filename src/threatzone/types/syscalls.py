@@ -60,3 +60,6 @@ class SyscallSearchResult(BaseModel):
     busy: bool
     """``True`` when the server runs too many searches and did not scan. Send the same request
     again later."""
+    retry_after_seconds: float | None = Field(default=None, alias="retryAfterSeconds")
+    """Seconds to wait before the same request when ``busy`` is ``True``. ``None`` on other
+    responses and on older servers."""

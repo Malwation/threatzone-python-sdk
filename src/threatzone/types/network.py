@@ -32,27 +32,40 @@ DnsRecordType = Literal[
     "CAA",
 ]
 
-DnsStatus = Literal[
-    "NOERROR",
-    "FORMERR",
-    "SERVFAIL",
-    "NXDOMAIN",
-    "NOTIMP",
-    "REFUSED",
-    "YXDOMAIN",
-    "YXRRSET",
-    "NXRRSET",
-    "NOTAUTH",
-    "NOTZONE",
-    "BADVERS",
-    "BADKEY",
-    "BADTIME",
-    "BADMODE",
-    "BADNAME",
-    "BADALG",
-    "BADTRUNC",
-    "TIMEOUT",
-]
+DnsStatus = (
+    Literal[
+        "NOERROR",
+        "FORMERR",
+        "SERVFAIL",
+        "NXDOMAIN",
+        "NOTIMP",
+        "REFUSED",
+        "YXDOMAIN",
+        "YXRRSET",
+        "NXRRSET",
+        "NOTAUTH",
+        "NOTZONE",
+        "BADVERS",
+        "BADKEY",
+        "BADTIME",
+        "BADMODE",
+        "BADNAME",
+        "BADALG",
+        "BADTRUNC",
+        "TIMEOUT",
+        "UNKNOWN",
+    ]
+    | str
+)
+"""DNS response status. ``TIMEOUT`` means that the query got no answer. ``UNKNOWN`` means that
+the sensor text is not a standard status; read ``status_text``."""
+
+ConnectOutcome = Literal["established", "no_response", "refused", "not_captured"] | str
+"""Outcome of a TCP or UDP connection attempt.
+
+``established``: the remote side answered. ``no_response``: nothing came back. ``refused``: the
+remote side reset the connection. ``not_captured``: the process monitor saw the connect, but the
+capture holds no flow for it, for example in a run without internet access."""
 
 ConnectionProtocol = Literal["tcp", "udp"]
 ThreatProtocol = Literal["TCP", "UDP"]
@@ -281,7 +294,12 @@ class DnsQuery(NetworkRowSource):
     status: DnsStatus
     status_text: str | None = Field(default=None, alias="statusText")
     records: list[str]
+    answered: bool | None = None
+    """``False`` when the query got no answer. ``None`` for rows of older reports and on older
+    servers."""
     timeshift: float
+    timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
+    """Seconds from the start of the capture. ``None`` when the server does not send it."""
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
@@ -340,7 +358,12 @@ class Connection(NetworkRowSource):
     """Capture packets of the flow."""
     packets_omitted: int | None = Field(default=None, alias="packetsOmitted")
     """Capture packets that the report packet limit left out. Download the PCAP to read them."""
+    connect_outcome: ConnectOutcome | None = Field(default=None, alias="connectOutcome")
+    """Outcome of the connection attempt. ``None`` for rows of older reports and on older
+    servers."""
     timeshift: float
+    timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
+    """Seconds from the start of the capture. ``None`` when the server does not send it."""
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
 
 
@@ -375,6 +398,8 @@ class NetworkThreat(NetworkRowSource):
     destination_ip: str = Field(alias="destinationIp")
     destination_port: int = Field(alias="destinationPort")
     timeshift: float
+    timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
+    """Seconds from the start of the capture. ``None`` when the server does not send it."""
     metadata: dict[str, list[str]]
     details: dict[str, str | int]
     tls: NetworkThreatTls | None = None
@@ -525,7 +550,13 @@ class NetworkEndpoint(BaseModel):
     """DNS queries, HTTP requests and TCP and UDP flows of the endpoint."""
     alert_count: int = Field(alias="alertCount")
     max_alert_severity: str | None = Field(default=None, alias="maxAlertSeverity")
-    """Highest alert severity as text. ``"1"`` is the highest. ``None`` without alerts."""
+    """Deprecated: read ``max_alert_severity_level``. Highest alert severity as text. ``"1"`` is
+    the highest. ``None`` without alerts."""
+    max_alert_severity_level: NetworkThreatSeverityLevel | None = Field(
+        default=None, alias="maxAlertSeverityLevel"
+    )
+    """Highest alert severity, ``1`` (high) to ``4`` (info), on the scale of
+    ``NetworkThreat.severity_level``. ``None`` without alerts and on older servers."""
     process_ids: list[int] = Field(alias="processIds")
     attribution_note: str | None = Field(default=None, alias="attributionNote")
 

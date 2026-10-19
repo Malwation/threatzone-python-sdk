@@ -238,6 +238,7 @@ def _submission_list_item_payload(state: SubmissionState) -> dict[str, Any]:
         "uuid": state.uuid,
         "filename": state.filename if state.type == "file" else None,
         "sha256": state.sha256 if state.type == "file" else None,
+        "url": state.url if state.type == "url" else None,
         "level": state.level,
         "type": state.type,
         "private": state.private,
@@ -341,6 +342,7 @@ def build_indicators_response(
         items.append(
             {
                 "id": f"ind-{idx}",
+                "source": "dynamic_scan",
                 "name": f"Indicator {seed.attack_code}",
                 "description": f"Triggered MITRE technique {seed.attack_code}",
                 "category": ["default"],
@@ -597,6 +599,7 @@ def _mitre_items(state: SubmissionState) -> list[dict[str, Any]]:
                 "score": max((_indicator_score(seed) for _, seed in carriers), default=0),
                 "scoreMaximum": 100,
                 "inVerdictChain": any(seed.level == "malicious" for _, seed in carriers),
+                "attempted": False,
                 "indicatorIds": [f"ind-{idx}" for idx, _ in carriers],
             }
         )
@@ -610,6 +613,8 @@ def build_mitre_response(state: SubmissionState) -> MitreResponse:
         {
             "techniques": list(state.mitre_techniques),
             "total": len(state.mitre_techniques),
+            "attackVersion": "20.0",
+            "domain": "enterprise",
             "items": _mitre_items(state),
         }
     )
@@ -1376,6 +1381,7 @@ def build_dns_queries(state: SubmissionState) -> list[DnsQuery]:
             "type": "A",
             "status": "NOERROR",
             "records": ["192.0.2.10"],
+            "answered": True,
             "timeshift": 0.5,
         },
         {
@@ -1384,6 +1390,7 @@ def build_dns_queries(state: SubmissionState) -> list[DnsQuery]:
             "type": "A",
             "status": "NOERROR",
             "records": ["198.51.100.1"],
+            "answered": True,
             "timeshift": 1.0,
         },
     ]
@@ -1433,6 +1440,7 @@ def _build_connection_payload(proto: str, identifier: str, ip: str, port: int) -
         "bytesToClient": 6120,
         "packetsTotal": 30,
         "packetsOmitted": 0,
+        "connectOutcome": "established",
         "timeshift": 0.5,
     }
 
@@ -1623,6 +1631,7 @@ def _endpoint_row(
         "requestCount": request_count,
         "alertCount": alert_count,
         "maxAlertSeverity": max_alert_severity,
+        "maxAlertSeverityLevel": int(max_alert_severity) if max_alert_severity else None,
         "processIds": [],
         "attributionNote": None,
     }
@@ -2411,12 +2420,15 @@ def build_user_info() -> UserInfo:
         },
         "plan": {
             "planName": "Enterprise",
-            "startTime": "2024-01-01T00:00:00Z",
-            "endTime": "2099-01-01T00:00:00Z",
+            "startTime": "1 January 2024",
+            "endTime": "1 January 2099",
+            "startsAt": "2024-01-01T00:00:00.000Z",
+            "endsAt": "2099-01-01T00:00:00.000Z",
             "subsTime": "monthly",
             "fileLimits": {
                 "extensions": ["exe", "dll", "pdf"],
-                "fileSize": "100MB",
+                "fileSize": "100.00 MB",
+                "fileSizeBytes": 104857600,
             },
             "submissionLimits": {
                 "apiLimit": 1000,
@@ -2437,8 +2449,10 @@ def build_user_info() -> UserInfo:
             {
                 "moduleId": "dynamic",
                 "moduleName": "Dynamic Analysis",
-                "startTime": "2024-01-01T00:00:00Z",
-                "endTime": "2099-01-01T00:00:00Z",
+                "startTime": "1 January 2024",
+                "endTime": "1 January 2099",
+                "startsAt": "2024-01-01T00:00:00.000Z",
+                "endsAt": "2099-01-01T00:00:00.000Z",
             }
         ],
     }
