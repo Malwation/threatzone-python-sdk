@@ -51,6 +51,9 @@ class FileLimits(BaseModel):
 
     extensions: list[str]
     file_size: str = Field(alias="fileSize")
+    """Display text, for example ``"3.00 GB"``. Read ``file_size_bytes`` in code."""
+    file_size_bytes: int | None = Field(default=None, alias="fileSizeBytes")
+    """File size limit in bytes. ``None`` on older servers."""
 
 
 class SubmissionLimits(BaseModel):
@@ -91,7 +94,13 @@ class PlanInfo(BaseModel):
 
     plan_name: str = Field(alias="planName")
     start_time: str = Field(alias="startTime")
+    """Display text. Read ``starts_at`` in code."""
     end_time: str = Field(alias="endTime")
+    """Display text. Read ``ends_at`` in code."""
+    starts_at: datetime | None = Field(default=None, alias="startsAt")
+    """Start of the plan. ``None`` when there is no time and on older servers."""
+    ends_at: datetime | None = Field(default=None, alias="endsAt")
+    """End of the plan. ``None`` when the plan does not end and on older servers."""
     subs_time: str = Field(alias="subsTime")
     file_limits: FileLimits = Field(alias="fileLimits")
     submission_limits: SubmissionLimits = Field(alias="submissionLimits")
@@ -106,7 +115,13 @@ class ModuleInfo(BaseModel):
     module_id: str = Field(alias="moduleId")
     module_name: str = Field(alias="moduleName")
     start_time: str = Field(alias="startTime")
+    """Display text. Read ``starts_at`` in code."""
     end_time: str = Field(alias="endTime")
+    """Display text. Read ``ends_at`` in code."""
+    starts_at: datetime | None = Field(default=None, alias="startsAt")
+    """Start of the module. ``None`` when there is no time and on older servers."""
+    ends_at: datetime | None = Field(default=None, alias="endsAt")
+    """End of the module. ``None`` when the module does not end and on older servers."""
 
 
 class UserInfo(BaseModel):

@@ -18,7 +18,13 @@ class ThreatZoneError(Exception):
 
 
 class APIError(ThreatZoneError):
-    """Base exception for API errors with HTTP response details."""
+    """Base exception for API errors with HTTP response details.
+
+    Attributes:
+        code: The machine-readable error code from the response envelope, for example
+            ``WORKSPACE_INACTIVE`` or ``PLAN_API_ACCESS_DENIED``. ``None`` when the
+            response has no JSON error envelope.
+    """
 
     def __init__(
         self,
@@ -27,11 +33,13 @@ class APIError(ThreatZoneError):
         status_code: int,
         response: httpx.Response | None = None,
         body: dict[str, Any] | None = None,
+        code: str | None = None,
     ) -> None:
+        super().__init__(message)
         self.status_code = status_code
         self.response = response
         self.body = body
-        super().__init__(message)
+        self.code: str | None = code if code is not None else _body_code(body)
 
     def __str__(self) -> str:
         return f"{self.message} (status_code={self.status_code})"
@@ -42,11 +50,19 @@ class AuthenticationError(APIError):
 
 
 class PaymentRequiredError(APIError):
-    """Raised when workspace subscription is inactive (HTTP 402)."""
+    """Raised when the workspace is not active (HTTP 402, ``WORKSPACE_INACTIVE``).
+
+    Renew the plan or contact the workspace owner.
+    """
 
 
 class PermissionDeniedError(APIError):
-    """Raised when access is denied or module not available (HTTP 403)."""
+    """Raised when access is denied (HTTP 403).
+
+    ``code`` is ``FORBIDDEN`` for a missing plan permission or module,
+    ``PLAN_API_ACCESS_DENIED`` when the plan has no API access (a retry does not help),
+    or ``LICENSE_INVALID``.
+    """
 
 
 class NotFoundError(APIError):
@@ -54,7 +70,14 @@ class NotFoundError(APIError):
 
 
 class BadRequestError(APIError):
-    """Raised when the request is invalid (HTTP 400)."""
+    """Raised when the request is invalid (HTTP 400, ``INVALID_QUERY_PARAM``)."""
+
+    @property
+    def field(self) -> str | None:
+        """Path of the first field that failed validation (``details.field``), for example
+        ``limit``. A nested field uses dots. ``None`` when the server does not send it."""
+        value = _details(self.body).get("field")
+        return value if isinstance(value, str) else None
 
 
 class RateLimitError(APIError):
@@ -81,9 +104,8 @@ class RateLimitError(APIError):
         retry_after: float | None = None,
         code: str | None = None,
     ) -> None:
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
         self.retry_after = retry_after
-        self.code = code
-        super().__init__(message, status_code=status_code, response=response, body=body)
 
     def __str__(self) -> str:
         base = super().__str__()
@@ -125,12 +147,11 @@ class ReportUnavailableError(APIError):
         current_status: str | None = None,
         available_reports: list[str] | None = None,
     ) -> None:
-        self.code = code
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
         self.submission_uuid = submission_uuid
         self.required_report = required_report
         self.current_status = current_status
         self.available_reports = available_reports or []
-        super().__init__(message, status_code=status_code, response=response, body=body)
 
     def __str__(self) -> str:
         base = super().__str__()
@@ -140,13 +161,13 @@ class ReportUnavailableError(APIError):
 
 
 class BehaviourIndexingError(ReportUnavailableError):
-    """Raised when the behaviour index of a submission is not ready (HTTP 409).
+    """Raised when the behaviour index of a submission is not ready.
 
-    The routes that read the behaviour index raise it with the code
-    ``BEHAVIOUR_INDEXING``: ``get_behaviours()`` with an index parameter,
-    ``get_behaviour_summary()`` and ``get_behaviour_facets()``. The public API
-    never builds the index. The index is built when the Behaviour view of the
-    report is opened. Retry after ``retry_after`` seconds, or call
+    The routes that read the behaviour index raise it: ``get_behaviours()`` with an
+    index parameter, ``get_behaviour_summary()``, ``get_behaviour_facets()`` and
+    ``get_behaviour_matches()``. Current servers return ``503 BEHAVIOUR_INDEX_BUILDING``,
+    which raises the subclass ``BehaviourIndexBuildingError``. Older servers return
+    ``409 BEHAVIOUR_INDEXING``. Retry after ``retry_after`` seconds, or call
     ``get_behaviours()`` without the index parameters.
 
     Attributes:
@@ -163,8 +184,8 @@ class BehaviourIndexingError(ReportUnavailableError):
         code: str | None = "BEHAVIOUR_INDEXING",
         retry_after: float | None = None,
     ) -> None:
-        self.retry_after = retry_after
         super().__init__(message, status_code=status_code, response=response, body=body, code=code)
+        self.retry_after = retry_after
 
     def __str__(self) -> str:
         base = super().__str__()
@@ -199,11 +220,10 @@ class BehaviourTooLargeError(APIError):
         max_bytes: int | None = None,
         download_route: str | None = None,
     ) -> None:
-        self.code = code
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
         self.size_bytes = size_bytes
         self.max_bytes = max_bytes
         self.download_route = download_route
-        super().__init__(message, status_code=status_code, response=response, body=body)
 
 
 class YaraRulePendingError(APIError):
@@ -218,8 +238,8 @@ class YaraRulePendingError(APIError):
         body: dict[str, Any] | None = None,
         retry_after: float | None = None,
     ) -> None:
-        self.retry_after = retry_after
         super().__init__(message, status_code=status_code, response=response, body=body)
+        self.retry_after = retry_after
 
     def __str__(self) -> str:
         base = super().__str__()
@@ -245,8 +265,8 @@ class PdfReportPendingError(APIError):
         body: dict[str, Any] | None = None,
         retry_after: float | None = None,
     ) -> None:
-        self.retry_after = retry_after
         super().__init__(message, status_code=status_code, response=response, body=body)
+        self.retry_after = retry_after
 
     def __str__(self) -> str:
         base = super().__str__()
@@ -259,7 +279,74 @@ class InternalServerError(APIError):
     """Raised when a server error occurs (HTTP 5xx)."""
 
 
-class QuotaUnavailableError(InternalServerError):
+class ServiceUnavailableError(InternalServerError):
+    """Raised when the server is busy or a dependency is down (HTTP 503).
+
+    Every ``503`` of the API has a ``Retry-After`` header and ``details.retryAfterSeconds``.
+    The SDK retries idempotent requests on ``503`` when the wait is short. Retry other
+    requests after ``retry_after`` seconds.
+
+    Attributes:
+        retry_after: Seconds to wait before a retry. The SDK reads the ``Retry-After``
+            header, then the ``retryAfter`` body field, then ``details.retryAfterSeconds``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 503,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = None,
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
+        self.retry_after = retry_after
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
+class BehaviourIndexBuildingError(BehaviourIndexingError, ServiceUnavailableError):
+    """Raised when the behaviour index is being built (HTTP 503, ``BEHAVIOUR_INDEX_BUILDING``).
+
+    The behaviour index routes ask the platform to build a missing index and answer from a
+    direct read of the behaviour file. When that read cannot answer the request, they return
+    this error. Retry after ``retry_after`` seconds. It is a ``BehaviourIndexingError``, so
+    code that handles the older ``409 BEHAVIOUR_INDEXING`` also handles it.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 503,
+        response: httpx.Response | None = None,
+        body: dict[str, Any] | None = None,
+        code: str | None = "BEHAVIOUR_INDEX_BUILDING",
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            status_code=status_code,
+            response=response,
+            body=body,
+            code=code,
+            retry_after=retry_after,
+        )
+
+    def __str__(self) -> str:
+        base = APIError.__str__(self)
+        if self.retry_after is not None:
+            return f"{base} (retry_after={self.retry_after}s)"
+        return base
+
+
+class QuotaUnavailableError(ServiceUnavailableError):
     """Raised when the server cannot check the submission quota (HTTP 503).
 
     Maps the code ``QUOTA_UNAVAILABLE``. The create routes and
@@ -283,15 +370,14 @@ class QuotaUnavailableError(InternalServerError):
         code: str | None = "QUOTA_UNAVAILABLE",
         retry_after: float | None = None,
     ) -> None:
-        self.code = code
-        self.retry_after = retry_after
-        super().__init__(message, status_code=status_code, response=response, body=body)
-
-    def __str__(self) -> str:
-        base = super().__str__()
-        if self.retry_after is not None:
-            return f"{base} (retry_after={self.retry_after}s)"
-        return base
+        super().__init__(
+            message,
+            status_code=status_code,
+            response=response,
+            body=body,
+            code=code,
+            retry_after=retry_after,
+        )
 
 
 class BehaviourUnreadableError(InternalServerError):
@@ -312,8 +398,7 @@ class BehaviourUnreadableError(InternalServerError):
         body: dict[str, Any] | None = None,
         code: str | None = "BEHAVIOUR_UNREADABLE",
     ) -> None:
-        self.code = code
-        super().__init__(message, status_code=status_code, response=response, body=body)
+        super().__init__(message, status_code=status_code, response=response, body=body, code=code)
 
 
 class TimeoutError(ThreatZoneError):
@@ -367,8 +452,14 @@ def _header_seconds(value: str | None) -> float | None:
 
 
 def _retry_after(response: httpx.Response, body: dict[str, Any] | None) -> float | None:
-    seconds = _header_seconds(response.headers.get("retry-after"))
-    return seconds if seconds is not None else _body_number(body, "retryAfter")
+    for seconds in (
+        _header_seconds(response.headers.get("retry-after")),
+        _body_number(body, "retryAfter"),
+        _detail_number(body, "retryAfterSeconds"),
+    ):
+        if seconds is not None:
+            return seconds
+    return None
 
 
 def raise_for_status(response: httpx.Response) -> None:
@@ -470,12 +561,17 @@ def raise_for_status(response: httpx.Response) -> None:
             retry_after=_retry_after(response, body),
             code=_body_code(body),
         )
-    elif status_code == 503 and _body_code(body) == "QUOTA_UNAVAILABLE":
-        raise QuotaUnavailableError(
+    elif status_code == 503:
+        unavailable_class: type[ServiceUnavailableError] = {
+            "QUOTA_UNAVAILABLE": QuotaUnavailableError,
+            "BEHAVIOUR_INDEX_BUILDING": BehaviourIndexBuildingError,
+        }.get(_body_code(body) or "", ServiceUnavailableError)
+        raise unavailable_class(
             message,
             status_code=status_code,
             response=response,
             body=body,
+            code=_body_code(body),
             retry_after=_retry_after(response, body),
         )
     elif status_code == 502 and _body_code(body) == "BEHAVIOUR_UNREADABLE":

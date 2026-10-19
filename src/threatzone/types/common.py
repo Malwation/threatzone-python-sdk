@@ -27,6 +27,8 @@ TagOrigin = (
     | str
 )
 TagAuthor = Literal["system", "user"] | str
+MetafieldValue = bool | int | float | str
+"""A stored analysis option value with its type."""
 
 
 class Message(BaseModel):
@@ -142,5 +144,14 @@ class ReportStatus(BaseModel):
 
     The key is the option name and the value is the selected parameter name.
     Only ``get_submission()`` sends it. ``None`` when the report has no options
-    and on older servers.
+    and on older servers. This is display text; read ``metafield_values`` in code.
     """
+    metafield_values: dict[str, MetafieldValue] | None = Field(
+        default=None, alias="metafieldValues"
+    )
+    """Stored analysis option values with their types, keyed by the metafield key, for
+    example ``{"timeout": 120, "internet_connection": True}``. Only ``get_submission()``
+    sends it. ``None`` when the report has no options and on older servers."""
+    execution_duration_seconds: float | None = Field(default=None, alias="executionDurationSeconds")
+    """The ``timeout`` option of a dynamic report in seconds. Only ``get_submission()``
+    sends it. ``None`` for other reports and on older servers."""

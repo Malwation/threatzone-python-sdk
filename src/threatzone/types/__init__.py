@@ -66,6 +66,7 @@ from .common import (
     FileSource,
     Hashes,
     Message,
+    MetafieldValue,
     OperatingSystemPlatform,
     ReportOperatingSystem,
     ReportStatus,
@@ -161,11 +162,12 @@ from .me import (
     UserInfoDetails,
     WorkspaceBasicInfo,
 )
-from .mitre import MitreResponse, MitreTechniqueUsage
+from .mitre import AttackDomain, MitreResponse, MitreTechniqueUsage
 from .network import (
     Connection,
     ConnectionPackets,
     ConnectionProtocol,
+    ConnectOutcome,
     DnsQuery,
     DnsRecordType,
     DnsStatus,
@@ -333,6 +335,7 @@ __all__ = [
     "ReportStatusValue",
     "ReportType",
     "Tag",
+    "MetafieldValue",
     "TagAuthor",
     "TagOrigin",
     "ThreatLevel",
@@ -486,10 +489,12 @@ __all__ = [
     "KillchainPathAuthority",
     "KillchainProcess",
     # Mitre
+    "AttackDomain",
     "MitreResponse",
     "MitreTechniqueUsage",
     # Network
     "Connection",
+    "ConnectOutcome",
     "ConnectionPackets",
     "ConnectionProtocol",
     "DnsQuery",

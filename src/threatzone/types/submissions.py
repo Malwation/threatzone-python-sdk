@@ -103,7 +103,12 @@ class SubmissionListItem(BaseModel):
 
     uuid: str
     filename: str | None = None
+    """``None`` for a URL submission."""
     sha256: str | None = None
+    """``None`` for a URL submission."""
+    url: str | None = None
+    """Submitted URL of a URL submission. ``None`` for a file submission and on older
+    servers."""
     level: SubmissionLevel
     type: SubmissionType
     private: bool

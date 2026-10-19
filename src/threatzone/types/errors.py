@@ -15,6 +15,8 @@ ApiErrorCode = (
     Literal[
         "INVALID_QUERY_PARAM",
         "UNAUTHORIZED",
+        "WORKSPACE_INACTIVE",
+        "PLAN_API_ACCESS_DENIED",
         "LICENSE_INVALID",
         "FORBIDDEN",
         "NOT_FOUND",
@@ -38,11 +40,10 @@ ApiErrorCode = (
         "QUOTA_UNAVAILABLE",
         "INTERNAL_ERROR",
         "STORAGE_UNAVAILABLE",
+        "BEHAVIOUR_INDEX_BUILDING",
         "BEHAVIOUR_INDEXING",
         "BEHAVIOUR_TOO_LARGE",
         "BEHAVIOUR_UNREADABLE",
-        "SAMPLE_INDEX_UNAVAILABLE",
-        "SAMPLE_INDEX_ERROR",
         "SESSION_SERVICE_UNAVAILABLE",
         "SESSION_NOT_FOUND",
         "AI_REPORT_NOT_FOUND",
@@ -55,7 +56,8 @@ ApiErrorCode = (
     | str
 )
 """The ``code`` values of the public API. Any other string is also accepted, so a code that
-a newer server adds does not fail the parse."""
+a newer server adds does not fail the parse. ``BEHAVIOUR_INDEXING`` comes only from older
+servers."""
 
 
 class ApiError(BaseModel):
