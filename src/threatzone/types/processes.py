@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import ListEnvelopeFields
+
 ProcessOrigin = Literal["sample", "shell"] | str
 """Who started a process: ``sample`` (the submitted sample tree) or ``shell`` (the analyst on
 the guest desktop). A newer server can send another value."""
@@ -84,7 +86,7 @@ class Process(BaseModel):
     events: ProcessEvents
 
 
-class ProcessesResponse(BaseModel):
+class ProcessesResponse(ListEnvelopeFields):
     """List of processes observed during dynamic analysis."""
 
     model_config = ConfigDict(populate_by_name=True)

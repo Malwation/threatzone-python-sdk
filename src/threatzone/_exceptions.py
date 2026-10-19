@@ -451,7 +451,9 @@ def _header_seconds(value: str | None) -> float | None:
         return None
 
 
-def _retry_after(response: httpx.Response, body: dict[str, Any] | None) -> float | None:
+def retry_after_seconds(response: httpx.Response, body: dict[str, Any] | None) -> float | None:
+    """Seconds to wait from the ``Retry-After`` header, the ``retryAfter`` body field or
+    ``details.retryAfterSeconds``, in that order."""
     for seconds in (
         _header_seconds(response.headers.get("retry-after")),
         _body_number(body, "retryAfter"),
@@ -558,7 +560,7 @@ def raise_for_status(response: httpx.Response) -> None:
             status_code=status_code,
             response=response,
             body=body,
-            retry_after=_retry_after(response, body),
+            retry_after=retry_after_seconds(response, body),
             code=_body_code(body),
         )
     elif status_code == 503:
@@ -572,7 +574,7 @@ def raise_for_status(response: httpx.Response) -> None:
             response=response,
             body=body,
             code=_body_code(body),
-            retry_after=_retry_after(response, body),
+            retry_after=retry_after_seconds(response, body),
         )
     elif status_code == 502 and _body_code(body) == "BEHAVIOUR_UNREADABLE":
         raise BehaviourUnreadableError(

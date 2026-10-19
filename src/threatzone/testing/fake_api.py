@@ -23,6 +23,8 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 from pydantic import BaseModel
 
+from threatzone._client import is_list_route
+from threatzone._lists import total_count_header
 from threatzone.types import AiReportPending
 
 from . import _responses
@@ -196,6 +198,77 @@ def _serialize(model: BaseModel) -> bytes:
 def _serialize_list(models: list[BaseModel]) -> bytes:
     payload = [m.model_dump(mode="json", by_alias=True) for m in models]
     return json.dumps(payload).encode("utf-8")
+
+
+def _positive_int(value: str | None, fallback: int) -> int:
+    try:
+        parsed = int(value) if value is not None else fallback
+    except ValueError:
+        return fallback
+    return parsed if parsed > 0 else fallback
+
+
+def _next_link(request: httpx.Request, name: str, value: int) -> str:
+    url = request.url.copy_set_param(name, str(value))
+    return f"{url.path}?{url.query.decode()}"
+
+
+def _list_envelope(request: httpx.Request, path: str, response: httpx.Response) -> httpx.Response:
+    """Wrap a list response in ``{items, total, page, pageSize, next}``, as the API does."""
+    body = json.loads(response.content)
+    params = request.url.params
+    envelope: dict[str, Any]
+    if isinstance(body, list):
+        total = total_count_header(response)
+        if "/network/" in path:
+            page_size = _positive_int(params.get("limit"), 1000)
+            skip = max(_positive_int(params.get("skip"), 0), 0)
+            more = body and skip + len(body) < (total if total is not None else len(body))
+            envelope = {
+                "items": body,
+                "total": total if total is not None else len(body),
+                "page": skip // page_size + 1,
+                "pageSize": page_size,
+                "next": _next_link(request, "skip", skip + page_size) if more else None,
+            }
+        elif path.startswith("/submissions/search/sha256/"):
+            page_size = _positive_int(params.get("limit"), 20)
+            page = _positive_int(params.get("page"), 1)
+            matched = total if total is not None else len(body)
+            envelope = {
+                "items": body,
+                "total": matched,
+                "page": page,
+                "pageSize": page_size,
+                "next": _next_link(request, "page", page + 1)
+                if page * page_size < matched
+                else None,
+            }
+        else:
+            envelope = {
+                "items": body,
+                "total": len(body),
+                "page": 1,
+                "pageSize": len(body),
+                "next": None,
+            }
+    elif isinstance(body, dict) and isinstance(body.get("items"), list):
+        envelope = dict(body)
+        if "totalPages" in body:
+            page = int(body.get("page", 1))
+            envelope["pageSize"] = body.get("limit", len(body["items"]))
+            envelope["next"] = (
+                _next_link(request, "page", page + 1) if page < int(body["totalPages"]) else None
+            )
+        else:
+            envelope.setdefault("total", len(body["items"]))
+            envelope.update({"page": 1, "pageSize": len(body["items"]), "next": None})
+    else:
+        return response
+    headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+    return httpx.Response(
+        response.status_code, content=json.dumps(envelope).encode("utf-8"), headers=headers
+    )
 
 
 def _error(
@@ -629,7 +702,24 @@ class FakeThreatZoneAPI:
             quota_error = self._quota_check()
             if quota_error is not None:
                 return quota_error
-        return handler(request, match)
+        response = handler(request, match)
+        envelope = request.url.params.get("envelope")
+        if envelope is not None and envelope not in ("0", "1", "false", "true"):
+            return _error(
+                400,
+                "Bad Request",
+                "envelope must be one of the following values: 1, true, 0, false",
+                "INVALID_QUERY_PARAM",
+                {"field": "envelope"},
+            )
+        if (
+            envelope in ("1", "true")
+            and request.method == "GET"
+            and response.is_success
+            and is_list_route(path)
+        ):
+            return _list_envelope(request, path, response)
+        return response
 
     def _handlers(self) -> dict[str, Callable[[httpx.Request, RouteMatch], httpx.Response]]:
         return {

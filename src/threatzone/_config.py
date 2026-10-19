@@ -23,6 +23,7 @@ class ClientConfig:
     timeout: float
     max_retries: int
     verify_ssl: bool
+    list_envelope: bool = False
 
     @classmethod
     def from_env(
@@ -32,6 +33,7 @@ class ClientConfig:
         timeout: float | None = None,
         max_retries: int | None = None,
         verify_ssl: bool = False,
+        list_envelope: bool = False,
     ) -> ClientConfig:
         """Create a ClientConfig instance with defaults and environment variable fallback.
 
@@ -42,6 +44,7 @@ class ClientConfig:
             max_retries: Maximum number of retries for failed requests. Defaults to 2.
             verify_ssl: Whether to verify SSL certificates. Set to False for self-signed certs
                         in on-premise deployments. Defaults to False.
+            list_envelope: Send ``envelope=1`` to the list routes. Defaults to False.
         """
         resolved_api_key = api_key or os.environ.get(API_KEY_ENV_VAR)
 
@@ -60,6 +63,7 @@ class ClientConfig:
             timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
             max_retries=max_retries if max_retries is not None else DEFAULT_MAX_RETRIES,
             verify_ssl=verify_ssl,
+            list_envelope=list_envelope,
         )
 
     def get_headers(self) -> dict[str, str]:

@@ -5,6 +5,7 @@ from typing import Final
 DEFAULT_BASE_URL: Final[str] = "https://app.threat.zone/public-api"
 DEFAULT_TIMEOUT: Final[float] = 60.0
 DEFAULT_MAX_RETRIES: Final[int] = 2
+MAX_RETRY_AFTER_SECONDS: Final[float] = 60.0
 DEFAULT_POLL_INTERVAL: Final[float] = 5.0
 DEFAULT_WAIT_TIMEOUT: Final[float] = 600.0
 

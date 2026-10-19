@@ -13,6 +13,8 @@ from typing import Annotated, Literal, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer
 
+from .common import ListEnvelopeFields
+
 DnsRecordType = Literal[
     "A",
     "AAAA",
@@ -561,7 +563,7 @@ class NetworkEndpoint(BaseModel):
     attribution_note: str | None = Field(default=None, alias="attributionNote")
 
 
-class NetworkEndpoints(BaseModel):
+class NetworkEndpoints(ListEnvelopeFields):
     """The endpoints of a submission, sample endpoints first."""
 
     model_config = ConfigDict(populate_by_name=True)

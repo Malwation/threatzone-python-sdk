@@ -7,7 +7,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .common import FileInfo, Hashes, ReportStatus, ReportStatusValue, Tag, ThreatLevel
+from .common import (
+    FileInfo,
+    Hashes,
+    ListEnvelopeFields,
+    ReportStatus,
+    ReportStatusValue,
+    Tag,
+    ThreatLevel,
+)
 
 SubmissionLevel = ThreatLevel
 SubmissionType = Literal["file", "url"]
@@ -121,7 +129,7 @@ class SubmissionListItem(BaseModel):
     created_at: datetime = Field(alias="createdAt")
 
 
-class PaginatedSubmissions(BaseModel):
+class PaginatedSubmissions(ListEnvelopeFields):
     """Paginated list of submissions."""
 
     model_config = ConfigDict(populate_by_name=True)

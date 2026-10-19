@@ -19,6 +19,17 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Skip the waits between transport retries, so retry tests run fast."""
+
+    async def _no_async_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("threatzone._client._sleep", lambda _seconds: None)
+    monkeypatch.setattr("threatzone._client._async_sleep", _no_async_sleep)
+
+
 @pytest.fixture
 def api_key() -> str:
     return "arrakis_2042"

@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import ListEnvelopeFields
+
 BehaviourOs = Literal["windows", "linux", "android", "macos"]
 
 BehaviourEventSort = Literal["eventId", "time"] | str
@@ -77,7 +79,7 @@ class BehaviourEvent(BaseModel):
     details: dict[str, Any]
 
 
-class BehavioursResponse(BaseModel):
+class BehavioursResponse(ListEnvelopeFields):
     """Paginated behaviour event list."""
 
     model_config = ConfigDict(populate_by_name=True)

@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import ListEnvelopeFields
 
-class SyscallsResponse(BaseModel):
+
+class SyscallsResponse(ListEnvelopeFields):
     """Paginated raw syscall log lines."""
 
     model_config = ConfigDict(populate_by_name=True)

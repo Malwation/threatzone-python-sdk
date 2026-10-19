@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .common import ListEnvelopeFields
+
 
 class NetworkConfigListItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -24,6 +26,6 @@ class NetworkConfigListItem(BaseModel):
     updated_at: str = Field(alias="updatedAt")
 
 
-class NetworkConfigListResponse(BaseModel):
+class NetworkConfigListResponse(ListEnvelopeFields):
     model_config = ConfigDict(populate_by_name=True)
     items: list[NetworkConfigListItem] = Field(default_factory=list)
