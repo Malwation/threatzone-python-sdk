@@ -465,9 +465,11 @@ from threatzone import (
     AuthenticationError,
     BadRequestError,
     NotFoundError,
+    PaymentRequiredError,
     PermissionDeniedError,
     RateLimitError,
     ReportUnavailableError,
+    ServiceUnavailableError,
     ThreatZone,
 )
 
@@ -476,19 +478,22 @@ def fetch_indicators_safely(client: ThreatZone, submission_uuid: str) -> None:
         response = client.get_indicators(submission_uuid)
     except AuthenticationError:
         print("Invalid API key.")
+    except PaymentRequiredError:
+        # WORKSPACE_INACTIVE
+        print("The workspace is not active. Renew the plan or contact the workspace owner.")
     except PermissionDeniedError as exc:
-        code = (exc.body or {}).get("code")
-        if code == "LICENSE_INVALID":
+        if exc.code == "PLAN_API_ACCESS_DENIED":
+            print("The plan has no API access. Upgrade the plan; a retry does not help.")
+        elif exc.code == "LICENSE_INVALID":
             print("The self-hosted deployment has no valid license.")
         else:
             print(f"Access denied (plan permission or module): {exc.message}")
     except NotFoundError as exc:
         # A private submission of another workspace gives the same NOT_FOUND as a missing one.
-        print(f"Not found ({(exc.body or {}).get('code')}).")
+        print(f"Not found ({exc.code}).")
     except BadRequestError as exc:
-        code = (exc.body or {}).get("code")
-        if code == "INVALID_QUERY_PARAM":
-            print(f"A path or query parameter is not valid: {exc.message}")
+        if exc.code == "INVALID_QUERY_PARAM":
+            print(f"Parameter {exc.field or '?'} is not valid: {exc.message}")
         else:
             print(f"Bad request: {exc.message}")
     except ReportUnavailableError as exc:
@@ -497,6 +502,8 @@ def fetch_indicators_safely(client: ThreatZone, submission_uuid: str) -> None:
     except RateLimitError as exc:
         wait = exc.retry_after or 60
         print(f"Rate limited ({exc.code}); retry after {wait}s.")
+    except ServiceUnavailableError as exc:
+        print(f"Service unavailable ({exc.code}); retry after {exc.retry_after}s.")
     except APIError as exc:
         print(f"Unhandled API error {exc.status_code}: {exc.message}")
     else:
@@ -508,19 +515,25 @@ with ThreatZone() as client:
 
 **Notes.**
 
-- `APIError.body["code"]` is the machine-readable discriminator. It's one of the values
+- `APIError.code` is the machine-readable discriminator. It's one of the values
   in the `ApiErrorCode` literal union in `threatzone.types.errors`, or a code that a newer
-  server adds. Every code is stable across releases; the `message` is not.
-- `ReportUnavailableError` already exposes `.code` as a typed attribute &mdash; no need
-  to reach into `.body` for it.
+  server adds. Every code is stable across releases; the `message` is not. `code` is `None`
+  only when the response has no JSON error body, for example a proxy error page.
+- `PaymentRequiredError` (402) has the code `WORKSPACE_INACTIVE`. `PermissionDeniedError`
+  (403) has `FORBIDDEN`, `PLAN_API_ACCESS_DENIED` or `LICENSE_INVALID`.
+- `BadRequestError.field` names the first field that failed validation (`details.field`).
 - `RateLimitError.code` is `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request
   limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit) or
   `AI_REPORT_QUOTA_EXCEEDED`. `RateLimitError.retry_after` is parsed from the `Retry-After`
-  response header, or from the `retryAfter` body field when the header is absent or is not a
-  number. It is `None` when both are absent.
-- The create routes raise `QuotaUnavailableError` (503, `QUOTA_UNAVAILABLE`, a subclass of
-  `InternalServerError`) when the server cannot check the submission quota. Retry after
+  response header, then from the `retryAfter` body field, then from
+  `details.retryAfterSeconds`. It is `None` when all are absent.
+- Every `503` raises `ServiceUnavailableError` (a subclass of `InternalServerError`) with
+  `retry_after`. The create routes raise its subclass `QuotaUnavailableError`
+  (`QUOTA_UNAVAILABLE`) when the server cannot check the submission quota. Retry after
   `retry_after` seconds.
+- The SDK already retries `GET`, `PUT` and `DELETE` requests on `429` and `503` when the wait
+  is at most 60 seconds, so these errors reach your code only after the retries or for a
+  longer wait. It never retries a `POST` after a timeout or a `429` or `503`.
 - The API never sends `SUBMISSION_PRIVATE` or `INVALID_UUID`. Code that checked them must
   check `NotFoundError` with `NOT_FOUND`, and `BadRequestError` with `INVALID_QUERY_PARAM`.
 

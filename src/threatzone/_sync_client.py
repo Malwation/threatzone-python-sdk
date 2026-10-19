@@ -21,7 +21,12 @@ from ._exceptions import (
     YaraRulePendingError,
 )
 from ._lists import list_page
-from ._params import behaviour_filter_params, behaviour_match_params, syscall_search_params
+from ._params import (
+    behaviour_filter_params,
+    behaviour_match_params,
+    syscall_search_params,
+    warn_singular_behaviour_filters,
+)
 from ._streaming import DownloadResponse
 from .types import (
     AiReport,
@@ -1147,10 +1152,13 @@ class ThreatZone:
 
         Args:
             uuid: Submission UUID.
-            type: Filter by event type (e.g. registry, file, network, process, mutex).
-            pid: Filter by process ID.
-            operation: Filter by operation name.
-            process_name: Filter by process name (exact match).
+            type: Deprecated: use ``types``. Filter by event type (e.g. registry, file,
+                network, process, mutex).
+            pid: Deprecated: use ``pids``. Filter by process ID.
+            operation: Deprecated: use ``operations``. Filter by operation name.
+            process_name: Deprecated: use ``process_name_contains``. Filter by process
+                name (exact match). The four singular filters warn with
+                ``DeprecationWarning`` and keep working.
             page: 1-indexed page number.
             limit: Maximum items per page (1-500).
             event_ids: Return only the events with these IDs (at most 500), for example
@@ -1193,6 +1201,9 @@ class ThreatZone:
                 above the heavy-route limit. ``retry_after`` gives the seconds to wait.
             ValueError: When a list filter is empty. The SDK does not send the request.
         """
+        warn_singular_behaviour_filters(
+            type=type, pid=pid, operation=operation, process_name=process_name
+        )
         params: dict[str, Any] = {}
         if type is not None:
             params["type"] = type

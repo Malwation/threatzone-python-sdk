@@ -392,6 +392,9 @@ Every method above is mirrored on `AsyncThreatZone`.
   is not retried; the error is raised at once. `max_retries` (default `2`) bounds every retry,
   also with `http_client=`; `max_retries=0` turns retries off.
 - A download error keeps the error body, so the exception has `code` and the server message.
+- README and recipes use `APIError.code` and the current error codes (`WORKSPACE_INACTIVE`,
+  `PLAN_API_ACCESS_DENIED`, `BEHAVIOUR_INDEX_BUILDING`) and describe the retries and the list
+  envelope.
 
 - `retry_after` on `RateLimitError` and the `503` errors falls back to
   `details.retryAfterSeconds` when the header and the `retryAfter` body field are absent.
@@ -427,6 +430,14 @@ Every method above is mirrored on `AsyncThreatZone`.
   methods, `restart_url_analysis()`, `get_behaviours()`, `download_behaviour()`,
   `download_syscalls()`, `get_mitre_techniques()`, `unpin_evidence()` and
   `get_url_analysis_indicator_evidence()` name the errors and fields that the API now sends.
+
+### Deprecated
+
+- The singular filters `type`, `pid`, `operation` and `process_name` of `get_behaviours()`
+  warn with `DeprecationWarning`, as the API marks them deprecated. Use `types`, `pids`,
+  `operations` and `process_name_contains`. They keep working.
+- `Indicator.score_maximum` (always `100`) and `NetworkEndpoint.max_alert_severity` (read
+  `max_alert_severity_level`).
 
 ### Removed
 

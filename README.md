@@ -46,6 +46,30 @@ client = ThreatZone(
 The `base_url` **must** include the `/public-api` suffix. For self-signed certs, leave
 `verify_ssl=False` (the default).
 
+### Retries
+
+`max_retries` (default `2`) sets how many times the SDK sends a failed request again:
+
+- A connection failure, a connect timeout and a pool timeout: every method. The server did not
+  get the request.
+- A read or write timeout: `GET`, `PUT` and `DELETE` only. The SDK never sends a `POST` again
+  after such a timeout, because the server can have created the submission. Check
+  `list_submissions()` before you upload the file again.
+- A `429` or `503` response: `GET`, `PUT` and `DELETE` only, also downloads. The SDK waits
+  for the `Retry-After` header (without the header: 1, 2, 4... seconds). When the wait is more
+  than 60 seconds, the SDK raises the error at once; read `retry_after` on it.
+
+`max_retries=0` turns retries off.
+
+### List envelope
+
+`ThreatZone(list_envelope=True)` sends `envelope=1` to every list route. The routes then
+return `{items, total, page, pageSize, next}`. The methods return the same types:
+`total_count` of the flat lists comes from `total`, and the list models (for example
+`PaginatedSubmissions`) add `page_size` and `next`. The flat array form of the API is
+deprecated. Servers before the 2026-10-19 Public API reject `envelope` with `400`, so the
+default is `False`.
+
 ## Quick usage
 
 ```python
@@ -361,8 +385,13 @@ with client.download_syscalls(uuid) as download:
 ```
 
 The index parameters (`pids` to `sort`) and the summary, facet and match routes read the
-behaviour index. The public API never builds the index; the index is built when the Behaviour view of
-the report is opened. Without a current index these calls raise `BehaviourIndexingError`.
+behaviour index. When no index exists, the server starts the index build and answers from a
+direct read of the behaviour file. When that read cannot answer, these calls raise
+`BehaviourIndexBuildingError` (`503 BEHAVIOUR_INDEX_BUILDING`, a subclass of
+`BehaviourIndexingError`) after the SDK retries; `retry_after` gives the seconds to wait. Older
+servers raise `BehaviourIndexingError` with `409 BEHAVIOUR_INDEXING`. The singular filters
+`type`, `pid`, `operation` and `process_name` are deprecated and warn with
+`DeprecationWarning`; use `types`, `pids`, `operations` and `process_name_contains`.
 `get_behaviours()` without the index parameters (`event_ids` is allowed) reads the behaviour
 file and does not need the index. `get_behaviours()` with an index parameter,
 `get_behaviour_summary()`, `get_behaviour_facets()`, `get_behaviour_matches()`,
@@ -561,24 +590,26 @@ Use `asyncio.gather()` for concurrent fan-out. See [recipe 10](./docs/RECIPES.md
 ## Errors
 
 Every error inherits from `ThreatZoneError`. HTTP errors additionally inherit from
-`APIError` and carry the parsed error envelope on `.body`, with the structured code at
-`.body["code"]`. Branch on `.code`, never on `.message`.
+`APIError`. They carry the error code on `.code` and the parsed error envelope on `.body`.
+Branch on `.code`, never on `.message`. Download errors carry the code too.
 
 | Status | Exception | When |
 |---|---|---|
 | — | `ThreatZoneError` | Base class. Catch for a single safety net. |
 | — | `APIError` | HTTP error base class. `.status_code`, `.body`, `.response`. |
-| 400 | `BadRequestError` | `INVALID_QUERY_PARAM` (also for a malformed UUID or ID). |
-| 401 | `AuthenticationError` | Missing/invalid API key. |
-| 402 | `PaymentRequiredError` | Workspace subscription inactive. |
-| 403 | `PermissionDeniedError` | `FORBIDDEN` (plan permission or module missing), `LICENSE_INVALID`. |
+| 400 | `BadRequestError` | `INVALID_QUERY_PARAM` (also for a malformed UUID or ID). `.field` names the first field that failed, for example `limit`. |
+| 401 | `AuthenticationError` | `UNAUTHORIZED`: missing or invalid API key. |
+| 402 | `PaymentRequiredError` | `WORKSPACE_INACTIVE`: the workspace is not active. Renew the plan or contact the workspace owner. |
+| 403 | `PermissionDeniedError` | `FORBIDDEN` (plan permission or module missing), `PLAN_API_ACCESS_DENIED` (the plan has no API access; a retry does not help), `LICENSE_INVALID`. |
 | 404 | `NotFoundError` | `NOT_FOUND` for a missing submission and for a private submission of another workspace; `ARTIFACT_NOT_FOUND`, `MEDIA_NOT_FOUND` and other route codes. |
 | 409 | `ReportUnavailableError` | Required report not yet available. Carries `.code`, `.submission_uuid`, `.required_report`, `.current_status`, `.available_reports`. |
-| 409 | `BehaviourIndexingError` | `BEHAVIOUR_INDEXING`: the behaviour index is not ready. Subclass of `ReportUnavailableError`. Has `.retry_after`. |
+| 409 | `BehaviourIndexingError` | `BEHAVIOUR_INDEXING` from an older server: the behaviour index is not ready. Subclass of `ReportUnavailableError`. Has `.retry_after`. |
 | 413 | `BehaviourTooLargeError` | `BEHAVIOUR_TOO_LARGE`: the behaviour file or the index scan is above the read limit. `.size_bytes`, `.max_bytes`, `.download_route`. |
 | 429 | `RateLimitError` | `.code`: `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit), `AI_REPORT_QUOTA_EXCEEDED`. Has `.retry_after`. |
 | 502 | `BehaviourUnreadableError` | `BEHAVIOUR_UNREADABLE`: the stored behaviour file is not valid. Subclass of `InternalServerError`. |
-| 503 | `QuotaUnavailableError` | `QUOTA_UNAVAILABLE`: the server cannot check the submission quota. No submission was created. Subclass of `InternalServerError`. Has `.retry_after`. |
+| 503 | `ServiceUnavailableError` | Any other `503`, for example `STORAGE_UNAVAILABLE`. Subclass of `InternalServerError`. Has `.retry_after`. |
+| 503 | `BehaviourIndexBuildingError` | `BEHAVIOUR_INDEX_BUILDING`: the server builds the behaviour index. Subclass of `BehaviourIndexingError` and `ServiceUnavailableError`. Has `.retry_after`. |
+| 503 | `QuotaUnavailableError` | `QUOTA_UNAVAILABLE`: the server cannot check the submission quota. No submission was created. Subclass of `ServiceUnavailableError`. Has `.retry_after`. |
 | 5xx | `InternalServerError` | Server-side failure. |
 | — | `TimeoutError` | HTTP request timed out. |
 | — | `ConnectionError` | Network-level failure. |
