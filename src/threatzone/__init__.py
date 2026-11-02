@@ -194,7 +194,7 @@ from .types import (
     YaraRulesResponse,
 )
 
-__version__ = "1.1.1"
+__version__ = "1.1.4"
 
 __all__ = [
     # Clients
