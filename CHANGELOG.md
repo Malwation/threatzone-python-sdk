@@ -5,7 +5,7 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 1.1.4
 
 ### Added
 
@@ -453,6 +453,13 @@ Every method above is mirrored on `AsyncThreatZone`.
 
 ### Fixed
 
+- Concurrent file uploads on one client no longer fail with `ValueError: read of closed file`.
+  When a submission method got a file path, the SDK closed every file it had opened on that
+  client after each upload, so an upload that finished first cut off the uploads still in
+  progress (for example `asyncio.gather()` over `AsyncThreatZone.create_sandbox_submission()`).
+  Each upload now closes only its own file. File objects you pass in stay open.
+- The SDK version and `User-Agent` header are now `1.1.4`. The `1.1.2` and `1.1.3` releases
+  were not published because their tags did not match the package version.
 - `get_behaviours` no longer fails on Windows V2 events. Their `timestamp` has fractional
   seconds (for example `1790376279.35`).
 - `get_network_threats` no longer fails on `info` alerts. `ThreatSeverity` adds `info` and

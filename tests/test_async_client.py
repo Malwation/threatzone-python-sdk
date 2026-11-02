@@ -6,8 +6,10 @@ to patch httpx.AsyncClient.request.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -434,6 +436,38 @@ class TestAsyncCreateSubmissions:
         assert isinstance(result, SubmissionCreated)
         assert _call_url(mock).endswith("/submissions/sandbox")
         assert _call_method(mock) == "POST"
+
+    async def test_concurrent_path_uploads_do_not_close_each_others_files(
+        self, api_key: str, sample_submission_created: dict[str, Any], tmp_path: Path
+    ) -> None:
+        payloads = {f"sample_{i}.bin": bytes([i]) * 100_000 * (i + 1) ** 2 for i in range(4)}
+        for name, payload in payloads.items():
+            (tmp_path / name).write_bytes(payload)
+        received: list[bytes] = []
+
+        class InterleavingTransport(httpx.AsyncBaseTransport):
+            async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+                body = b""
+                async for chunk in request.stream:
+                    body += chunk
+                    await asyncio.sleep(0)
+                received.append(body)
+                return _make_response(200, sample_submission_created)
+
+        injected = httpx.AsyncClient(transport=InterleavingTransport())
+        async with AsyncThreatZone(api_key=api_key, http_client=injected) as client:
+            results = await asyncio.gather(
+                *(
+                    client.create_sandbox_submission(tmp_path / name, environment="w10_x64")
+                    for name in payloads
+                )
+            )
+        await injected.aclose()
+
+        assert all(isinstance(result, SubmissionCreated) for result in results)
+        assert len(received) == len(payloads)
+        for payload in payloads.values():
+            assert sum(payload in body for body in received) == 1
 
     async def test_create_sandbox_submission_400(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(400, {"message": "missing environment"}))

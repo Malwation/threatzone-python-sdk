@@ -12,6 +12,6 @@ DEFAULT_WAIT_TIMEOUT: Final[float] = 600.0
 API_KEY_ENV_VAR: Final[str] = "THREATZONE_API_KEY"
 API_KEY_HEADER: Final[str] = "Authorization"
 
-USER_AGENT: Final[str] = "threatzone-python-sdk/1.1.1"
+USER_AGENT: Final[str] = "threatzone-python-sdk/1.1.4"
 
 CHUNK_SIZE: Final[int] = 8192

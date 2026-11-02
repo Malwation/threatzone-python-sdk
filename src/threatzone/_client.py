@@ -7,6 +7,7 @@ import contextlib
 import json
 import re
 import time
+import weakref
 from collections.abc import Mapping
 from io import IOBase
 from pathlib import Path
@@ -97,7 +98,7 @@ class BaseClient:
 
     def __init__(self, config: ClientConfig) -> None:
         self._config = config
-        self._file_stack: contextlib.ExitStack = contextlib.ExitStack()
+        self._opened_uploads: weakref.WeakSet[IOBase] = weakref.WeakSet()
 
     def _prepare_file_upload(
         self,
@@ -112,7 +113,8 @@ class BaseClient:
         content: BinaryIO | bytes | IOBase
         if isinstance(file, (str, Path)):
             path = Path(file)
-            file_handle = self._file_stack.enter_context(path.open("rb"))
+            file_handle = path.open("rb")
+            self._opened_uploads.add(file_handle)
             filename = path.name
             content = file_handle
         elif isinstance(file, bytes):
@@ -134,11 +136,19 @@ class BaseClient:
             filtered["envelope"] = 1
         return filtered or None
 
-    def _cleanup_files(self) -> None:
-        """Close any file handles opened during file upload preparation."""
-        with contextlib.suppress(Exception):
-            self._file_stack.close()
-        self._file_stack = contextlib.ExitStack()
+    def _cleanup_files(self, files: Mapping[str, Any] | None) -> None:
+        """Close the file handles this client opened for one request's uploads.
+
+        Only handles referenced by ``files`` are closed, so concurrent uploads on the
+        same client never close each other's files. Caller-supplied file objects are
+        left open.
+        """
+        for value in (files or {}).values():
+            content = value[1] if isinstance(value, tuple) and len(value) > 1 else value
+            if content in self._opened_uploads:
+                self._opened_uploads.discard(content)
+                with contextlib.suppress(Exception):
+                    content.close()
 
     def _build_multipart_data(
         self,
@@ -295,7 +305,7 @@ class SyncHTTPClient(BaseClient):
         try:
             return self._request("POST", path, json=json, data=data, files=files)
         finally:
-            self._cleanup_files()
+            self._cleanup_files(files)
 
     def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""
@@ -466,7 +476,7 @@ class AsyncHTTPClient(BaseClient):
         try:
             return await self._request("POST", path, json=json, data=data, files=files)
         finally:
-            self._cleanup_files()
+            self._cleanup_files(files)
 
     async def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""

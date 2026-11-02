@@ -47,7 +47,7 @@ class TestBaseClient:
             assert content.read() == b"MZ executable content"
             assert content_type == "application/octet-stream"
         finally:
-            client._cleanup_files()
+            client._cleanup_files({field_name: (filename, content, content_type)})
             Path(temp_path).unlink()
 
     def test_prepare_file_upload_from_path_object(self, config: ClientConfig):
@@ -65,8 +65,40 @@ class TestBaseClient:
             assert hasattr(content, "read")
             assert content.read() == b"DLL content"
         finally:
-            client._cleanup_files()
+            client._cleanup_files({field_name: (filename, content, "application/octet-stream")})
             temp_path.unlink()
+
+    def test_cleanup_files_closes_only_the_given_request_handles(
+        self, config: ClientConfig, tmp_path: Path
+    ):
+        client = BaseClient(config)
+        first_path = tmp_path / "first.bin"
+        second_path = tmp_path / "second.bin"
+        first_path.write_bytes(b"first")
+        second_path.write_bytes(b"second")
+
+        first = client._build_multipart_data(first_path)["files"]
+        second = client._build_multipart_data(second_path)["files"]
+        first_handle = first["file"][1]
+        second_handle = second["file"][1]
+
+        client._cleanup_files(first)
+
+        assert first_handle.closed
+        assert not second_handle.closed
+        assert second_handle.read() == b"second"
+
+        client._cleanup_files(second)
+        assert second_handle.closed
+
+    def test_cleanup_files_leaves_caller_file_objects_open(self, config: ClientConfig):
+        client = BaseClient(config)
+        file_obj = io.BytesIO(b"caller owned")
+
+        files = client._build_multipart_data(file_obj)["files"]
+        client._cleanup_files(files)
+
+        assert not file_obj.closed
 
     def test_prepare_file_upload_from_bytes(self, config: ClientConfig):
         client = BaseClient(config)
