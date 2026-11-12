@@ -250,6 +250,11 @@ _ROUTES_POST: list[tuple[str, re.Pattern[str]]] = [
     ("create_cdr", re.compile(r"^/submissions/cdr$")),
     ("create_url_analysis", re.compile(r"^/submissions/url_analysis$")),
     ("create_open_in_browser", re.compile(r"^/submissions/open_in_browser$")),
+    ("url_download", re.compile(r"^/submissions/url_download$")),
+    (
+        "analyze_artifact",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/artifacts/(?P<artifact_id>[^/]+)/analyze$"),
+    ),
     (
         "restart_url_analysis_session",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/session/restart$"),

@@ -5,6 +5,44 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `analyze_artifact(uuid, artifact_id, ...)` submits a stored artifact of a submission for
+  sandbox analysis (`POST /submissions/{uuid}/artifacts/{artifact_id}/analyze`). It takes the
+  options of `create_sandbox_submission()` and returns `SubmissionCreated`.
+- `create_url_download_submission(url, ...)` fetches a file from a URL on the server and
+  submits it for sandbox analysis (`POST /submissions/url_download`, `mode: "submit"`). It
+  accepts `archive_password` and the sandbox options, and returns `UrlDownloadSubmission`.
+- `download_url(url)` fetches a file from a URL on the server and returns it in an AES-256
+  ZIP with the password `infected` (`mode: "return"`). The result is a streamed
+  `UrlDownloadFile` (`AsyncUrlDownloadFile` on the async client) with the file facts from the
+  response headers: `file_name`, `detected_type`, `mimetype`, `file_size`, `sha256`,
+  `final_url` and `tls_error`.
+- `UrlAnalysisResponse.downloaded_files` (`UrlAnalysisDownloadedFile`) lists the files that
+  the browser downloaded. `state`, `initiator` and `limit_reason` accept new server values.
+- `UrlAnalysisResponse.score_state` (`scored`, `failed`, `not_scored`),
+  `UrlAnalysisResponse.browser_snapshot` (`UrlAnalysisBrowserSnapshot`),
+  `UrlAnalysisCompleteness.browser_collection_note`, `UrlScoreIndicator.checked_url` and
+  `UrlAnalysisThreatAnalysis.url_results` (`UrlAnalysisUrlResult`,
+  `UrlAnalysisNavigationContext`, `UrlAnalysisNavigationSslCertificate`). Every new field is
+  `None` or empty when an older server omits it.
+- `PlanPermissions.url_download` (default `False`).
+- `UrlFetchError` for the codes `URL_TARGET_NOT_ALLOWED`, `URL_HOST_UNRESOLVABLE`,
+  `URL_TOO_MANY_REDIRECTS`, `URL_DID_NOT_RETURN_A_FILE`, `URL_FETCH_TIMEOUT` and
+  `URL_FETCH_FAILED`, with `details`. `FileTooLargeError` for `413 FILE_TOO_LARGE`, with
+  `max_bytes`. `ArtifactNotAnalyzableError` (subclass of `BadRequestError`) for
+  `400 ARTIFACT_NOT_ANALYZABLE`.
+- The fake API supports `analyze_artifact()`, `create_url_download_submission()` and
+  `download_url()`, and its URL report lists downloaded files.
+
+### Deprecated
+
+- `UrlAnalysisResponse.extracted_file`: never populated; always `None`. Use
+  `downloaded_files`.
+- `UrlAnalysisIpInfo.threat_status`: no source writes it.
+
 ## 1.1.4
 
 ### Added

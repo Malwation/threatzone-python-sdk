@@ -24,6 +24,8 @@ client = ThreatZone(api_key="<your-api-key>")
 12. [Cross-reference MITRE techniques with indicators](#12-cross-reference-mitre-techniques-with-indicators)
 13. [Control Magika filename canonicalisation per submission (`dynamic_mimetype_check`)](#13-control-dynamic_mimetype_check)
 14. [Auto-select sandbox environment](#14-auto-select-sandbox-environment)
+15. [Analyse the files that a URL downloaded](#15-analyse-the-files-that-a-url-downloaded)
+16. [Fetch a file from a URL](#16-fetch-a-file-from-a-url)
 
 ---
 
@@ -103,7 +105,6 @@ def analyse_url(url: str) -> None:
         if report.ip_info is not None:
             print(f"IP:        {report.ip_info.ip} ({report.ip_info.country})")
             print(f"ISP:       {report.ip_info.isp}")
-            print(f"Verdict:   {report.ip_info.threat_status.verdict}")
 
         if report.ssl_certificate is not None:
             print(f"TLS issuer: {report.ssl_certificate.issuer}")
@@ -111,6 +112,9 @@ def analyse_url(url: str) -> None:
 
         for dns in report.dns_records:
             print(f"DNS {dns.type}: {', '.join(dns.records)}")
+
+        for item in report.downloaded_files:
+            print(f"Download:  {item.filename} ({item.state}, artifact {item.artifact_id})")
 
         if report.threat_analysis is not None and report.threat_analysis.blacklist:
             print("URL appears on at least one blacklist.")
@@ -833,3 +837,84 @@ with ThreatZone(api_key="<your-api-key>") as client:
 - The same kwarg is accepted by `create_open_in_browser_submission()` for API symmetry;
   since there's no file to route on, OIB always falls back to the plan's default
   `open_in_browser` OS.
+
+---
+
+### 15. Analyse the files that a URL downloaded
+
+**Goal.** Read the files that the browser downloaded during a URL analysis, and send each
+stored file to the sandbox.
+
+```python
+from threatzone import ArtifactNotAnalyzableError, ThreatZone
+
+with ThreatZone(api_key="<your-api-key>") as client:
+    url_submission = client.create_url_submission("https://suspicious.example.com/")
+    client.wait_for_completion(url_submission.uuid, timeout=600)
+    report = client.get_url_analysis(url_submission.uuid)
+
+    for item in report.downloaded_files:
+        if item.state != "completed" or item.artifact_id is None:
+            print(f"{item.filename}: {item.state} ({item.limit_reason or item.received_bytes})")
+            continue
+        try:
+            child = client.analyze_artifact(
+                url_submission.uuid,
+                item.artifact_id,
+                auto_select_environment=True,
+            )
+        except ArtifactNotAnalyzableError as exc:
+            print(f"{item.filename}: the sandbox does not run type {exc.artifact_type}")
+            continue
+        print(f"{item.filename} ({item.detected_type}) -> {child.uuid}")
+```
+
+**Notes.**
+
+- Only a `completed` file has an `artifact_id`. An `incomplete` file was still downloading
+  when the browser session ended; `received_bytes` tells how far it got.
+- `analyze_artifact()` takes the same options as `create_sandbox_submission()` and counts
+  against the submission quota. The new submission has the URL submission as its parent.
+- `report.extracted_file` is deprecated and always `None`. Read `downloaded_files`.
+
+---
+
+### 16. Fetch a file from a URL
+
+**Goal.** Let the platform fetch a file from a URL: analyse it in the sandbox, or get it
+back in a password-protected ZIP. The plan needs the `urlDownload` permission.
+
+```python
+from threatzone import FileTooLargeError, ThreatZone, UrlFetchError
+
+with ThreatZone(api_key="<your-api-key>") as client:
+    permissions = client.get_user_info().plan_permissions
+    if permissions is None or not permissions.url_download:
+        raise SystemExit("The plan has no urlDownload permission.")
+
+    try:
+        created = client.create_url_download_submission(
+            "https://cdn.example.com/tools/setup.zip",
+            archive_password="s3cret",
+            auto_select_environment=True,
+        )
+        print(created.uuid, created.filename, created.sha256, created.final_url)
+
+        with client.download_url("https://cdn.example.com/tools/setup.exe") as download:
+            path = download.save(download.filename)
+            print(f"{download.file_name} ({download.file_size} bytes) -> {path}")
+    except UrlFetchError as exc:
+        print(f"Fetch failed: {exc.code} {exc.details}")
+    except FileTooLargeError as exc:
+        print(f"The file is larger than {exc.max_bytes} bytes.")
+```
+
+**Notes.**
+
+- The server follows at most 10 redirects, stops after 60 seconds, and refuses private
+  targets on every hop.
+- `download_url()` stores nothing and creates no submission. The ZIP is AES-256 with the
+  password `infected`. `file_size` and `sha256` describe the fetched file, not the ZIP.
+- `tls_error` is the certificate error code of the first TLS hop that failed verification,
+  for example `CERT_HAS_EXPIRED`. The server still fetches the file.
+- The SDK never sends these `POST` requests again after a read or write timeout.

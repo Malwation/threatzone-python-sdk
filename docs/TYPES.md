@@ -21,7 +21,8 @@ Top-level submission types. Returned by `create_*_submission()`, `list_submissio
 
 | Type | Purpose | Endpoints |
 |------|---------|-----------|
-| `SubmissionCreated` | Thin envelope for a freshly queued submission. | `POST /submissions/*` |
+| `SubmissionCreated` | Thin envelope for a freshly queued submission. Also returned by `analyze_artifact()`. | `POST /submissions/*`, `POST /submissions/:uuid/artifacts/:artifactId/analyze` |
+| `UrlDownloadSubmission` | Subclass of `SubmissionCreated` returned by `create_url_download_submission()`: `uuid`, `message`, `sha256`, `filename`, `detected_type`, `mimetype`, `size`, `final_url`, `tls_error`. `tls_error` is the certificate error code of the first TLS hop that failed verification, or `None`. | `POST /submissions/url_download` (`mode: "submit"`) |
 | `SubmissionListItem` | One row in a paginated list. Carries enrichment (indicators rollup, overview). `url` is the submitted URL of a URL submission; `filename` and `sha256` are `None` for a URL submission. | `GET /submissions` |
 | `PaginatedSubmissions` | Full list envelope with `items`, `total`, `page`, `limit`, `total_pages`. | `GET /submissions` |
 | `Submission` | Full submission detail including `file`, `mitre_techniques`, `overview`, `score_breakdown`. `score` is the live score that the web UI shows; it is `None` for a pure URL submission until the final URL verdict. `search_by_sha256()` returns one page of these (`page`, `limit`; the server default is 20 rows). | `GET /submissions/:uuid`, `GET /submissions/search/sha256/:sha256` |
@@ -254,29 +255,34 @@ peer report type to dynamic/static/cdr &mdash; it is guarded separately by
 
 | Type | Purpose |
 |------|---------|
-| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `job_id` (the analysis run; `None` on older servers), `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file`, optional `threat_analysis`, `pages`, plus the scoring fields `threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`, `verdict_provenance`, `impersonation_target`, `completeness`, `intel_detections`, `metafields`, `scored_at`. |
+| `UrlAnalysisResponse` | Top-level report: `level`, `status`, `job_id` (the analysis run; `None` on older servers), `general_info`, `screenshot`, optional `ip_info`, `dns_records`, optional `whois`, optional `ssl_certificate`, optional `response_headers`, optional `extracted_file` (deprecated, always `None`), `downloaded_files`, optional `threat_analysis`, `pages`, plus the scoring fields `threat_score`, `score_state`, `risk_level`, `privacy_score`, `privacy_risk_level`, `privacy_breakdown`, `verdict_provenance`, `impersonation_target`, `completeness`, `browser_snapshot`, `intel_detections`, `metafields`, `scored_at`. `score_state` is `UrlAnalysisScoreState` (`scored`, `failed`, `not_scored`, or a new value) or `None` on older servers. |
+| `UrlAnalysisDownloadedFile` | `{id, artifact_id, filename, detected_type, mime_type, size, received_bytes, sha256, source_url, initiator, state, limit_reason, captured_at}`. One file that the browser downloaded. `state` is `UrlDownloadedFileState` (`completed`, `canceled`, `too_large`, `upload_failed`, `incomplete`, or a new value). `initiator` is `UrlDownloadInitiator` (`navigation`, `script`, `unknown`, or a new value). `limit_reason` is `UrlDownloadLimitReason` (`too_large`, `run_bytes_exceeded`, `file_count_exceeded`, or a new value) or `None`. Pass `artifact_id` of a `completed` file to `download_artifact()` or `analyze_artifact()`. |
+| `UrlAnalysisBrowserSnapshot` | `{job_id, revision, sections}`. Browser snapshot of the current run. `sections` lists the names for `get_url_analysis_browser_section()`. |
 | `UrlAnalysisGeneralInfo` | `{url, domain, website_title}`. |
 | `UrlAnalysisScreenshot` | `{available: bool}`. Fetch actual bytes with `client.get_screenshot(uuid)`. |
-| `UrlAnalysisIpInfo` | `{ip, asn, city, country, isp, organization, threat_status}`. |
+| `UrlAnalysisIpInfo` | `{ip, asn, city, country, isp, organization, threat_status}`. `threat_status` is deprecated: no source writes it, and the verdict is always `unknown`. |
 | `UrlAnalysisThreatStatus` | `{verdict, title, description}`. Reused across `ip_info`, `extracted_file`. |
 | `UrlAnalysisDnsRecord` | `{type, records}`. |
 | `UrlAnalysisWhoisInfo` | Parsed WHOIS: `domain_name`, `name_servers`, `creation_date`, `expiration_date`, `registrar`, `email`, `phone`, &hellip; |
 | `UrlAnalysisSslCertificate` | Parsed leaf cert: `subject`, `issuer`, `renewed_at`, `expires_at`, `serial_number`, `fingerprint`. |
-| `UrlAnalysisExtractedFile` | `{uuid, threat_status}`. Set when the page served a downloadable file. |
-| `UrlAnalysisThreatAnalysis` | `{overview, blacklist, threat_details}`. |
+| `UrlAnalysisExtractedFile` | `{uuid, threat_status}`. Deprecated: never populated. Use `UrlAnalysisResponse.downloaded_files`. |
+| `UrlAnalysisThreatAnalysis` | `{overview, blacklist, threat_details, url_results}`. `url_results` is empty on older servers. |
+| `UrlAnalysisUrlResult` | `{id, parent_id, hop, via, redirect_status, url, overview, blacklist, threat_details, navigation_context}`. One node of the tree of checked URLs. The node with `parent_id=None` is the submitted URL. `via` is `UrlResultVia` (`submitted`, `http_redirect`, `browser_redirect`, `browser_navigation`, `unknown`, or a new value). |
+| `UrlAnalysisNavigationContext` | `{url, dns_records, whois_creation_date, ssl_certificate}`. Lookups of one checked URL. |
+| `UrlAnalysisNavigationSslCertificate` | `{subject, issuer, expires_at, renewed_at, fingerprint}`. The times are ISO 8601 UTC text. |
 | `UrlAnalysisThreatOverviewItem` | `{source, title, description, verdict}`. Per-intel-source verdict. |
 | `UrlAnalysisThreatDetailItem` | `{source, details}`. Per-intel-source raw detail payload. |
 | `UrlAnalysisPrivacyFactor` | `{factor, label, delta, detail}`. One contributor to the privacy score. |
 | `UrlAnalysisVerdictProvenance` | `{raw_verdict, quorum_applied, allowlist_applied, collection_state, pass_}`. How the verdict was produced. `pass_` maps to the wire field `pass`. |
 | `UrlAnalysisImpersonationTarget` | `{brand_name, canonical_domain, signals, confidence}`. Brand the page most likely impersonates. |
-| `UrlAnalysisCompleteness` | `{measured_sources, skipped_sources, unavailable_sources, browser_collection}`. Which sources produced evidence. |
+| `UrlAnalysisCompleteness` | `{measured_sources, skipped_sources, unavailable_sources, browser_collection, browser_collection_note}`. Which sources produced evidence. `browser_collection_note` is a plain note on the browser evidence, or `None`. |
 | `UrlAnalysisIntelDetection` | `{source, detection_type, severity, details}`. One threat-intelligence hit. |
 | `UrlAnalysisSession` | Interactive browser session state: `state`, `collection_status`, `recording_status`, `queue_position`, `vnc_available`, `report_available`, `started_at`, `ready_at`, `expires_at`, `finished_at`, `failure_code`, `extensions_used`, `extensions_max`, `session_config`, `link`, `expired`. Returned by `get_url_analysis_session()`. |
 | `UrlAnalysisSessionConfig` | `{device_profile_id, network_config_id, network_config_source, network_config_name, session_duration_seconds, device_preset_id, device_preset_name}`. Device and network choice the session runs with. `network_config_source` is `UrlAnalysisNetworkConfigSource` (`submit`, `admin-default`, or a new value). `network_config_source` and `network_config_name` are `None` when no network configuration was recorded, and on older servers. |
 | `UrlAnalysisIndicators` | `{state, unavailable_reason, snapshot}`. Returned by `get_url_analysis_indicators()`. `state` is `UrlScoreIndicatorsState` (`available`, `pending`, `unavailable`, or a new value). `unavailable_reason` is `UrlScoreExplanationUnavailableReason` (`legacy`, `size_limit`, `scoring_error`, or a new value) or `None`. |
 | `UrlScoreExplanation` | `{schema_version, scoring_version, job_id, pass_, scored_at, browser_snapshot, threat_score, verdict, indicators, aggregation, verdict_adjustments}`. `pass_` maps to the wire field `pass` (`UrlScorePass`: `submit`, `final`, or a new value). `scored_at` is the server text, not a `datetime`: send it unchanged to `get_url_analysis_indicator_evidence()`. `verdict` is `UrlScoreVerdict` (`unknown`, `benign`, `suspicious`, `malicious`, or a new value). |
 | `UrlScoreBrowserSnapshot` | `{job_id, manifest_hash}`. Browser snapshot that the score used. |
-| `UrlScoreIndicator` | `{id, rule_id, source, family, title, reason, availability, confidence, original_rule_score, weighted_points, disposition, suppressed_by, evidence_refs}`. `availability` is `UrlScoreIndicatorAvailability` (`measured`, `not_measured`, `unavailable`, or a new value). `confidence` is `UrlScoreIndicatorConfidence` (`high`, `heuristic`, or a new value). `disposition` is `UrlScoreIndicatorDisposition` (`contributing`, `informational`, `suppressed`, `no_match`, `not_measured`, `unavailable`, or a new value). `title` and `reason` are display text that can change. |
+| `UrlScoreIndicator` | `{id, rule_id, source, family, title, reason, availability, confidence, original_rule_score, weighted_points, disposition, suppressed_by, checked_url, evidence_refs}`. `checked_url` is the URL that the indicator checked (explanation schema version 2, else `None`). `availability` is `UrlScoreIndicatorAvailability` (`measured`, `not_measured`, `unavailable`, or a new value). `confidence` is `UrlScoreIndicatorConfidence` (`high`, `heuristic`, or a new value). `disposition` is `UrlScoreIndicatorDisposition` (`contributing`, `informational`, `suppressed`, `no_match`, `not_measured`, `unavailable`, or a new value). `title` and `reason` are display text that can change. |
 | `UrlScoreEvidenceRef` | `{kind, id, available}`. `kind` is `UrlScoreEvidenceKind` (`network`, `finding`, `intel`, `report`, or a new value). |
 | `UrlScoreAggregation` | `{high_points, heuristic_points, reputation_credits, credit_scope, effective_credit, score_before_clamp, score_after_clamp, rounding_adjustment, impersonation_floor_adjustment}`. `credit_scope` is `UrlScoreCreditScope` (`heuristic`, `all`, or a new value). |
 | `UrlScoreReputationCredit` | `{rule_id, eligible, nominal_points, reason}`. |
@@ -419,7 +425,7 @@ User, workspace, plan, and quota types. Returned by `get_user_info()`.
 | `WorkspaceBasicInfo` | `{name, alias, private, type}`. `type` is `Literal["personal", "organization"]`. |
 | `LimitsCount` | Current usage: `api_request_count`, `daily_submission_count`, `concurrent_submission_count`, `ai_report_count`, `ai_report_resets_at`. `ai_report_count` counts the AI report quota units used since 00:00 UTC; a report in progress counts as used. `ai_report_resets_at` is the next 00:00 UTC. |
 | `PlanInfo` | `{plan_name, start_time, end_time, starts_at, ends_at, subs_time, file_limits, submission_limits, permissions}`. `start_time` and `end_time` are display text; read `starts_at` and `ends_at` (`datetime` or `None`) in code. |
-| `PlanPermissions` | `{download_sample, html_report, stix_report, pdf_report, download_report, ai_report}`. A `False` value means that the matching routes return 403. |
+| `PlanPermissions` | `{download_sample, html_report, stix_report, pdf_report, download_report, ai_report, url_download}`. A `False` value means that the matching routes return 403. `url_download` (default `False`) allows `create_url_download_submission()` and `download_url()`. |
 | `FileLimits` | `{extensions, file_size, file_size_bytes}`. `file_size` is display text; read `file_size_bytes` in code. |
 | `SubmissionLimits` | `{api_limit, daily_limit, concurrent_limit, ai_report_limit}`. `ai_report_limit` is `0` when the plan has no AI report. |
 | `ModuleInfo` | One enabled module: `{module_id, module_name, start_time, end_time, starts_at, ends_at}`. |
@@ -445,6 +451,9 @@ Typed error surface. Import from the top-level `threatzone` module or from
 | `PermissionDeniedError` (403) | Plan permission or module missing (`FORBIDDEN`), a plan without API access (`PLAN_API_ACCESS_DENIED`, a retry does not help), or an unlicensed self-hosted deployment (`LICENSE_INVALID`). | `code` |
 | `NotFoundError` (404) | `NOT_FOUND` for a missing submission and for a private submission of another workspace. Route codes such as `ARTIFACT_NOT_FOUND` and `MEDIA_NOT_FOUND`. | inherits from `APIError` |
 | `BadRequestError` (400) | Validation failure (`INVALID_QUERY_PARAM`, also for a malformed UUID or ID). | `code`, `field` (`details.field`, the first field that failed) |
+| `ArtifactNotAnalyzableError` (400) | `ARTIFACT_NOT_ANALYZABLE`: `analyze_artifact()` named an artifact type that the sandbox does not run, for example a page source. Subclass of `BadRequestError`. | `code`, `artifact_id`, `artifact_type` |
+| `UrlFetchError` (400, 422, 502, 504) | The server cannot fetch the URL of a URL download: `URL_TARGET_NOT_ALLOWED` (400), `URL_HOST_UNRESOLVABLE`, `URL_TOO_MANY_REDIRECTS`, `URL_DID_NOT_RETURN_A_FILE` (422), `URL_FETCH_FAILED` (502), `URL_FETCH_TIMEOUT` (504). Subclass of `APIError` only. | `code`, `details` |
+| `FileTooLargeError` (413) | `FILE_TOO_LARGE`: the fetched file is larger than the plan file size limit. | `code`, `max_bytes` |
 | `RateLimitError` (429) | `RATE_LIMIT_EXCEEDED` (heavy-route limit, monthly API request limit), `SUBMISSION_LIMIT_EXCEEDED` (daily or concurrent submission limit) or `AI_REPORT_QUOTA_EXCEEDED`. | `code`, `retry_after` (from the `Retry-After` header, else the `retryAfter` body field, else `details.retryAfterSeconds`) |
 | `ReportUnavailableError` (409) | Required report not yet available. | `code`, `submission_uuid`, `required_report`, `current_status`, `available_reports` |
 | `BehaviourIndexingError` (409) | `BEHAVIOUR_INDEXING` from an older server: the behaviour index is not ready. Subclass of `ReportUnavailableError`. | `code`, `retry_after` |
@@ -518,6 +527,7 @@ Types shared across multiple surfaces.
 | `DevicePresetOption` | `{id, name, category, base_key, default}`. One selectable browser device preset. Pass `id` as the `device_preset` metafield. | `GET /config/device-presets` |
 | `MediaFile` | `{id, name, content_type, size, kind}`. `kind` is `"video"`, `"screenshot"`, or `None`. | `GET /submissions/:uuid/media` |
 | `PdfReportStatus` | `{status, message, retry_after_seconds}`. `status` is `PdfReportStatusValue` (`analysis_in_progress`, `queued`, `generating`, `ready`, `failed`, or a new value). | `GET /submissions/:uuid/download/pdf-report/status` |
+| `UrlDownloadFile` | Returned by `download_url()` (`AsyncUrlDownloadFile` on the async client). A `DownloadResponse` of the AES-256 ZIP (password `infected`) plus the facts of the fetched file from the response headers: `file_name` (percent-decoded `X-File-Name`), `detected_type`, `mimetype`, `file_size` (the file, not the ZIP), `sha256`, `final_url`, `tls_error`. `filename` is `<file_name>.zip`. | `POST /submissions/url_download` (`mode: "return"`) |
 | `IocExportFormat` | Literal union for `download_iocs(uuid, format=...)`: `csv`, `text`, `stix` (STIX 2.1 bundle), `misp` (MISP event JSON). `stix` and `misp` need the `stixReport` plan permission. | `GET /submissions/:uuid/download/iocs` |
 
 Download endpoints return `DownloadResponse` (sync) or `AsyncDownloadResponse` (async)

@@ -8,11 +8,13 @@ import pytest
 from threatzone._exceptions import (
     AnalysisTimeoutError,
     APIError,
+    ArtifactNotAnalyzableError,
     AuthenticationError,
     BadRequestError,
     BehaviourIndexingError,
     BehaviourTooLargeError,
     BehaviourUnreadableError,
+    FileTooLargeError,
     InternalServerError,
     NotFoundError,
     PaymentRequiredError,
@@ -21,6 +23,7 @@ from threatzone._exceptions import (
     RateLimitError,
     ReportUnavailableError,
     ThreatZoneError,
+    UrlFetchError,
     YaraRulePendingError,
     raise_for_status,
 )
@@ -541,3 +544,86 @@ class TestBehaviourErrors:
         with pytest.raises(InternalServerError) as exc_info:
             raise_for_status(response)
         assert not isinstance(exc_info.value, QuotaUnavailableError)
+
+
+def _envelope(status_code: int, code: str, details: dict[str, object]) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        json={
+            "statusCode": status_code,
+            "error": "Error",
+            "message": f"{code} message",
+            "code": code,
+            "details": details,
+        },
+    )
+
+
+class TestUrlDownloadErrors:
+    @pytest.mark.parametrize(
+        ("status_code", "code", "details"),
+        [
+            (400, "URL_TARGET_NOT_ALLOWED", {"host": "10.0.0.1", "reason": "private", "hop": 0}),
+            (422, "URL_HOST_UNRESOLVABLE", {"host": "nx.example", "hop": 1}),
+            (422, "URL_TOO_MANY_REDIRECTS", {"maxRedirects": 10, "lastUrl": "https://a.example"}),
+            (
+                422,
+                "URL_DID_NOT_RETURN_A_FILE",
+                {"status": 404, "contentType": "text/html", "finalUrl": "https://a.example"},
+            ),
+            (504, "URL_FETCH_TIMEOUT", {"timeoutSeconds": 60}),
+            (502, "URL_FETCH_FAILED", {"reason": "tls_handshake", "hop": 0}),
+        ],
+    )
+    def test_url_fetch_codes_raise_url_fetch_error(
+        self, status_code: int, code: str, details: dict[str, object]
+    ) -> None:
+        with pytest.raises(UrlFetchError) as exc_info:
+            raise_for_status(_envelope(status_code, code, details))
+        error = exc_info.value
+        assert error.status_code == status_code
+        assert error.code == code
+        assert error.details == details
+        assert error.message == f"{code} message"
+        assert not isinstance(error, (BadRequestError, InternalServerError))
+
+    def test_url_fetch_error_without_details(self) -> None:
+        response = httpx.Response(502, json={"message": "m", "code": "URL_FETCH_FAILED"})
+        with pytest.raises(UrlFetchError) as exc_info:
+            raise_for_status(response)
+        assert exc_info.value.details == {}
+
+    def test_file_too_large(self) -> None:
+        with pytest.raises(FileTooLargeError) as exc_info:
+            raise_for_status(_envelope(413, "FILE_TOO_LARGE", {"maxBytes": 104857600}))
+        assert exc_info.value.max_bytes == 104857600
+        assert exc_info.value.code == "FILE_TOO_LARGE"
+
+    def test_other_413_is_a_plain_api_error(self) -> None:
+        with pytest.raises(APIError) as exc_info:
+            raise_for_status(_envelope(413, "PAYLOAD_TOO_LARGE", {}))
+        assert type(exc_info.value) is APIError
+
+    def test_artifact_not_analyzable(self) -> None:
+        response = _envelope(
+            400, "ARTIFACT_NOT_ANALYZABLE", {"artifactId": "66f0a1b2", "type": "page_source"}
+        )
+        with pytest.raises(ArtifactNotAnalyzableError) as exc_info:
+            raise_for_status(response)
+        error = exc_info.value
+        assert isinstance(error, BadRequestError)
+        assert error.artifact_id == "66f0a1b2"
+        assert error.artifact_type == "page_source"
+
+    def test_other_400_stays_a_bad_request_error(self) -> None:
+        with pytest.raises(BadRequestError) as exc_info:
+            raise_for_status(_envelope(400, "INVALID_QUERY_PARAM", {"field": "mode"}))
+        assert type(exc_info.value) is BadRequestError
+        assert exc_info.value.field == "mode"
+
+    def test_new_errors_are_exported_from_the_package(self) -> None:
+        import threatzone
+
+        assert threatzone.UrlFetchError is UrlFetchError
+        assert threatzone.FileTooLargeError is FileTooLargeError
+        assert threatzone.ArtifactNotAnalyzableError is ArtifactNotAnalyzableError

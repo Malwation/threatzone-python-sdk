@@ -85,6 +85,9 @@ class PlanPermissions(BaseModel):
     """Download report files, for example the network capture and the raw analysis data."""
     ai_report: bool | None = Field(default=None, alias="aiReport")
     """Read and queue AI analyst reports."""
+    url_download: bool = Field(default=False, alias="urlDownload")
+    """Fetch a file from a URL with ``create_url_download_submission()`` and
+    ``download_url()``."""
 
 
 class PlanInfo(BaseModel):

@@ -13,28 +13,37 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from pytest_httpx import HTTPXMock
 
 from threatzone import ThreatZone
 from threatzone._exceptions import (
     AnalysisTimeoutError,
+    ArtifactNotAnalyzableError,
     AuthenticationError,
     BadRequestError,
     BehaviourIndexingError,
     BehaviourTooLargeError,
     BehaviourUnreadableError,
+    ConnectionError,
+    FileTooLargeError,
     InternalServerError,
     NotFoundError,
     PdfReportPendingError,
     PermissionDeniedError,
     RateLimitError,
     ReportUnavailableError,
+    ServiceUnavailableError,
+    TimeoutError,
+    UrlFetchError,
     YaraRulePendingError,
 )
+from threatzone.testing import FakeThreatZoneAPI
 from threatzone.types import (
     AiReport,
     AiReportPending,
@@ -92,6 +101,8 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlDownloadFile,
+    UrlDownloadSubmission,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -3062,3 +3073,330 @@ class TestIocExport:
         ctx, _ = _patched_stream(_make_response(403, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):
             client.download_iocs("sub-789", format="misp")
+
+
+# ---------------------------------------------------------------------------
+# Artifact analysis and URL download
+# ---------------------------------------------------------------------------
+
+FAKE_BASE = "https://fake.threat.zone/public-api"
+ARTIFACT_UUID = "11111111-2222-4333-8444-555555555555"
+ARTIFACT_ID = "66f0a1b2c3d4e5f6a7b8c9d0"
+URL_DOWNLOAD_URL = f"{FAKE_BASE}/submissions/url_download"
+CREATED = {"uuid": "c1c2c3c4-e5f6-4789-abcd-ef1234567890", "message": "Submission created"}
+URL_DOWNLOAD_CREATED = {
+    **CREATED,
+    "filename": "setup.exe",
+    "detectedType": "exe",
+    "mimetype": "application/vnd.microsoft.portable-executable",
+    "size": 123456,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "finalUrl": "https://cdn.example.com/setup.exe",
+    "tlsError": None,
+}
+ZIP_HEADERS = {
+    "content-type": "application/zip",
+    "content-disposition": 'attachment; filename="setup.exe.zip"',
+    "x-file-name": "setup%20v2.exe",
+    "x-file-detected-type": "exe",
+    "x-file-mimetype": "application/vnd.microsoft.portable-executable",
+    "x-file-size": "123456",
+    "x-file-sha256": "ab" * 32,
+    "x-final-url": "https://cdn.example.com/setup%20v2.exe",
+}
+
+
+def _fake_client() -> ThreatZone:
+    return ThreatZone(api_key="k", base_url=FAKE_BASE)
+
+
+def _error_body(status_code: int, code: str, details: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "statusCode": status_code,
+        "error": "Error",
+        "message": f"{code} message",
+        "code": code,
+        "details": details,
+    }
+
+
+class TestAnalyzeArtifact:
+    def test_sends_every_option(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{FAKE_BASE}/submissions/{ARTIFACT_UUID}/artifacts/{ARTIFACT_ID}/analyze",
+            status_code=201,
+            json=CREATED,
+        )
+        with _fake_client() as client:
+            result = client.analyze_artifact(
+                ARTIFACT_UUID,
+                ARTIFACT_ID,
+                environment="w10_x64",
+                auto_select_environment=True,
+                metafields=[{"key": "timeout", "value": 120}],
+                private=True,
+                entrypoint="run.exe",
+                password="infected",
+                configurations={"startArguments": "/quiet"},
+            )
+        assert isinstance(result, SubmissionCreated)
+        assert result.uuid == CREATED["uuid"]
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert request.headers["authorization"] == "Bearer k"
+        assert json.loads(request.content) == {
+            "private": True,
+            "environment": "w10_x64",
+            "autoSelectEnvironment": True,
+            "metafields": {"timeout": 120},
+            "entrypoint": "run.exe",
+            "password": "infected",
+            "configurations": {"startArguments": "/quiet"},
+        }
+
+    def test_minimal_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="POST", status_code=201, json=CREATED)
+        with _fake_client() as client:
+            client.analyze_artifact(ARTIFACT_UUID, ARTIFACT_ID)
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert json.loads(request.content) == {"private": False}
+
+    def test_artifact_not_analyzable(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            status_code=400,
+            json=_error_body(
+                400, "ARTIFACT_NOT_ANALYZABLE", {"artifactId": ARTIFACT_ID, "type": "page_source"}
+            ),
+        )
+        with _fake_client() as client, pytest.raises(ArtifactNotAnalyzableError) as exc_info:
+            client.analyze_artifact(ARTIFACT_UUID, ARTIFACT_ID)
+        assert exc_info.value.artifact_type == "page_source"
+
+    def test_read_timeout_is_not_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ReadTimeout("slow"))
+        with _fake_client() as client, pytest.raises(TimeoutError):
+            client.analyze_artifact(ARTIFACT_UUID, ARTIFACT_ID)
+        assert len(httpx_mock.get_requests()) == 1
+
+
+class TestCreateUrlDownloadSubmission:
+    def test_sends_submit_mode_and_every_option(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="POST", url=URL_DOWNLOAD_URL, status_code=201, json=URL_DOWNLOAD_CREATED
+        )
+        with _fake_client() as client:
+            result = client.create_url_download_submission(
+                "https://cdn.example.com/setup.zip",
+                archive_password="s3cret",
+                environment="w10_x64",
+                auto_select_environment=True,
+                metafields={"timeout": 120},
+                private=True,
+                entrypoint="setup.exe",
+                configurations={"networkConfig": "abc"},
+            )
+        assert isinstance(result, UrlDownloadSubmission)
+        assert result.final_url == "https://cdn.example.com/setup.exe"
+        assert result.tls_error is None
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert json.loads(request.content) == {
+            "url": "https://cdn.example.com/setup.zip",
+            "mode": "submit",
+            "archivePassword": "s3cret",
+            "private": True,
+            "environment": "w10_x64",
+            "autoSelectEnvironment": True,
+            "metafields": {"timeout": 120},
+            "entrypoint": "setup.exe",
+            "configurations": {"networkConfig": "abc"},
+        }
+
+    def test_minimal_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="POST", status_code=201, json=URL_DOWNLOAD_CREATED)
+        with _fake_client() as client:
+            client.create_url_download_submission("https://cdn.example.com/setup.exe")
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert json.loads(request.content) == {
+            "url": "https://cdn.example.com/setup.exe",
+            "mode": "submit",
+            "private": False,
+        }
+
+    def test_fetch_failure_raises_url_fetch_error(self, httpx_mock: HTTPXMock) -> None:
+        details = {"status": 404, "contentType": "text/html", "finalUrl": "https://a.example/"}
+        httpx_mock.add_response(
+            method="POST",
+            status_code=422,
+            json=_error_body(422, "URL_DID_NOT_RETURN_A_FILE", details),
+        )
+        with _fake_client() as client, pytest.raises(UrlFetchError) as exc_info:
+            client.create_url_download_submission("https://a.example/")
+        assert exc_info.value.code == "URL_DID_NOT_RETURN_A_FILE"
+        assert exc_info.value.details == details
+
+    def test_return_mode_concurrency_limit_raises_rate_limit_error(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            status_code=429,
+            headers={"Retry-After": "10"},
+            json=_error_body(429, "URL_DOWNLOAD_CONCURRENCY_LIMIT_EXCEEDED", {"maxInFlight": 4}),
+            is_reusable=True,
+        )
+        with _fake_client() as client, pytest.raises(RateLimitError) as exc_info:
+            client.create_url_download_submission("https://cdn.example.com/setup.exe")
+        assert exc_info.value.retry_after == 10
+
+    def test_egress_unavailable_raises_service_unavailable(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            status_code=503,
+            headers={"Retry-After": "30"},
+            json=_error_body(503, "URL_EGRESS_UNAVAILABLE", {}),
+            is_reusable=True,
+        )
+        with _fake_client() as client, pytest.raises(ServiceUnavailableError) as exc_info:
+            client.create_url_download_submission("https://cdn.example.com/setup.exe")
+        assert exc_info.value.code == "URL_EGRESS_UNAVAILABLE"
+        assert exc_info.value.retry_after == 30
+
+    def test_read_timeout_is_not_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ReadTimeout("slow"))
+        with _fake_client() as client, pytest.raises(TimeoutError):
+            client.create_url_download_submission("https://cdn.example.com/setup.exe")
+        assert len(httpx_mock.get_requests()) == 1
+
+
+class TestDownloadUrl:
+    def test_streams_the_zip_and_reads_the_file_facts(
+        self, httpx_mock: HTTPXMock, tmp_path: Path
+    ) -> None:
+        httpx_mock.add_response(
+            method="POST", url=URL_DOWNLOAD_URL, content=b"PK-ZIP-BYTES", headers=ZIP_HEADERS
+        )
+        with _fake_client() as client, client.download_url("https://cdn.example.com/a") as dl:
+            assert isinstance(dl, UrlDownloadFile)
+            assert dl.file_name == "setup v2.exe"
+            assert dl.filename == "setup v2.exe.zip"
+            assert dl.detected_type == "exe"
+            assert dl.file_size == 123456
+            assert dl.sha256 == "ab" * 32
+            assert dl.final_url == "https://cdn.example.com/setup%20v2.exe"
+            assert dl.tls_error is None
+            saved = dl.save(tmp_path / "out" / dl.filename)
+        assert saved.read_bytes() == b"PK-ZIP-BYTES"
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert request.headers["authorization"] == "Bearer k"
+        assert json.loads(request.content) == {"url": "https://cdn.example.com/a", "mode": "return"}
+
+    def test_iter_bytes(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="POST", content=b"PK-ZIP-BYTES", headers=ZIP_HEADERS)
+        with _fake_client() as client:
+            download = client.download_url("https://cdn.example.com/a")
+            assert b"".join(download.iter_bytes(chunk_size=4)) == b"PK-ZIP-BYTES"
+            download.close()
+
+    @pytest.mark.parametrize(
+        ("status_code", "code", "error_type"),
+        [
+            (502, "URL_FETCH_FAILED", UrlFetchError),
+            (504, "URL_FETCH_TIMEOUT", UrlFetchError),
+            (400, "URL_TARGET_NOT_ALLOWED", UrlFetchError),
+            (413, "FILE_TOO_LARGE", FileTooLargeError),
+            (403, "FORBIDDEN", PermissionDeniedError),
+        ],
+    )
+    def test_error_response_keeps_its_code(
+        self, httpx_mock: HTTPXMock, status_code: int, code: str, error_type: type[Exception]
+    ) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            status_code=status_code,
+            json=_error_body(status_code, code, {"hop": 0}),
+        )
+        with _fake_client() as client, pytest.raises(error_type) as exc_info:
+            client.download_url("https://cdn.example.com/a")
+        assert getattr(exc_info.value, "code", None) == code
+
+    def test_connect_error_is_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ConnectError("refused"))
+        httpx_mock.add_response(method="POST", content=b"PK", headers=ZIP_HEADERS)
+        with _fake_client() as client, client.download_url("https://cdn.example.com/a") as dl:
+            assert dl.read() == b"PK"
+        assert len(httpx_mock.get_requests()) == 2
+
+    def test_connect_error_on_the_last_attempt_raises(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ConnectError("refused"), is_reusable=True)
+        client = ThreatZone(api_key="k", base_url=FAKE_BASE, max_retries=1)
+        with client, pytest.raises(ConnectionError):
+            client.download_url("https://cdn.example.com/a")
+        assert len(httpx_mock.get_requests()) == 2
+
+    def test_connect_timeout_is_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ConnectTimeout("slow connect"))
+        httpx_mock.add_response(method="POST", content=b"PK", headers=ZIP_HEADERS)
+        with _fake_client() as client, client.download_url("https://cdn.example.com/a") as dl:
+            assert dl.read() == b"PK"
+
+    def test_read_timeout_is_not_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ReadTimeout("slow"))
+        with _fake_client() as client, pytest.raises(TimeoutError, match="did not send it again"):
+            client.download_url("https://cdn.example.com/a")
+        assert len(httpx_mock.get_requests()) == 1
+
+    def test_busy_response_is_not_retried(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="POST",
+            status_code=429,
+            headers={"retry-after": "1"},
+            json=_error_body(429, "RATE_LIMIT_EXCEEDED", {}),
+        )
+        with _fake_client() as client, pytest.raises(RateLimitError):
+            client.download_url("https://cdn.example.com/a")
+        assert len(httpx_mock.get_requests()) == 1
+
+
+class TestFakeApiArtifactAnalysisAndUrlDownload:
+    def _client(self, fake: FakeThreatZoneAPI) -> ThreatZone:
+        return ThreatZone(api_key="k", base_url=FAKE_BASE, http_client=fake.as_httpx_client())
+
+    def test_downloaded_file_can_be_analysed(self) -> None:
+        fake = FakeThreatZoneAPI()
+        fake.register_url_analysis(url="https://phish.example.com", advance_after_polls=0)
+        client = self._client(fake)
+        url_submission = client.create_url_submission("https://phish.example.com")
+        report = client.get_url_analysis(url_submission.uuid)
+        downloaded = report.downloaded_files[0]
+        assert downloaded.state == "completed"
+        assert downloaded.artifact_id is not None
+        child = client.analyze_artifact(url_submission.uuid, downloaded.artifact_id)
+        assert client.get_submission(child.uuid).type == "file"
+
+    def test_unknown_artifact_is_not_found(self) -> None:
+        fake = FakeThreatZoneAPI()
+        fake.register_url_analysis(url="https://phish.example.com", advance_after_polls=0)
+        client = self._client(fake)
+        url_submission = client.create_url_submission("https://phish.example.com")
+        with pytest.raises(NotFoundError) as exc_info:
+            client.analyze_artifact(url_submission.uuid, "missing")
+        assert exc_info.value.code == "ARTIFACT_NOT_FOUND"
+
+    def test_url_download_submit_and_return(self) -> None:
+        client = self._client(FakeThreatZoneAPI())
+        permissions = client.get_user_info().plan_permissions
+        assert permissions is not None
+        assert permissions.url_download is True
+        created = client.create_url_download_submission("https://cdn.example.com/tool.exe")
+        assert created.filename == "tool.exe"
+        assert client.get_submission(created.uuid).type == "file"
+        with client.download_url("https://cdn.example.com/tool.exe") as download:
+            assert download.file_name == "tool.exe"
+            assert download.final_url == "https://cdn.example.com/tool.exe"
+            assert download.read().startswith(b"PK")

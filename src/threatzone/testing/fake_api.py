@@ -18,7 +18,7 @@ from collections import Counter
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 from pydantic import BaseModel
@@ -104,7 +104,19 @@ _QUOTA_CHECKED_ROUTES: frozenset[str] = frozenset(
         "create_url_analysis",
         "create_open_in_browser",
         "restart_url_analysis",
+        "analyze_artifact",
     }
+)
+
+_URL_DOWNLOAD_MODES: frozenset[str] = frozenset({"submit", "return"})
+_URL_DOWNLOAD_SUBMIT_ONLY_FIELDS: tuple[str, ...] = (
+    "archivePassword",
+    "environment",
+    "autoSelectEnvironment",
+    "metafields",
+    "private",
+    "entrypoint",
+    "configurations",
 )
 
 _BEHAVIOUR_MATCH_TEXTS_MAX = 200
@@ -737,6 +749,8 @@ class FakeThreatZoneAPI:
             "create_cdr": self._handle_create_cdr,
             "create_url_analysis": self._handle_create_url,
             "create_open_in_browser": self._handle_create_open_in_browser,
+            "analyze_artifact": self._handle_analyze_artifact,
+            "url_download": self._handle_url_download,
             "get_summary": self._handle_get_summary,
             "get_indicators": self._handle_get_indicators,
             "get_iocs": self._handle_get_iocs,
@@ -1286,6 +1300,112 @@ class FakeThreatZoneAPI:
             state = self._states[self._url_to_uuid[target_url]]
         state.has_dynamic_report = True
         return _json(_responses.build_submission_created(state), status_code=200)
+
+    def _handle_analyze_artifact(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        parent, err = self._require_state(match.params["uuid"])
+        if err is not None or parent is None:
+            assert err is not None
+            return err
+        artifact_id = match.params["artifact_id"]
+        if artifact_id not in parent.artifact_ids:
+            return _error(
+                404,
+                "Not Found",
+                "Artifact not found",
+                "ARTIFACT_NOT_FOUND",
+                {"submissionUuid": parent.uuid, "artifactId": artifact_id},
+            )
+        response = self._create_submission(
+            request,
+            kind="file",
+            seed_filename=f"{artifact_id}.bin",
+            ensure_dynamic=True,
+            ensure_static=False,
+            ensure_cdr=False,
+        )
+        return httpx.Response(201, content=response.content, headers=response.headers)
+
+    def _handle_url_download(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
+        del match
+        payload = self._json_body(request) or {}
+        target_url = payload.get("url")
+        if not isinstance(target_url, str) or urlparse(target_url).scheme not in ("http", "https"):
+            return _error(
+                400,
+                "Bad Request",
+                "url must be an http or https URL",
+                "INVALID_QUERY_PARAM",
+                {"field": "url"},
+            )
+        mode = payload.get("mode", "submit")
+        if mode not in _URL_DOWNLOAD_MODES:
+            return _error(
+                400,
+                "Bad Request",
+                "mode must be one of the following values: submit, return",
+                "INVALID_QUERY_PARAM",
+                {"field": "mode"},
+            )
+        filename = urlparse(target_url).path.rstrip("/").rsplit("/", 1)[-1] or "download.bin"
+        if mode == "return":
+            return self._url_download_return(payload, target_url, filename)
+
+        quota_error = self._quota_check()
+        if quota_error is not None:
+            return quota_error
+        sha = _deterministic_sha256(f"url_download::{target_url}")
+        state = self._build_state(
+            sha256=sha,
+            filename=filename,
+            kind="file",
+            verdict="unknown",
+            advance_after_polls=2,
+            indicators=None,
+            network_threats=None,
+            yara_rules=None,
+            iocs=None,
+            mitre_techniques=None,
+            include_static_report=False,
+            include_cdr_report=False,
+        )
+        state.private = payload.get("private") is True
+        self._states[state.uuid] = state
+        self._sha_to_uuid[sha] = state.uuid
+        return _json(
+            _responses.build_url_download_submission(
+                state, final_url=target_url, mimetype="application/octet-stream"
+            ),
+            status_code=201,
+        )
+
+    @staticmethod
+    def _url_download_return(
+        payload: dict[str, Any], target_url: str, filename: str
+    ) -> httpx.Response:
+        for field_name in _URL_DOWNLOAD_SUBMIT_ONLY_FIELDS:
+            if field_name in payload:
+                return _error(
+                    400,
+                    "Bad Request",
+                    f"{field_name} is accepted only when mode is submit",
+                    "INVALID_QUERY_PARAM",
+                    {"field": field_name},
+                )
+        content = _responses.FAKE_URL_DOWNLOAD_BYTES
+        encoded_name = quote(filename, safe="")
+        return httpx.Response(
+            200,
+            content=_build_minimal_zip(filename, content),
+            headers={
+                "content-type": "application/zip",
+                "content-disposition": f"attachment; filename*=UTF-8''{encoded_name}.zip",
+                "x-file-name": encoded_name,
+                "x-file-mimetype": "application/octet-stream",
+                "x-file-size": str(len(content)),
+                "x-file-sha256": hashlib.sha256(content).hexdigest(),
+                "x-final-url": target_url,
+            },
+        )
 
     def _handle_get_summary(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])

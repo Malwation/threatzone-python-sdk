@@ -12,14 +12,17 @@ from urllib.parse import quote
 
 import httpx
 
-from ._client import AsyncHTTPClient, FileInput
+from . import _client as _transport
+from ._client import AsyncHTTPClient, FileInput, _may_retry_timeout, _timeout_error
 from ._config import ClientConfig
 from ._constants import DEFAULT_POLL_INTERVAL, DEFAULT_WAIT_TIMEOUT
 from ._exceptions import (
     AnalysisTimeoutError,
+    ConnectionError,
     InternalServerError,
     PdfReportPendingError,
     YaraRulePendingError,
+    raise_for_status,
 )
 from ._lists import list_page
 from ._params import (
@@ -38,6 +41,7 @@ from .types import (
     ArtifactJob,
     ArtifactSource,
     ArtifactsResponse,
+    AsyncUrlDownloadFile,
     BehaviourEventSort,
     BehaviourFacetField,
     BehaviourFacets,
@@ -95,6 +99,7 @@ from .types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlDownloadSubmission,
     UserInfo,
     Verdict,
     YaraRuleCategory,
@@ -119,6 +124,34 @@ def _normalize_metafields_json(
             raise TypeError("metafields list items must be dicts with at least a 'key' field")
         normalized[str(item["key"])] = item.get("value")
     return normalized
+
+
+_URL_DOWNLOAD_PATH = "/submissions/url_download"
+
+
+def _sandbox_options_payload(
+    *,
+    environment: str | None,
+    auto_select_environment: bool,
+    metafields: dict[str, Any] | list[dict[str, Any]] | None,
+    private: bool,
+    entrypoint: str | None,
+    configurations: dict[str, str] | None,
+) -> dict[str, Any]:
+    """Build the JSON body fields that a sandbox run accepts."""
+    payload: dict[str, Any] = {"private": private}
+    normalized_metafields = _normalize_metafields_json(metafields)
+    if environment is not None:
+        payload["environment"] = environment
+    if auto_select_environment:
+        payload["autoSelectEnvironment"] = True
+    if normalized_metafields is not None:
+        payload["metafields"] = normalized_metafields
+    if entrypoint is not None:
+        payload["entrypoint"] = entrypoint
+    if configurations is not None:
+        payload["configurations"] = configurations
+    return payload
 
 
 def _parse_retry_after(value: Any) -> float | None:
@@ -522,6 +555,137 @@ class AsyncThreatZone:
 
         response = await self._http.post("/submissions/open_in_browser", json=payload)
         return SubmissionCreated.model_validate(response.json())
+
+    async def analyze_artifact(
+        self,
+        uuid: str,
+        artifact_id: str,
+        *,
+        environment: str | None = None,
+        auto_select_environment: bool = False,
+        metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
+        private: bool = False,
+        entrypoint: str | None = None,
+        password: str | None = None,
+        configurations: dict[str, str] | None = None,
+    ) -> SubmissionCreated:
+        """
+        Analyse a stored artifact of a submission in the sandbox.
+
+        The new submission is a file submission. Its parent is ``uuid``. Use it for a
+        file that the browser downloaded during a URL analysis
+        (``UrlAnalysisResponse.downloaded_files[].artifact_id``) or for any other
+        artifact from get_artifacts().
+
+        Args:
+            uuid: UUID of the submission that holds the artifact.
+            artifact_id: Artifact ID.
+            environment: Sandbox environment to use. See get_environments() for options.
+                Takes precedence over auto_select_environment.
+            auto_select_environment: When True, the server picks the environment based
+                on the detected extension of the artifact. Ignored if `environment` is
+                also set. Default: False.
+            metafields: Optional analysis metafields, as a dict map or a list of
+                {"key": ..., "value": ...} objects.
+            private: If True, the new submission is private to your workspace.
+            entrypoint: Entry point for an archive artifact.
+            password: Password for an encrypted archive artifact.
+            configurations: Advanced execution configuration options, the same as
+                create_sandbox_submission().
+
+        Returns:
+            SubmissionCreated with the new submission UUID.
+
+        Raises:
+            ArtifactNotAnalyzableError: When the sandbox does not run this artifact type
+                (HTTP 400, ``ARTIFACT_NOT_ANALYZABLE``), for example a page source.
+            NotFoundError: When the submission or the artifact does not exist.
+            RateLimitError: When the daily or concurrent submission limit is reached
+                (``SUBMISSION_LIMIT_EXCEEDED``), or the monthly API request limit is
+                reached (``RATE_LIMIT_EXCEEDED``). ``retry_after`` gives the seconds to
+                wait.
+            QuotaUnavailableError: When the server cannot check the submission quota
+                (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
+        """
+        payload = _sandbox_options_payload(
+            environment=environment,
+            auto_select_environment=auto_select_environment,
+            metafields=metafields,
+            private=private,
+            entrypoint=entrypoint,
+            configurations=configurations,
+        )
+        if password is not None:
+            payload["password"] = password
+
+        response = await self._http.post(
+            f"/submissions/{uuid}/artifacts/{artifact_id}/analyze", json=payload
+        )
+        return SubmissionCreated.model_validate(response.json())
+
+    async def create_url_download_submission(
+        self,
+        url: str,
+        *,
+        archive_password: str | None = None,
+        environment: str | None = None,
+        auto_select_environment: bool = False,
+        metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
+        private: bool = False,
+        entrypoint: str | None = None,
+        configurations: dict[str, str] | None = None,
+    ) -> UrlDownloadSubmission:
+        """
+        Fetch a file from a URL on the server and submit it for sandbox analysis.
+
+        The call waits until the server has fetched the file (at most 60 seconds). The
+        server follows at most 10 redirects and refuses private targets. The plan needs
+        the ``urlDownload`` permission (``get_user_info().plan_permissions``).
+
+        Args:
+            url: The http or https URL of the file.
+            archive_password: Password of an encrypted archive that the URL returns.
+                The server uses ``infected`` when it is not set.
+            environment: Sandbox environment to use. See get_environments() for options.
+                Takes precedence over auto_select_environment.
+            auto_select_environment: When True, the server picks the environment based
+                on the detected extension of the file. Ignored if `environment` is also
+                set. Default: False.
+            metafields: Optional analysis metafields, as a dict map or a list of
+                {"key": ..., "value": ...} objects.
+            private: If True, the submission is private to your workspace.
+            entrypoint: Entry point for an archive file.
+            configurations: Advanced execution configuration options for the sandbox
+                run. They do not change how the server fetches the URL.
+
+        Returns:
+            UrlDownloadSubmission with the new submission UUID and the facts of the
+            fetched file.
+
+        Raises:
+            UrlFetchError: When the server cannot fetch the URL. ``code`` tells the cause.
+            FileTooLargeError: When the file is larger than the plan file size limit.
+            BadRequestError: When the request is not valid, or ``archive_password`` does
+                not open the archive (``ARCHIVE_PASSWORD_INCORRECT``).
+            PermissionDeniedError: When the plan has no ``urlDownload`` permission.
+            RateLimitError: When a submission or API request limit is reached.
+            QuotaUnavailableError: When the server cannot check the submission quota.
+        """
+        payload = _sandbox_options_payload(
+            environment=environment,
+            auto_select_environment=auto_select_environment,
+            metafields=metafields,
+            private=private,
+            entrypoint=entrypoint,
+            configurations=configurations,
+        )
+        payload["url"] = url
+        payload["mode"] = "submit"
+        if archive_password is not None:
+            payload["archivePassword"] = archive_password
+
+        response = await self._http.post(_URL_DOWNLOAD_PATH, json=payload)
+        return UrlDownloadSubmission.model_validate(response.json())
 
     # =========================================================================
     # Submissions - Query
@@ -2464,6 +2628,72 @@ class AsyncThreatZone:
             AsyncDownloadResponse for streaming or saving the file.
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/artifact/{artifact_id}")
+
+    async def download_url(self, url: str) -> AsyncUrlDownloadFile:
+        """
+        Fetch a file from a URL on the server and get it back in a ZIP.
+
+        The server stores nothing and creates no submission. The body is an AES-256 ZIP
+        with the password ``infected`` and one entry, the fetched file. The call counts
+        only against the API request limit. The plan needs the ``urlDownload``
+        permission.
+
+        Args:
+            url: The http or https URL of the file.
+
+        Returns:
+            AsyncUrlDownloadFile for streaming or saving the ZIP. ``file_name``,
+            ``detected_type``, ``mimetype``, ``file_size``, ``sha256``, ``final_url``
+            and ``tls_error`` describe the fetched file.
+
+        Raises:
+            UrlFetchError: When the server cannot fetch the URL. ``code`` tells the cause.
+            FileTooLargeError: When the file is larger than the plan file size limit.
+            PermissionDeniedError: When the plan has no ``urlDownload`` permission.
+            RateLimitError: When the API request limit is reached.
+        """
+        response, stream_context = await self._open_post_stream(
+            _URL_DOWNLOAD_PATH, {"url": url, "mode": "return"}
+        )
+        return AsyncUrlDownloadFile(response, stream_context=stream_context)
+
+    async def _open_post_stream(
+        self, path: str, payload: dict[str, Any]
+    ) -> tuple[httpx.Response, Any]:
+        """Send a JSON ``POST`` and return the open streamed response.
+
+        An error response is read and raised. The request is sent again only after a
+        connection failure or a timeout before the server got it.
+        """
+        url = self._config.build_url(path)
+        headers = self._config.get_headers()
+        max_retries = self._config.max_retries
+
+        for attempt in range(max_retries + 1):
+            last_attempt = attempt == max_retries
+            stream_context = self._http._client.stream("POST", url, json=payload, headers=headers)
+            try:
+                response = await stream_context.__aenter__()
+            except httpx.TimeoutException as e:
+                if last_attempt or not _may_retry_timeout("POST", e):
+                    raise _timeout_error("POST", e) from e
+                await _transport._async_sleep(2**attempt)
+                continue
+            except httpx.ConnectError as e:
+                if last_attempt:
+                    raise ConnectionError(f"Failed to connect: {e}") from e
+                await _transport._async_sleep(2**attempt)
+                continue
+
+            if not response.is_success:
+                try:
+                    await response.aread()
+                    raise_for_status(response)
+                finally:
+                    await stream_context.__aexit__(None, None, None)
+            return response, stream_context
+
+        raise RuntimeError("Unexpected end of the download retry loop")
 
     async def download_pcap(self, uuid: str) -> AsyncDownloadResponse:
         """

@@ -34,6 +34,15 @@ UrlScorePass = Literal["submit", "final"] | str
 UrlScoreCreditScope = Literal["heuristic", "all"] | str
 UrlScoreEvidenceState = Literal["available", "unavailable"] | str
 UrlAnalysisBrowserSectionName = Literal["overview", "findings", "tls", "network-summary"]
+UrlAnalysisScoreState = Literal["scored", "failed", "not_scored"] | str
+UrlResultVia = (
+    Literal["submitted", "http_redirect", "browser_redirect", "browser_navigation", "unknown"] | str
+)
+UrlDownloadedFileState = (
+    Literal["completed", "canceled", "too_large", "upload_failed", "incomplete"] | str
+)
+UrlDownloadInitiator = Literal["navigation", "script", "unknown"] | str
+UrlDownloadLimitReason = Literal["too_large", "run_bytes_exceeded", "file_count_exceeded"] | str
 
 
 class UrlAnalysisThreatStatus(BaseModel):
@@ -76,6 +85,8 @@ class UrlAnalysisIpInfo(BaseModel):
     isp: str | None = None
     organization: str | None = None
     threat_status: UrlAnalysisThreatStatus = Field(alias="threatStatus")
+    """Deprecated: no source writes it. The verdict is always ``unknown``. Read
+    ``UrlAnalysisResponse.threat_analysis`` for verdicts."""
 
 
 class UrlAnalysisDnsRecord(BaseModel):
@@ -147,6 +158,55 @@ class UrlAnalysisThreatDetailItem(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class UrlAnalysisNavigationSslCertificate(BaseModel):
+    """TLS certificate of one checked URL. The times are ISO 8601 UTC text."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    subject: str
+    issuer: str
+    expires_at: str | None = Field(default=None, alias="expiresAt")
+    renewed_at: str | None = Field(default=None, alias="renewedAt")
+    fingerprint: str | None = None
+
+
+class UrlAnalysisNavigationContext(BaseModel):
+    """DNS, WHOIS and TLS lookups of one checked URL."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    url: str
+    dns_records: list[UrlAnalysisDnsRecord] = Field(default_factory=list, alias="dnsRecords")
+    whois_creation_date: str | None = Field(default=None, alias="whoisCreationDate")
+    ssl_certificate: UrlAnalysisNavigationSslCertificate | None = Field(
+        default=None, alias="sslCertificate"
+    )
+
+
+class UrlAnalysisUrlResult(BaseModel):
+    """One node of the tree of URLs that the analysis checked.
+
+    The node with ``parent_id=None`` is the submitted URL.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    parent_id: str | None = Field(default=None, alias="parentId")
+    hop: int
+    via: UrlResultVia
+    redirect_status: int | None = Field(default=None, alias="redirectStatus")
+    url: str
+    overview: list[UrlAnalysisThreatOverviewItem] = Field(default_factory=list)
+    blacklist: bool
+    threat_details: list[UrlAnalysisThreatDetailItem] = Field(
+        default_factory=list, alias="threatDetails"
+    )
+    navigation_context: UrlAnalysisNavigationContext | None = Field(
+        default=None, alias="navigationContext"
+    )
+
+
 class UrlAnalysisThreatAnalysis(BaseModel):
     """Aggregated threat intelligence for the analysed URL."""
 
@@ -155,6 +215,37 @@ class UrlAnalysisThreatAnalysis(BaseModel):
     overview: list[UrlAnalysisThreatOverviewItem]
     blacklist: bool
     threat_details: list[UrlAnalysisThreatDetailItem] = Field(alias="threatDetails")
+    url_results: list[UrlAnalysisUrlResult] = Field(default_factory=list, alias="urlResults")
+    """Tree of checked URLs. Empty on older servers."""
+
+
+class UrlAnalysisDownloadedFile(BaseModel):
+    """One file that the browser downloaded while it loaded the page.
+
+    A ``completed`` file has ``artifact_id``, ``sha256`` and ``size``. Pass
+    ``artifact_id`` to ``download_artifact()`` or ``analyze_artifact()``. An
+    ``incomplete`` file has ``received_bytes`` and no artifact.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    artifact_id: str | None = Field(default=None, alias="artifactId")
+    filename: str
+    detected_type: str | None = Field(default=None, alias="detectedType")
+    mime_type: str | None = Field(default=None, alias="mimeType")
+    size: int | None = None
+    """Size of the complete file in bytes. ``None`` when the file did not complete."""
+    received_bytes: int | None = Field(default=None, alias="receivedBytes")
+    """Bytes received before the download stopped. Set for ``incomplete`` files and for
+    ``too_large`` files that a limit stopped while they ran."""
+    sha256: str | None = None
+    source_url: str = Field(alias="sourceUrl")
+    initiator: UrlDownloadInitiator
+    state: UrlDownloadedFileState
+    limit_reason: UrlDownloadLimitReason | None = Field(default=None, alias="limitReason")
+    """The limit that stopped a ``too_large`` file. ``None`` for other states."""
+    captured_at: datetime = Field(alias="capturedAt")
 
 
 class UrlAnalysisPrivacyFactor(BaseModel):
@@ -200,6 +291,21 @@ class UrlAnalysisCompleteness(BaseModel):
     skipped_sources: list[str] = Field(default_factory=list, alias="skippedSources")
     unavailable_sources: list[str] = Field(default_factory=list, alias="unavailableSources")
     browser_collection: str | None = Field(default=None, alias="browserCollection")
+    browser_collection_note: str | None = Field(default=None, alias="browserCollectionNote")
+    """Plain note on the browser evidence of the run. ``None`` when there is nothing to
+    note and on older servers."""
+
+
+class UrlAnalysisBrowserSnapshot(BaseModel):
+    """Browser snapshot of the current URL run."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="jobId")
+    revision: str
+    """The same value as ``UrlAnalysisBrowserSection.revision``."""
+    sections: list[UrlAnalysisBrowserSectionName | str] = Field(default_factory=list)
+    """Section names for ``get_url_analysis_browser_section()``."""
 
 
 class UrlAnalysisIntelDetection(BaseModel):
@@ -269,9 +375,18 @@ class UrlAnalysisResponse(BaseModel):
     # Free-form: header names are not normalised by the API.
     response_headers: dict[str, Any] | None = Field(default=None, alias="responseHeaders")
     extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
+    """Deprecated: never populated; always None. Use downloaded_files."""
+    downloaded_files: list[UrlAnalysisDownloadedFile] = Field(
+        default_factory=list, alias="downloadedFiles"
+    )
+    """Files that the browser downloaded. Empty when it downloaded nothing and on older
+    servers."""
     threat_analysis: UrlAnalysisThreatAnalysis | None = Field(default=None, alias="threatAnalysis")
     pages: list[str]
     threat_score: float | None = Field(default=None, alias="threatScore")
+    score_state: UrlAnalysisScoreState | None = Field(default=None, alias="scoreState")
+    """``scored``, ``failed`` (scoring ran and failed) or ``not_scored``. ``None`` on older
+    servers."""
     risk_level: str | None = Field(default=None, alias="riskLevel")
     privacy_score: float | None = Field(default=None, alias="privacyScore")
     privacy_risk_level: str | None = Field(default=None, alias="privacyRiskLevel")
@@ -285,6 +400,10 @@ class UrlAnalysisResponse(BaseModel):
         default=None, alias="impersonationTarget"
     )
     completeness: UrlAnalysisCompleteness | None = None
+    browser_snapshot: UrlAnalysisBrowserSnapshot | None = Field(
+        default=None, alias="browserSnapshot"
+    )
+    """``None`` when the current run has no browser snapshot and on older servers."""
     intel_detections: list[UrlAnalysisIntelDetection] = Field(
         default_factory=list, alias="intelDetections"
     )
@@ -332,6 +451,8 @@ class UrlScoreIndicator(BaseModel):
     weighted_points: float = Field(alias="weightedPoints")
     disposition: UrlScoreIndicatorDisposition
     suppressed_by: str | None = Field(default=None, alias="suppressedBy")
+    checked_url: str | None = Field(default=None, alias="checkedUrl")
+    """The URL that the indicator checked. Set from explanation schema version 2."""
     evidence_refs: list[UrlScoreEvidenceRef] = Field(default_factory=list, alias="evidenceRefs")
 
 

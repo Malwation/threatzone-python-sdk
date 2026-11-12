@@ -14,6 +14,7 @@ from ._async_client import AsyncThreatZone
 from ._exceptions import (
     AnalysisTimeoutError,
     APIError,
+    ArtifactNotAnalyzableError,
     AuthenticationError,
     BadRequestError,
     BehaviourIndexBuildingError,
@@ -21,6 +22,7 @@ from ._exceptions import (
     BehaviourTooLargeError,
     BehaviourUnreadableError,
     ConnectionError,
+    FileTooLargeError,
     InternalServerError,
     NotFoundError,
     PaymentRequiredError,
@@ -32,6 +34,7 @@ from ._exceptions import (
     ServiceUnavailableError,
     ThreatZoneError,
     TimeoutError,
+    UrlFetchError,
     YaraRulePendingError,
 )
 from ._streaming import AsyncDownloadResponse, DownloadResponse
@@ -48,6 +51,7 @@ from .types import (
     Artifact,
     ArtifactJob,
     ArtifactsResponse,
+    AsyncUrlDownloadFile,
     BehaviourEvent,
     BehaviourExit,
     BehaviourFacets,
@@ -177,10 +181,14 @@ from .types import (
     TotalCountList,
     UrlAnalysisBrowserSection,
     UrlAnalysisBrowserSectionName,
+    UrlAnalysisBrowserSnapshot,
+    UrlAnalysisDownloadedFile,
     UrlAnalysisIndicatorEvidence,
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlDownloadFile,
+    UrlDownloadSubmission,
     UrlScoreExplanation,
     UrlScoreIndicator,
     UserInfo,
@@ -225,6 +233,9 @@ __all__ = [
     "BehaviourIndexBuildingError",
     "BehaviourTooLargeError",
     "BehaviourUnreadableError",
+    "UrlFetchError",
+    "FileTooLargeError",
+    "ArtifactNotAnalyzableError",
     # Types - Common
     "Hashes",
     "FileInfo",
@@ -241,6 +252,8 @@ __all__ = [
     "IocExportFormat",
     "MediaFile",
     "PdfReportStatus",
+    "UrlDownloadFile",
+    "AsyncUrlDownloadFile",
     # Types - AI report
     "AiReport",
     "AiReportContent",
@@ -386,6 +399,8 @@ __all__ = [
     # Types - URL analysis
     "UrlAnalysisBrowserSection",
     "UrlAnalysisBrowserSectionName",
+    "UrlAnalysisBrowserSnapshot",
+    "UrlAnalysisDownloadedFile",
     "UrlAnalysisIndicatorEvidence",
     "UrlAnalysisIndicators",
     "UrlAnalysisResponse",
@@ -394,6 +409,7 @@ __all__ = [
     "UrlScoreIndicator",
     # Types - Submissions
     "SubmissionCreated",
+    "UrlDownloadSubmission",
     "SubmissionListItem",
     "PaginatedSubmissions",
     "Submission",
