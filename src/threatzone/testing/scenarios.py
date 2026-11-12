@@ -7,7 +7,7 @@ duplicating boilerplate.
 
 from __future__ import annotations
 
-from .fake_api import FakeThreatZoneAPI
+from .fake_api import FakeThreatZoneAPI, ThreatLevelStr
 
 
 def seed_malicious_pe(fake: FakeThreatZoneAPI, *, sha256: str | None = None) -> str:
@@ -150,6 +150,36 @@ def seed_interactive_url_session(
         device_preset_id=device_preset_id,
         session_duration_seconds=session_duration_seconds,
     )
+    return url
+
+
+def seed_similar_pages(
+    fake: FakeThreatZoneAPI, *, url: str = "https://login.example.com/signin"
+) -> str:
+    """Seed a URL submission whose page matches the pages of three other submissions.
+
+    Two matches are public. The third match is private to another workspace, so
+    ``get_url_analysis_similar_pages()`` never lists it and ``total`` is 2.
+    """
+    seed_phishing_url(fake, url=url)
+    matches: list[tuple[str, ThreatLevelStr, list[str], bool]] = [
+        ("https://login-example.net/signin", "malicious", ["dom", "favicon", "form"], False),
+        ("https://example-login.org/", "suspicious", ["dom", "title"], False),
+        (
+            "https://private-match.example.org/",
+            "malicious",
+            ["dom", "phash", "favicon", "form", "kit"],
+            True,
+        ),
+    ]
+    for similar_url, verdict, dimensions, private in matches:
+        fake.register_url_analysis(url=similar_url, verdict=verdict, final_url=similar_url)
+        similar_uuid = fake._url_to_uuid[similar_url]
+        similar_state = fake._states[similar_uuid]
+        similar_state.polls_seen = similar_state.advance_after_polls
+        if private:
+            fake.mark_private(similar_uuid)
+        fake.register_similar_page(fake._url_to_uuid[url], similar_uuid, dimensions)
     return url
 
 

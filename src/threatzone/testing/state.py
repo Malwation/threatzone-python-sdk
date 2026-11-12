@@ -51,6 +51,14 @@ class IocSeed:
 
 
 @dataclass
+class SimilarPageSeed:
+    """Seed data for a submission whose page matches the page of another submission."""
+
+    submission_uuid: str
+    matched_dimensions: list[str]
+
+
+@dataclass
 class SubmissionState:
     """Mutable per-submission state owned by the fake."""
 
@@ -106,6 +114,7 @@ class SubmissionState:
     annotation_pins: list[dict[str, Any]] = field(default_factory=list)
     annotation_note: dict[str, Any] | None = None
     artifact_yara_rules_started: set[str] = field(default_factory=set)
+    similar_pages: list[SimilarPageSeed] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def current_status(self) -> StatusStr:

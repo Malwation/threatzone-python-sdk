@@ -138,8 +138,12 @@ class SubmissionListItem(BaseModel):
     sha256: str | None = None
     """``None`` for a URL submission."""
     url: str | None = None
-    """Submitted URL of a URL submission. ``None`` for a file submission and on older
-    servers."""
+    """Submitted URL of a URL submission. For a file submission, the URL that the server
+    fetched the file from (without its username and password). ``None`` for an upload and
+    on older servers."""
+    source_url: str | None = Field(default=None, alias="sourceUrl")
+    """URL that the server fetched the file from. Only the deprecated v2 list sends it, so
+    it is ``None`` on the v1 list that the SDK reads. Read ``url`` instead."""
     level: SubmissionLevel
     type: SubmissionType
     private: bool

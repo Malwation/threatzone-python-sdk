@@ -1771,6 +1771,29 @@ def url_analysis_browser_section_payload() -> dict[str, Any]:
 
 
 @pytest.fixture
+def url_similar_pages_payload() -> dict[str, Any]:
+    return {
+        "total": 2,
+        "items": [
+            {
+                "submissionUuid": "b2c3d4e5-f6a7-4b89-8cde-f01234567891",
+                "host": "login-example.net",
+                "verdict": "malicious",
+                "scoredAt": "2026-11-10T08:15:00.000Z",
+                "matchedDimensions": ["dom", "favicon", "form"],
+            },
+            {
+                "submissionUuid": "c3d4e5f6-a7b8-4c90-9def-012345678912",
+                "host": "example-login.org",
+                "verdict": "suspicious",
+                "scoredAt": None,
+                "matchedDimensions": ["dom", "title"],
+            },
+        ],
+    }
+
+
+@pytest.fixture
 def device_presets_payload() -> list[dict[str, Any]]:
     return [
         {

@@ -100,6 +100,7 @@ from .types import (
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UrlDownloadSubmission,
+    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRuleCategory,
@@ -1846,8 +1847,8 @@ class AsyncThreatZone:
         Get one section of the browser snapshot of the current URL analysis run.
 
         Every plan can use this call. The API returns only the approved
-        sections. It never returns cookies, full network entries, or request
-        and response bodies.
+        sections. It never returns cookies, full network entries, request
+        and response bodies, or the page script list.
 
         Args:
             uuid: Submission UUID (must be a URL submission).
@@ -1869,6 +1870,39 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/url-analysis/browser/{quote(section, safe='')}"
         )
         return UrlAnalysisBrowserSection.model_validate(response.json())
+
+    async def get_url_analysis_similar_pages(
+        self, uuid: str, *, limit: int = 20
+    ) -> UrlSimilarPages:
+        """
+        Get the URL analysis reports on other domains whose pages match the analysed page.
+
+        Every plan can use this call. A match needs at least two page dimensions and a
+        report from the last 30 days. The list holds only submissions that the API token
+        can open: public submissions and private submissions of the token workspace.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+            limit: Maximum number of items, from 1 to 50. The default is 20.
+
+        Returns:
+            UrlSimilarPages. ``total`` is the number of similar pages that the token can
+            read, at most 200. ``items`` holds the first ``limit`` of them, with the most
+            matched dimensions first. A report without a page fingerprint, for example a
+            report from before this feature, returns ``total == 0``.
+
+        Raises:
+            BadRequestError: When ``limit`` is not an integer from 1 to 50
+                (``INVALID_QUERY_PARAM``).
+            NotFoundError: When the submission does not exist or is private to
+                another workspace.
+            ReportUnavailableError: When the submission has no completed URL analysis
+                report (HTTP 409).
+        """
+        response = await self._http.get(
+            f"/submissions/{uuid}/url-analysis/similar-pages", params={"limit": limit}
+        )
+        return UrlSimilarPages.model_validate(response.json())
 
     # =========================================================================
     # Verdict, run notes, annotations and run compare

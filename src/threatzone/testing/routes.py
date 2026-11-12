@@ -228,6 +228,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
     (
+        "get_url_analysis_similar_pages",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/similar-pages$"),
+    ),
+    (
         "get_url_analysis_browser_section",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/browser/(?P<section>[^/]+)$"),
     ),

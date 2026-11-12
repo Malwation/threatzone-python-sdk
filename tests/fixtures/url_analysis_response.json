@@ -194,7 +194,7 @@
   },
   "intelDetections": [
     {
-      "source": "urlhaus",
+      "source": "malware_feed",
       "detectionType": "malware_url",
       "severity": "high",
       "details": "listed"

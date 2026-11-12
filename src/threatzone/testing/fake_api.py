@@ -33,6 +33,7 @@ from .state import (
     IndicatorSeed,
     IocSeed,
     NetworkThreatSeed,
+    SimilarPageSeed,
     SubmissionState,
     YaraRuleSeed,
 )
@@ -46,6 +47,9 @@ _NETWORK_ATTRIBUTIONS: frozenset[str] = frozenset(
     {"sample", "sample_child", "sensor_only", "windows_background"}
 )
 _NETWORK_LIST_MAX_LIMIT = 1000
+_URL_SIMILAR_PAGES_DEFAULT_LIMIT = 20
+_URL_SIMILAR_PAGES_MAX_LIMIT = 50
+_URL_SIMILAR_PAGES_TOTAL_CAP = 200
 _NETWORK_ENDPOINT_LIMIT = 300
 _NETWORK_ENDPOINT_MAX_LIMIT = 500
 _NETWORK_HOST_FLOW_LIMIT = 50
@@ -483,6 +487,30 @@ class FakeThreatZoneAPI:
         self._url_to_uuid[url] = submission_uuid
         self._states[submission_uuid] = state
 
+    def register_similar_page(
+        self,
+        submission_uuid: str,
+        similar_uuid: str,
+        matched_dimensions: list[str],
+    ) -> None:
+        """Record that the page of ``similar_uuid`` matches the page of ``submission_uuid``.
+
+        ``GET /submissions/{uuid}/url-analysis/similar-pages`` lists only the submissions
+        that the test token can open, the same as the real API. A private submission of
+        another workspace never appears and never changes ``total``.
+        """
+        if submission_uuid not in self._states:
+            raise KeyError(f"Unknown submission uuid: {submission_uuid}")
+        if similar_uuid not in self._states:
+            raise KeyError(f"Unknown submission uuid: {similar_uuid}")
+        if len(matched_dimensions) < 2:
+            raise ValueError("A similar page matches in at least two dimensions.")
+        self._states[submission_uuid].similar_pages.append(
+            SimilarPageSeed(
+                submission_uuid=similar_uuid, matched_dimensions=list(matched_dimensions)
+            )
+        )
+
     def mark_report_unavailable(self, submission_uuid: str, report_type: str) -> None:
         """Force a report to appear unavailable when the SDK queries it."""
         state = self._states.get(submission_uuid)
@@ -818,6 +846,7 @@ class FakeThreatZoneAPI:
                 self._handle_get_url_analysis_indicator_evidence
             ),
             "get_url_analysis_browser_section": self._handle_get_url_analysis_browser_section,
+            "get_url_analysis_similar_pages": self._handle_get_url_analysis_similar_pages,
             "start_url_analysis_session": self._handle_start_url_analysis_session,
             "restart_url_analysis_session": self._handle_restart_url_analysis_session,
             "restart_url_analysis": self._handle_restart_url_analysis,
@@ -2633,6 +2662,43 @@ class FakeThreatZoneAPI:
                 {"submissionUuid": state.uuid, "section": section},
             )
         return _json(_responses.build_url_analysis_browser_section(state, section))
+
+    def _readable_similar_pages(
+        self, state: SubmissionState
+    ) -> list[tuple[SubmissionState, list[str]]]:
+        readable: list[tuple[SubmissionState, list[str]]] = []
+        for seed in state.similar_pages:
+            other = self._states.get(seed.submission_uuid)
+            if other is None or not other.has_url_analysis_report:
+                continue
+            if other.private and other.owning_workspace != _CALLER_WORKSPACE:
+                continue
+            readable.append((other, seed.matched_dimensions))
+        readable.sort(key=lambda match: len(match[1]), reverse=True)
+        return readable[:_URL_SIMILAR_PAGES_TOTAL_CAP]
+
+    def _handle_get_url_analysis_similar_pages(
+        self, request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_analysis(state)
+        if guard is not None:
+            return guard
+        limit_message = f"limit must be an integer from 1 to {_URL_SIMILAR_PAGES_MAX_LIMIT}"
+        try:
+            limit = self._int(self._query(request), "limit")
+        except _BadQueryParam:
+            return self._bad_query_param("limit", limit_message)
+        if limit is None:
+            limit = _URL_SIMILAR_PAGES_DEFAULT_LIMIT
+        if limit < 1 or limit > _URL_SIMILAR_PAGES_MAX_LIMIT:
+            return self._bad_query_param("limit", limit_message)
+        return _json(
+            _responses.build_url_similar_pages(self._readable_similar_pages(state), limit=limit)
+        )
 
     def _handle_start_url_analysis_session(
         self, _request: httpx.Request, match: RouteMatch

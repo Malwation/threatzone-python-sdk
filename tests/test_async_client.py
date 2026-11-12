@@ -98,6 +98,7 @@ from threatzone.types import (
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UrlDownloadSubmission,
+    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -1885,6 +1886,38 @@ class TestUrlAnalysisScoreExplanation:
         with ctx, pytest.raises(NotFoundError):
             async with AsyncThreatZone(api_key=api_key) as client:
                 await client.get_url_analysis_browser_section(submission_uuid, "cookies")
+
+    async def test_get_url_analysis_similar_pages(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_similar_pages_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, url_similar_pages_payload))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                result = await client.get_url_analysis_similar_pages(submission_uuid, limit=2)
+        assert isinstance(result, UrlSimilarPages)
+        assert result.total == 2
+        assert [item.host for item in result.items] == ["login-example.net", "example-login.org"]
+        assert _call_url(mock).endswith(
+            f"/submissions/{submission_uuid}/url-analysis/similar-pages"
+        )
+        assert _call_params(mock) == {"limit": 2}
+
+    async def test_get_url_analysis_similar_pages_invalid_limit_400(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 400,
+            "error": "Bad Request",
+            "message": "limit must be an integer from 1 to 50",
+            "code": "INVALID_QUERY_PARAM",
+        }
+        ctx, _ = _patched_async_client(_make_response(400, body))
+        with ctx, pytest.raises(BadRequestError):
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_url_analysis_similar_pages(submission_uuid, limit=0)
 
 
 # ---------------------------------------------------------------------------

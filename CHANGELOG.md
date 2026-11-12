@@ -36,6 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `400 ARTIFACT_NOT_ANALYZABLE`.
 - The fake API supports `analyze_artifact()`, `create_url_download_submission()` and
   `download_url()`, and its URL report lists downloaded files.
+- `get_url_analysis_similar_pages(uuid, *, limit=20)` returns `UrlSimilarPages`
+  (`GET /submissions/{uuid}/url-analysis/similar-pages`). It lists the URL analysis reports on
+  other domains whose pages match the analysed page. Each `UrlSimilarPage` has
+  `submission_uuid`, `host`, `verdict`, `scored_at` and `matched_dimensions`. The list holds
+  only submissions that the API token can open, and `total` counts only these submissions.
+  `limit` is an integer from 1 to 50.
+- `UrlScoreIndicator.evidence` (`UrlScoreEvidenceFact`: `kind`, `label`, `value`, `ref`) and
+  `UrlScoreIndicator.evidence_total` give the facts that explain an indicator.
+  `UrlScoreEvidenceRef.label` gives a short display label. The three fields are `None` on older
+  explanations and older servers. `UrlScoreExplanation.schema_version` stays an integer.
+- `SubmissionListItem.source_url` reads the `sourceUrl` field of the deprecated v2 list. The v1
+  list sends the source URL of a fetched file in `url`. `url` is `None` for an upload.
+- The fake API supports `get_url_analysis_similar_pages()`, with
+  `FakeThreatZoneAPI.register_similar_page()` and the `seed_similar_pages` scenario. Its score
+  explanation returns evidence facts and evidence labels.
 
 ### Changed
 
