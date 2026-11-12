@@ -80,6 +80,68 @@ class BadRequestError(APIError):
         return value if isinstance(value, str) else None
 
 
+class ArtifactNotAnalyzableError(BadRequestError):
+    """Raised when the artifact cannot be analysed (HTTP 400, ``ARTIFACT_NOT_ANALYZABLE``).
+
+    ``analyze_artifact()`` raises it for an artifact type that the sandbox does not
+    run, for example a page source.
+
+    Attributes:
+        artifact_id: The artifact that the request named (``details.artifactId``).
+        artifact_type: The type of the artifact (``details.type``).
+    """
+
+    @property
+    def artifact_id(self) -> str | None:
+        value = _details(self.body).get("artifactId")
+        return value if isinstance(value, str) else None
+
+    @property
+    def artifact_type(self) -> str | None:
+        value = _details(self.body).get("type")
+        return value if isinstance(value, str) else None
+
+
+class UrlFetchError(APIError):
+    """Raised when the server cannot fetch the URL of a URL download.
+
+    ``create_url_download_submission()`` and ``download_url()`` raise it. ``code`` tells
+    the cause, and ``status_code`` follows it:
+
+    - ``URL_TARGET_NOT_ALLOWED`` (400): the URL or a redirect hop points to a private or
+      blocked target.
+    - ``URL_HOST_UNRESOLVABLE`` (422): the host does not resolve.
+    - ``URL_TOO_MANY_REDIRECTS`` (422): more than 10 redirects.
+    - ``URL_DID_NOT_RETURN_A_FILE`` (422): the final status is not 2xx, the body is empty,
+      or (submit mode) the URL returned an HTML page.
+    - ``URL_FETCH_TIMEOUT`` (504): the fetch did not complete in 60 seconds.
+    - ``URL_FETCH_FAILED`` (502): the connection, the TLS handshake, the proxy or the HTTP
+      exchange failed.
+
+    Attributes:
+        details: The ``details`` object of the error envelope, for example
+            ``{"host": ..., "reason": ..., "hop": 0}``. Empty when the server sends none.
+    """
+
+    @property
+    def details(self) -> dict[str, Any]:
+        return _details(self.body)
+
+
+class FileTooLargeError(APIError):
+    """Raised when the fetched file is larger than the plan file size limit (HTTP 413,
+    ``FILE_TOO_LARGE``).
+
+    Attributes:
+        max_bytes: The limit in bytes (``details.maxBytes``).
+    """
+
+    @property
+    def max_bytes(self) -> int | None:
+        value = _detail_number(self.body, "maxBytes")
+        return int(value) if value is not None else None
+
+
 class RateLimitError(APIError):
     """Raised when rate limit is exceeded (HTTP 429).
 
@@ -464,6 +526,18 @@ def retry_after_seconds(response: httpx.Response, body: dict[str, Any] | None) -
     return None
 
 
+_URL_FETCH_ERROR_CODES: frozenset[str] = frozenset(
+    {
+        "URL_TARGET_NOT_ALLOWED",
+        "URL_HOST_UNRESOLVABLE",
+        "URL_TOO_MANY_REDIRECTS",
+        "URL_DID_NOT_RETURN_A_FILE",
+        "URL_FETCH_TIMEOUT",
+        "URL_FETCH_FAILED",
+    }
+)
+
+
 def raise_for_status(response: httpx.Response) -> None:
     """Raise an appropriate exception based on HTTP status code."""
     if response.is_success:
@@ -486,8 +560,15 @@ def raise_for_status(response: httpx.Response) -> None:
         pass
 
     status_code = response.status_code
+    body_code = _body_code(body)
 
-    if status_code == 400:
+    if body_code in _URL_FETCH_ERROR_CODES:
+        raise UrlFetchError(message, status_code=status_code, response=response, body=body)
+    elif status_code == 400 and body_code == "ARTIFACT_NOT_ANALYZABLE":
+        raise ArtifactNotAnalyzableError(
+            message, status_code=status_code, response=response, body=body
+        )
+    elif status_code == 400:
         raise BadRequestError(message, status_code=status_code, response=response, body=body)
     elif status_code == 401:
         raise AuthenticationError(message, status_code=status_code, response=response, body=body)
@@ -554,6 +635,8 @@ def raise_for_status(response: httpx.Response) -> None:
             max_bytes=int(max_bytes) if max_bytes is not None else None,
             download_route=download_route if isinstance(download_route, str) else None,
         )
+    elif status_code == 413 and body_code == "FILE_TOO_LARGE":
+        raise FileTooLargeError(message, status_code=status_code, response=response, body=body)
     elif status_code == 429:
         raise RateLimitError(
             message,

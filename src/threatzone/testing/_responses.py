@@ -77,6 +77,7 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlDownloadSubmission,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -286,6 +287,28 @@ def build_submission_created(state: SubmissionState) -> SubmissionCreated:
             "uuid": state.uuid,
             "message": "Submission created",
             "sha256": state.sha256 if state.type == "file" else None,
+        }
+    )
+
+
+FAKE_URL_DOWNLOAD_BYTES = b"FAKE-URL-DOWNLOAD-BYTES"
+
+
+def build_url_download_submission(
+    state: SubmissionState, *, final_url: str, mimetype: str
+) -> UrlDownloadSubmission:
+    """Build the ``mode: "submit"`` response of ``POST /submissions/url_download``."""
+    return UrlDownloadSubmission.model_validate(
+        {
+            "uuid": state.uuid,
+            "message": "Submission created successfully",
+            "sha256": state.sha256,
+            "filename": state.filename,
+            "detectedType": state.filename.rsplit(".", 1)[-1] if "." in state.filename else None,
+            "mimetype": mimetype,
+            "size": len(FAKE_URL_DOWNLOAD_BYTES),
+            "finalUrl": final_url,
+            "tlsError": None,
         }
     )
 
@@ -1969,6 +1992,7 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
         "sslCertificate": None,
         "responseHeaders": {"server": "fake"},
         "extractedFile": None,
+        "downloadedFiles": _url_downloaded_files(state, target_url),
         "threatAnalysis": {
             "overview": [
                 {
@@ -1980,9 +2004,24 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
             ],
             "blacklist": state.level == "malicious",
             "threatDetails": [],
+            "urlResults": [
+                {
+                    "id": hashlib.sha256(target_url.encode("utf-8")).hexdigest()[:16],
+                    "parentId": None,
+                    "hop": 0,
+                    "via": "submitted",
+                    "redirectStatus": None,
+                    "url": target_url,
+                    "overview": [],
+                    "blacklist": state.level == "malicious",
+                    "threatDetails": [],
+                    "navigationContext": None,
+                }
+            ],
         },
         "pages": [state.final_url] if state.final_url else [target_url],
         "threatScore": _THREAT_SCORE_BY_LEVEL[state.level],
+        "scoreState": "scored",
         "riskLevel": _RISK_LEVEL_BY_LEVEL[state.level],
         "privacyScore": 35,
         "privacyRiskLevel": "Medium",
@@ -2016,6 +2055,7 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
             "skippedSources": [] if state.session_active() else ["browser"],
             "unavailableSources": [],
             "browserCollection": "complete" if state.session_active() else None,
+            "browserCollectionNote": None,
         },
         "intelDetections": (
             [
@@ -2033,6 +2073,28 @@ def build_url_analysis_response(state: SubmissionState) -> UrlAnalysisResponse:
         "scoredAt": state.updated_at.isoformat(),
     }
     return UrlAnalysisResponse.model_validate(payload)
+
+
+def _url_downloaded_files(state: SubmissionState, target_url: str) -> list[dict[str, Any]]:
+    """One completed browser download for each stored artifact of the URL run."""
+    return [
+        {
+            "id": f"download-{artifact_id}",
+            "artifactId": artifact_id,
+            "filename": f"download-{index + 1}.exe",
+            "detectedType": "exe",
+            "mimeType": "application/vnd.microsoft.portable-executable",
+            "size": len(b"FAKE-ARTIFACT-BYTES"),
+            "receivedBytes": None,
+            "sha256": hashlib.sha256(artifact_id.encode("utf-8")).hexdigest(),
+            "sourceUrl": f"{target_url.rstrip('/')}/download-{index + 1}.exe",
+            "initiator": "navigation",
+            "state": "completed",
+            "limitReason": None,
+            "capturedAt": state.created_at.isoformat(),
+        }
+        for index, artifact_id in enumerate(state.artifact_ids)
+    ]
 
 
 _THREAT_SCORE_BY_LEVEL: dict[str, int] = {
@@ -2443,6 +2505,7 @@ def build_user_info() -> UserInfo:
                 "pdfReport": True,
                 "downloadReport": True,
                 "aiReport": True,
+                "urlDownload": True,
             },
         },
         "modules": [

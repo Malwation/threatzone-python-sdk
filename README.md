@@ -180,6 +180,15 @@ Scoring fields (`threat_score`, `risk_level`, `privacy_score`, `privacy_risk_lev
 `completeness`, `intel_detections`, `metafields`, `scored_at`) are `None` or empty until
 scoring finishes. Read them after the report reaches `completed`.
 
+`report.score_state` is `"scored"`, `"failed"` (scoring ran and failed, `threat_score` is
+`None`) or `"not_scored"` (an older report). `report.completeness.browser_collection_note`
+is a plain note on the browser evidence. `report.browser_snapshot.sections` lists the names
+for `get_url_analysis_browser_section()`. `report.threat_analysis.url_results` is the tree of
+checked URLs: the node with `parent_id=None` is the submitted URL.
+
+`report.extracted_file` is deprecated: it is never populated and is always `None`. Use
+`report.downloaded_files`. `report.ip_info.threat_status` is deprecated: no source writes it.
+
 `report.job_id` identifies the analysis run. A restart starts a new run with a new
 `job_id`. `session.session_config.network_config_source` (`"submit"` or
 `"admin-default"`) and `network_config_name` tell where the network choice came from.
@@ -237,6 +246,96 @@ with neither report returns 409.
 
 See [recipe 2](./docs/RECIPES.md#2-submit-a-url-and-get-the-url-analysis-report) for the
 full flow.
+
+### Downloaded files
+
+`report.downloaded_files` lists the files that the browser downloaded while it loaded the
+page. The list is empty when the browser downloaded nothing.
+
+```python
+for item in report.downloaded_files:
+    print(item.filename, item.state, item.detected_type, item.size, item.received_bytes)
+    if item.state != "completed" or item.artifact_id is None:
+        continue
+    # The ZIP has the password "infected". It needs the downloadSample plan permission.
+    with client.download_artifact(created.uuid, item.artifact_id) as download:
+        download.save(f"{item.sha256}.zip")
+    # Analyse the file in the sandbox. The new submission has the URL submission as parent.
+    child = client.analyze_artifact(created.uuid, item.artifact_id, environment="w10_x64")
+    print(child.uuid)
+```
+
+`state` is one of:
+
+- `completed`: the bytes are stored. `artifact_id`, `sha256`, `size` and `detected_type` are
+  set.
+- `canceled`: the browser canceled the download.
+- `too_large`: a limit stopped the download. `limit_reason` is `too_large`,
+  `run_bytes_exceeded` or `file_count_exceeded`.
+- `upload_failed`: the platform could not store the bytes.
+- `incomplete`: the download still ran when the browser session ended. `received_bytes` is
+  set. There is no artifact.
+
+`state`, `initiator` and `limit_reason` accept new server values, so a new value does not
+fail the parse.
+
+### Analyse an artifact
+
+`analyze_artifact(uuid, artifact_id, ...)` submits a stored artifact of a submission for
+sandbox analysis. It takes the same options as `create_sandbox_submission()`: `environment`,
+`auto_select_environment`, `metafields`, `private`, `entrypoint`, `password` and
+`configurations`. It counts against the submission quota. An artifact type that the sandbox
+does not run, for example a page source, raises `ArtifactNotAnalyzableError`
+(`ARTIFACT_NOT_ANALYZABLE`).
+
+## URL download
+
+The server fetches a file from an http or https URL. The plan needs the `urlDownload`
+permission (`client.get_user_info().plan_permissions.url_download`). The call waits for the
+fetch: 60 seconds at most, 10 redirects at most. The server refuses private targets.
+
+Submit the file for sandbox analysis:
+
+```python
+created = client.create_url_download_submission(
+    "https://cdn.example.com/tools/setup.zip",
+    archive_password="s3cret",  # omitted = "infected"
+    environment="w10_x64",
+    private=True,
+)
+print(created.uuid, created.filename, created.detected_type, created.sha256)
+print(created.final_url, created.tls_error)  # tls_error: for example "CERT_HAS_EXPIRED"
+```
+
+Get the file back without a submission. The body is an AES-256 ZIP with the password
+`infected` and one entry, the fetched file. The call counts only against the API request
+limit.
+
+```python
+with client.download_url("https://cdn.example.com/tools/setup.exe") as download:
+    print(download.file_name, download.detected_type, download.file_size, download.sha256)
+    print(download.final_url, download.tls_error)
+    download.save(download.filename)  # "<file_name>.zip"
+```
+
+`archive_password` exists only in submit mode. It opens an encrypted archive that the URL
+returns. A wrong password raises `BadRequestError` (`ARCHIVE_PASSWORD_INCORRECT`).
+
+Errors:
+
+- `UrlFetchError`: the server cannot fetch the URL. `code` is `URL_TARGET_NOT_ALLOWED`,
+  `URL_HOST_UNRESOLVABLE`, `URL_TOO_MANY_REDIRECTS`, `URL_DID_NOT_RETURN_A_FILE`,
+  `URL_FETCH_TIMEOUT` or `URL_FETCH_FAILED`. `details` keeps the server details, for
+  example `{"host": ..., "reason": ..., "hop": 0}`.
+- `FileTooLargeError`: the file is larger than the plan file size limit. `max_bytes` gives
+  the limit.
+- `PermissionDeniedError`: the plan has no `urlDownload` permission.
+- `RateLimitError` (`URL_DOWNLOAD_CONCURRENCY_LIMIT_EXCEEDED`): the workspace already has the
+  maximum number of `mode="return"` downloads in progress. Wait `retry_after` seconds.
+- `ServiceUnavailableError` (`URL_EGRESS_UNAVAILABLE`): the server cannot read its egress
+  configuration. The server does not fetch the URL. Wait `retry_after` seconds.
+
+The SDK never sends these `POST` requests again after a read or write timeout.
 
 ## Indicators and artifacts
 
@@ -598,6 +697,9 @@ Branch on `.code`, never on `.message`. Download errors carry the code too.
 | — | `ThreatZoneError` | Base class. Catch for a single safety net. |
 | — | `APIError` | HTTP error base class. `.status_code`, `.body`, `.response`. |
 | 400 | `BadRequestError` | `INVALID_QUERY_PARAM` (also for a malformed UUID or ID). `.field` names the first field that failed, for example `limit`. |
+| 400 | `ArtifactNotAnalyzableError` | `ARTIFACT_NOT_ANALYZABLE`: `analyze_artifact()` named an artifact type that the sandbox does not run. Subclass of `BadRequestError`. `.artifact_id`, `.artifact_type`. |
+| 400, 422, 502, 504 | `UrlFetchError` | `URL_TARGET_NOT_ALLOWED`, `URL_HOST_UNRESOLVABLE`, `URL_TOO_MANY_REDIRECTS`, `URL_DID_NOT_RETURN_A_FILE`, `URL_FETCH_FAILED`, `URL_FETCH_TIMEOUT`: the server cannot fetch the URL of a URL download. `.details`. |
+| 413 | `FileTooLargeError` | `FILE_TOO_LARGE`: the fetched file is larger than the plan file size limit. `.max_bytes`. |
 | 401 | `AuthenticationError` | `UNAUTHORIZED`: missing or invalid API key. |
 | 402 | `PaymentRequiredError` | `WORKSPACE_INACTIVE`: the workspace is not active. Renew the plan or contact the workspace owner. |
 | 403 | `PermissionDeniedError` | `FORBIDDEN` (plan permission or module missing), `PLAN_API_ACCESS_DENIED` (the plan has no API access; a retry does not help), `LICENSE_INVALID`. |
@@ -663,6 +765,10 @@ Available scenarios: `seed_malicious_pe`, `seed_benign_document`, `seed_cdr_docu
 Switches for error paths: `fake.rate_limit_heavy_routes(retry_after=60)` makes the heavy routes
 return 429 `RATE_LIMIT_EXCEEDED`, and `fake.mark_quota_unavailable(retry_after=30)` makes the
 create routes return 503 `QUOTA_UNAVAILABLE`. `fake.reset()` ends both.
+
+The fake supports `analyze_artifact()`, `create_url_download_submission()` and
+`download_url()`. A URL report of the fake lists one completed downloaded file for each
+artifact of the submission.
 
 ## Development
 

@@ -45,6 +45,29 @@ class SubmissionCreated(BaseModel):
     sha256: str | None = None
 
 
+class UrlDownloadSubmission(SubmissionCreated):
+    """Response of ``create_url_download_submission()``: the new submission and the
+    fetched file."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    sha256: str
+    filename: str
+    """Filename from ``Content-Disposition``, else the last URL path segment, else the
+    first 16 characters of the sha256."""
+    detected_type: str | None = Field(default=None, alias="detectedType")
+    """Content-detected file extension. ``None`` when detection found none."""
+    mimetype: str
+    """Content-detected MIME type."""
+    size: int
+    """Size of the fetched file in bytes."""
+    final_url: str = Field(alias="finalUrl")
+    """URL after the redirects."""
+    tls_error: str | None = Field(default=None, alias="tlsError")
+    """Certificate error code of the first TLS hop that failed verification, for example
+    ``CERT_HAS_EXPIRED``. ``None`` when every TLS hop verified."""
+
+
 class SubmissionOverviewJobs(BaseModel):
     """Aggregated analysis job progress."""
 

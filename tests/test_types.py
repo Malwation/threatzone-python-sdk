@@ -12,8 +12,10 @@ Recursive `ProcessTreeNode.children` and the new error envelope are also covered
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -28,6 +30,7 @@ from threatzone.types import (
     ArtifactHashes,
     ArtifactJob,
     ArtifactsResponse,
+    AsyncUrlDownloadFile,
     BehaviourEvent,
     BehaviourFacets,
     BehavioursResponse,
@@ -119,10 +122,16 @@ from threatzone.types import (
     Tag,
     TotalCountList,
     UrlAnalysisBrowserSection,
+    UrlAnalysisBrowserSnapshot,
+    UrlAnalysisDownloadedFile,
     UrlAnalysisIndicatorEvidence,
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisUrlResult,
+    UrlDownloadFile,
+    UrlDownloadSubmission,
+    UrlScoreIndicator,
     UserInfo,
     UserInfoDetails,
     Verdict,
@@ -1901,7 +1910,7 @@ class TestUrlAnalysisIndicatorsTypes:
         self, url_analysis_indicators_payload: dict[str, Any]
     ) -> None:
         dumped = UrlAnalysisIndicators.model_validate(url_analysis_indicators_payload).model_dump(
-            by_alias=True
+            by_alias=True, exclude_unset=True
         )
         assert dumped["snapshot"]["pass"] == "final"
         assert dumped["snapshot"]["verdictAdjustments"][0]["from"] == "malicious"
@@ -3160,3 +3169,254 @@ class TestAnnotationErrorCodes:
             {"status_code": 400, "error": "Bad Request", "message": "m", "code": code}
         )
         assert err.code == code
+
+
+_DOWNLOADED_FILE: dict[str, Any] = {
+    "id": "8b1d6f0e-3c2a-4f5e-9a7b-1c2d3e4f5a6b",
+    "artifactId": "66f0a1b2c3d4e5f6a7b8c9d0",
+    "filename": "invoice.exe",
+    "detectedType": "exe",
+    "mimeType": "application/vnd.microsoft.portable-executable",
+    "size": 123456,
+    "receivedBytes": None,
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "sourceUrl": "https://phish.example.com/download/invoice.exe",
+    "initiator": "navigation",
+    "state": "completed",
+    "limitReason": None,
+    "capturedAt": "2026-11-11T10:00:00.000Z",
+}
+
+
+class TestUrlAnalysisDownloadedFiles:
+    def test_completed_file(self) -> None:
+        item = UrlAnalysisDownloadedFile.model_validate(_DOWNLOADED_FILE)
+        assert item.artifact_id == "66f0a1b2c3d4e5f6a7b8c9d0"
+        assert item.detected_type == "exe"
+        assert item.mime_type == "application/vnd.microsoft.portable-executable"
+        assert item.source_url == "https://phish.example.com/download/invoice.exe"
+        assert item.captured_at == datetime(2026, 11, 11, 10, 0, tzinfo=timezone.utc)
+        assert item.model_dump(by_alias=True, mode="json")["capturedAt"].startswith("2026-11-11")
+
+    def test_incomplete_file_has_no_artifact(self) -> None:
+        payload = {
+            **_DOWNLOADED_FILE,
+            "artifactId": None,
+            "detectedType": None,
+            "mimeType": None,
+            "size": None,
+            "sha256": None,
+            "receivedBytes": 4096,
+            "state": "incomplete",
+        }
+        item = UrlAnalysisDownloadedFile.model_validate(payload)
+        assert (item.artifact_id, item.size, item.sha256) == (None, None, None)
+        assert item.received_bytes == 4096
+
+    def test_too_large_file_has_a_limit_reason(self) -> None:
+        payload = {**_DOWNLOADED_FILE, "state": "too_large", "limitReason": "run_bytes_exceeded"}
+        item = UrlAnalysisDownloadedFile.model_validate(payload)
+        assert item.limit_reason == "run_bytes_exceeded"
+
+    def test_unknown_future_values_are_kept(self) -> None:
+        payload = {
+            **_DOWNLOADED_FILE,
+            "state": "quarantined",
+            "initiator": "service_worker",
+            "limitReason": "time_exceeded",
+        }
+        item = UrlAnalysisDownloadedFile.model_validate(payload)
+        assert (item.state, item.initiator, item.limit_reason) == (
+            "quarantined",
+            "service_worker",
+            "time_exceeded",
+        )
+
+    def test_required_fields(self) -> None:
+        payload = dict(_DOWNLOADED_FILE)
+        del payload["sourceUrl"]
+        with pytest.raises(ValidationError):
+            UrlAnalysisDownloadedFile.model_validate(payload)
+
+
+class TestUrlAnalysisReportFields:
+    def test_old_server_payload_defaults(
+        self, sample_url_analysis_response: dict[str, Any]
+    ) -> None:
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert report.downloaded_files == []
+        assert report.score_state is None
+        assert report.browser_snapshot is None
+        assert report.threat_analysis is not None
+        assert report.threat_analysis.url_results == []
+
+    def test_new_fields(self, sample_url_analysis_response: dict[str, Any]) -> None:
+        sample_url_analysis_response["downloadedFiles"] = [_DOWNLOADED_FILE]
+        sample_url_analysis_response["scoreState"] = "failed"
+        sample_url_analysis_response["browserSnapshot"] = {
+            "jobId": "68b0000000000000000000ee",
+            "revision": "46f965b0",
+            "sections": ["overview", "tls", "future-section"],
+        }
+        sample_url_analysis_response["completeness"] = {
+            "measuredSources": [],
+            "skippedSources": ["browser"],
+            "unavailableSources": [],
+            "browserCollection": "not_requested",
+            "browserCollectionNote": "The browser step did not run.",
+        }
+        report = UrlAnalysisResponse.model_validate(sample_url_analysis_response)
+        assert report.downloaded_files[0].filename == "invoice.exe"
+        assert report.score_state == "failed"
+        assert isinstance(report.browser_snapshot, UrlAnalysisBrowserSnapshot)
+        assert report.browser_snapshot.job_id == "68b0000000000000000000ee"
+        assert report.browser_snapshot.sections[-1] == "future-section"
+        assert report.completeness is not None
+        assert report.completeness.browser_collection_note == "The browser step did not run."
+        dumped = report.model_dump(by_alias=True)
+        assert dumped["downloadedFiles"][0]["artifactId"] == "66f0a1b2c3d4e5f6a7b8c9d0"
+        assert dumped["scoreState"] == "failed"
+        assert dumped["browserSnapshot"]["jobId"] == "68b0000000000000000000ee"
+
+    def test_url_result_tree(self) -> None:
+        node = UrlAnalysisUrlResult.model_validate(
+            {
+                "id": "b7e40c19a2d65f83",
+                "parentId": "3f1a9c0d5e7b2a64",
+                "hop": 1,
+                "via": "http_redirect",
+                "redirectStatus": 302,
+                "url": "https://phish.example.com/step2",
+                "overview": [],
+                "blacklist": False,
+                "threatDetails": [],
+                "navigationContext": {
+                    "url": "https://phish.example.com/step2",
+                    "dnsRecords": [{"type": "A", "records": ["203.0.113.42"]}],
+                    "whoisCreationDate": None,
+                    "sslCertificate": {
+                        "subject": "CN=phish.example.com",
+                        "issuer": "CN=Example CA",
+                        "expiresAt": "2027-01-15T08:00:00.000Z",
+                        "renewedAt": None,
+                        "fingerprint": None,
+                    },
+                },
+            }
+        )
+        assert (node.parent_id, node.hop, node.redirect_status) == ("3f1a9c0d5e7b2a64", 1, 302)
+        assert node.navigation_context is not None
+        assert node.navigation_context.dns_records[0].records == ["203.0.113.42"]
+        assert node.navigation_context.ssl_certificate is not None
+        assert node.navigation_context.ssl_certificate.expires_at == "2027-01-15T08:00:00.000Z"
+
+    def test_score_indicator_checked_url(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        indicator = url_analysis_indicators_payload["snapshot"]["indicators"][0]
+        assert UrlScoreIndicator.model_validate(indicator).checked_url is None
+        indicator["checkedUrl"] = "https://phish.example.com/login"
+        parsed = UrlScoreIndicator.model_validate(indicator)
+        assert parsed.checked_url == "https://phish.example.com/login"
+        assert parsed.model_dump(by_alias=True)["checkedUrl"] == "https://phish.example.com/login"
+
+
+class TestUrlDownloadTypes:
+    def test_plan_permission_url_download(self, sample_user_info: dict[str, Any]) -> None:
+        assert PlanPermissions.model_validate({}).url_download is False
+        user = UserInfo.model_validate(sample_user_info)
+        assert user.plan_permissions is not None
+        assert user.plan_permissions.url_download is False
+        assert PlanPermissions.model_validate({"urlDownload": True}).url_download is True
+
+    def test_url_download_submission(self) -> None:
+        created = UrlDownloadSubmission.model_validate(
+            {
+                "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "message": "Submission created successfully",
+                "filename": "setup.exe",
+                "detectedType": "exe",
+                "mimetype": "application/vnd.microsoft.portable-executable",
+                "size": 123456,
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "finalUrl": "https://cdn.example.com/setup.exe",
+                "tlsError": "CERT_HAS_EXPIRED",
+            }
+        )
+        assert isinstance(created, SubmissionCreated)
+        assert created.detected_type == "exe"
+        assert created.final_url == "https://cdn.example.com/setup.exe"
+        assert created.tls_error == "CERT_HAS_EXPIRED"
+        assert created.model_dump(by_alias=True)["finalUrl"] == "https://cdn.example.com/setup.exe"
+
+    def test_url_download_submission_requires_the_file_facts(self) -> None:
+        with pytest.raises(ValidationError):
+            UrlDownloadSubmission.model_validate({"uuid": "u", "message": "m"})
+
+
+def _zip_response(headers: dict[str, str]) -> httpx.Response:
+    return httpx.Response(
+        200,
+        content=b"PK-ZIP",
+        headers={"content-type": "application/zip", "content-length": "6", **headers},
+    )
+
+
+_URL_DOWNLOAD_HEADERS = {
+    "content-disposition": (
+        "attachment; filename=\"r_sum_.exe.zip\"; filename*=UTF-8''r%C3%A9sum%C3%A9.exe.zip"
+    ),
+    "x-file-name": "r%C3%A9sum%C3%A9.exe",
+    "x-file-detected-type": "exe",
+    "x-file-mimetype": "application/vnd.microsoft.portable-executable",
+    "x-file-size": "123456",
+    "x-file-sha256": "ab" * 32,
+    "x-final-url": "https://cdn.example.com/r%C3%A9sum%C3%A9.exe",
+    "x-tls-error": "CERT_HAS_EXPIRED",
+}
+
+
+class TestUrlDownloadFile:
+    def test_reads_the_file_facts_from_the_headers(self) -> None:
+        download = UrlDownloadFile(_zip_response(_URL_DOWNLOAD_HEADERS))
+        assert download.file_name == "résumé.exe"
+        assert download.filename == "résumé.exe.zip"
+        assert download.detected_type == "exe"
+        assert download.mimetype == "application/vnd.microsoft.portable-executable"
+        assert download.file_size == 123456
+        assert download.size == 6
+        assert download.sha256 == "ab" * 32
+        assert download.final_url == "https://cdn.example.com/r%C3%A9sum%C3%A9.exe"
+        assert download.tls_error == "CERT_HAS_EXPIRED"
+        assert download.content_type == "application/zip"
+        assert download.read() == b"PK-ZIP"
+
+    def test_absent_optional_headers_are_none(self) -> None:
+        headers = {
+            key: value
+            for key, value in _URL_DOWNLOAD_HEADERS.items()
+            if key not in ("x-file-detected-type", "x-tls-error")
+        }
+        download = UrlDownloadFile(_zip_response(headers))
+        assert download.detected_type is None
+        assert download.tls_error is None
+
+    def test_bad_size_header_is_none(self) -> None:
+        download = UrlDownloadFile(_zip_response({**_URL_DOWNLOAD_HEADERS, "x-file-size": "n/a"}))
+        assert download.file_size is None
+
+    def test_without_a_file_name_header_the_filename_comes_from_content_disposition(
+        self,
+    ) -> None:
+        download = UrlDownloadFile(
+            _zip_response({"content-disposition": 'attachment; filename="setup.exe.zip"'})
+        )
+        assert download.file_name is None
+        assert download.filename == "setup.exe.zip"
+
+    async def test_async_version_reads_the_same_facts(self) -> None:
+        download = AsyncUrlDownloadFile(_zip_response(_URL_DOWNLOAD_HEADERS))
+        assert download.file_name == "résumé.exe"
+        assert download.filename == "résumé.exe.zip"
+        assert download.file_size == 123456
+        assert await download.read() == b"PK-ZIP"

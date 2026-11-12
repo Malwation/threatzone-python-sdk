@@ -1,0 +1,205 @@
+{
+  "level": "malicious",
+  "status": "completed",
+  "jobId": "6650f0a1c2d3e4f5a6b7c8db",
+  "generalInfo": {
+    "url": "https://phish.example.com/login",
+    "domain": "phish.example.com",
+    "websiteTitle": "Login Portal"
+  },
+  "screenshot": {
+    "available": true
+  },
+  "ipInfo": {
+    "ip": "203.0.113.42",
+    "asn": "AS64500",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "isp": "Example Hosting B.V.",
+    "organization": "Example Hosting B.V.",
+    "threatStatus": {
+      "verdict": "unknown",
+      "title": "",
+      "description": ""
+    }
+  },
+  "dnsRecords": [
+    { "type": "A", "records": ["203.0.113.42"] },
+    { "type": "NS", "records": ["ns1.example.net", "ns2.example.net"] }
+  ],
+  "whois": {
+    "domainName": "example.com",
+    "domainId": "2336799_DOMAIN_COM-VRSN",
+    "nameServers": ["ns1.example.net", "ns2.example.net"],
+    "creationDate": "1995-08-14T04:00:00Z",
+    "updatedDate": "2024-08-14T07:01:34Z",
+    "expirationDate": "2025-08-13T04:00:00Z",
+    "registrar": "Example Registrar LLC",
+    "registrarIanaId": "376",
+    "email": null,
+    "phone": null
+  },
+  "sslCertificate": {
+    "subject": "CN=phish.example.com",
+    "issuer": "CN=Example CA",
+    "renewedAt": 1700000000,
+    "expiresAt": 1800000000,
+    "serialNumber": "0fae1234567890abcdef1234567890ab",
+    "fingerprint": "aa:bb:cc:dd:ee:ff:00:11"
+  },
+  "responseHeaders": {
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx/1.27.0"
+  },
+  "extractedFile": null,
+  "downloadedFiles": [
+    {
+      "id": "8b1d6f0e-3c2a-4f5e-9a7b-1c2d3e4f5a6b",
+      "artifactId": "66f0a1b2c3d4e5f6a7b8c9d0",
+      "filename": "invoice.exe",
+      "detectedType": "exe",
+      "mimeType": "application/vnd.microsoft.portable-executable",
+      "size": 123456,
+      "receivedBytes": null,
+      "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "sourceUrl": "https://phish.example.com/download/invoice.exe",
+      "initiator": "navigation",
+      "state": "completed",
+      "limitReason": null,
+      "capturedAt": "2026-11-11T10:00:00.000Z"
+    },
+    {
+      "id": "c4e2a9b7-5d1f-4a3e-8b6c-2f1e0d9c8b7a",
+      "artifactId": null,
+      "filename": "update.zip",
+      "detectedType": null,
+      "mimeType": null,
+      "size": null,
+      "receivedBytes": 4096,
+      "sha256": null,
+      "sourceUrl": "https://cdn.phish.example.com/update.zip",
+      "initiator": "script",
+      "state": "incomplete",
+      "limitReason": null,
+      "capturedAt": "2026-11-11T10:01:30.000Z"
+    }
+  ],
+  "threatAnalysis": {
+    "overview": [
+      {
+        "source": "phishtank",
+        "title": "Verified phishing site",
+        "description": "URL reported as phishing by 3 independent reporters.",
+        "verdict": "malicious"
+      }
+    ],
+    "blacklist": true,
+    "threatDetails": [
+      {
+        "source": "phishtank",
+        "details": { "submissionId": 9123, "verified": true }
+      }
+    ],
+    "urlResults": [
+      {
+        "id": "3f1a9c0d5e7b2a64",
+        "parentId": null,
+        "hop": 0,
+        "via": "submitted",
+        "redirectStatus": null,
+        "url": "https://phish.example.com/login",
+        "overview": [
+          {
+            "source": "phishtank",
+            "title": "Verified phishing site",
+            "description": "URL reported as phishing by 3 independent reporters.",
+            "verdict": "malicious"
+          }
+        ],
+        "blacklist": true,
+        "threatDetails": [
+          {
+            "source": "phishtank",
+            "details": { "submissionId": 9123, "verified": true }
+          }
+        ],
+        "navigationContext": {
+          "url": "https://phish.example.com/login",
+          "dnsRecords": [{ "type": "A", "records": ["203.0.113.42"] }],
+          "whoisCreationDate": "2025-12-30T00:00:00.000Z",
+          "sslCertificate": {
+            "subject": "CN=phish.example.com",
+            "issuer": "CN=Example CA",
+            "expiresAt": "2027-01-15T08:00:00.000Z",
+            "renewedAt": "2023-11-14T22:13:20.000Z",
+            "fingerprint": "aa:bb:cc:dd:ee:ff:00:11"
+          }
+        }
+      },
+      {
+        "id": "b7e40c19a2d65f83",
+        "parentId": "3f1a9c0d5e7b2a64",
+        "hop": 1,
+        "via": "http_redirect",
+        "redirectStatus": 302,
+        "url": "https://phish.example.com/step2",
+        "overview": [],
+        "blacklist": false,
+        "threatDetails": [],
+        "navigationContext": null
+      }
+    ]
+  },
+  "pages": [
+    "https://phish.example.com/",
+    "https://phish.example.com/about"
+  ],
+  "threatScore": 72,
+  "scoreState": "scored",
+  "riskLevel": "High",
+  "privacyScore": 35,
+  "privacyRiskLevel": "Medium",
+  "privacyBreakdown": [
+    {
+      "factor": "trackers",
+      "label": "Third-party trackers",
+      "delta": 20,
+      "detail": "5 tracker requests observed"
+    }
+  ],
+  "verdictProvenance": {
+    "rawVerdict": "malicious",
+    "quorumApplied": false,
+    "allowlistApplied": false,
+    "collectionState": "ok",
+    "pass": "final"
+  },
+  "impersonationTarget": {
+    "brandName": "PayPal",
+    "canonicalDomain": "paypal.com",
+    "signals": ["favicon_match", "logo_brand"],
+    "confidence": "high"
+  },
+  "completeness": {
+    "measuredSources": ["dns", "tls", "intel"],
+    "skippedSources": ["browser"],
+    "unavailableSources": ["whois"],
+    "browserCollection": "partial",
+    "browserCollectionNote": "Partial evidence: the browser capture is not complete."
+  },
+  "browserSnapshot": {
+    "jobId": "68b0000000000000000000ee",
+    "revision": "46f965b04d1056ed794ae51bd6d44edc41ac03b27dedac1e510ddc758f5fbcc1",
+    "sections": ["overview", "findings", "tls", "network-summary"]
+  },
+  "intelDetections": [
+    {
+      "source": "urlhaus",
+      "detectionType": "malware_url",
+      "severity": "high",
+      "details": "listed"
+    }
+  ],
+  "metafields": { "timeout": 240, "record_session": true },
+  "scoredAt": "2026-08-27T10:00:00.000Z"
+}
