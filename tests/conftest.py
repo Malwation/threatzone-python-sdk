@@ -784,8 +784,8 @@ def sample_network_summary_full(sample_network_summary: dict[str, Any]) -> dict[
         },
         "unattributedCounts": {"dns": 2, "http": 1, "tcp": 3, "udp": 0, "threats": 1},
         "submissionOnlyAlerts": {
-            "scope": "submission_unattributed",
-            "source": "pinned_offline_eve",
+            "scope": "These alerts are not linked to a process of the run.",
+            "source": "A scan of the full network capture made these alerts after the run ended.",
             "total": 3,
             "omitted": 2,
             "rows": [

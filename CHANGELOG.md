@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The fake API supports `analyze_artifact()`, `create_url_download_submission()` and
   `download_url()`, and its URL report lists downloaded files.
 
+### Changed
+
+- `NetworkSubmissionOnlyAlerts.scope` and `.source` are now `str | None` (default `None`).
+  The server sends one analyst sentence for each, or `null`, in place of the codes
+  `submission_unattributed` and `pinned_offline_eve`. The SDK no longer fails to parse
+  `get_network_summary()` when either is `null`. Do not match on their text; it can change.
+
 ### Deprecated
 
 - `UrlAnalysisResponse.extracted_file`: never populated; always `None`. Use
