@@ -1266,6 +1266,17 @@ class TestKillchainTypes:
         assert kc.artifact_inventory_coverage is not None
         assert kc.artifact_inventory_coverage.source_error == "future_error"
 
+    def test_killchain_inventory_source_error_is_a_sentence(
+        self, sample_killchain: dict[str, Any]
+    ) -> None:
+        sentence = "Not available because the file capture folder was missing"
+        payload = sample_killchain
+        payload["artifactInventoryCoverage"]["sourceStatus"] = "unavailable"
+        payload["artifactInventoryCoverage"]["sourceError"] = sentence
+        kc = Killchain.model_validate(payload)
+        assert kc.artifact_inventory_coverage is not None
+        assert kc.artifact_inventory_coverage.source_error == sentence
+
     def test_killchain_round_trip(self, sample_killchain: dict[str, Any]) -> None:
         first = Killchain.model_validate(sample_killchain)
         dumped = first.model_dump(by_alias=True)
@@ -2811,8 +2822,8 @@ class TestNetworkSensorFields:
         alerts = s.submission_only_alerts
         assert alerts is not None
         assert (alerts.scope, alerts.source, alerts.total, alerts.omitted) == (
-            "submission_unattributed",
-            "pinned_offline_eve",
+            "These alerts are not linked to a process of the run.",
+            "A scan of the full network capture made these alerts after the run ended.",
             3,
             2,
         )
@@ -2821,6 +2832,23 @@ class TestNetworkSensorFields:
         assert row.sid == 2034567
         assert row.severity == 1
         assert (row.source_ip, row.destination_ip) == ("192.0.2.86", "192.0.2.10")
+
+    @pytest.mark.parametrize("omit", [False, True])
+    def test_submission_only_alerts_accept_null_sentences(
+        self, sample_network_summary_full: dict[str, Any], omit: bool
+    ) -> None:
+        alerts = dict(sample_network_summary_full["submissionOnlyAlerts"])
+        if omit:
+            del alerts["scope"], alerts["source"]
+        else:
+            alerts.update(scope=None, source=None)
+        s = NetworkSummary.model_validate(
+            {**sample_network_summary_full, "submissionOnlyAlerts": alerts}
+        )
+        assert s.submission_only_alerts is not None
+        assert s.submission_only_alerts.scope is None
+        assert s.submission_only_alerts.source is None
+        assert s.submission_only_alerts.total == 3
 
 
 class TestNetworkPacketTypes:

@@ -221,8 +221,10 @@ class NetworkSubmissionOnlyAlerts(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    scope: str
-    source: str
+    scope: str | None = None
+    """One analyst sentence on which traffic the alerts cover, or ``None``. Not a code."""
+    source: str | None = None
+    """One analyst sentence on where the alerts come from, or ``None``. Not a code."""
     total: int
     omitted: int
     rows: list[NetworkSubmissionOnlyAlertRow]

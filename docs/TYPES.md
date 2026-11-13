@@ -189,7 +189,7 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 | `NetworkAvailability` | `{state, reason, coverage}`. Network evidence state of a Windows V2 report. | nested in `NetworkSummary` |
 | `NetworkAttributionCounts` / `NetworkSourceCounts` | `{dns, http, tcp, udp, threats}`, each `{sample, sample_child, sensor_only, windows_background}`. Rows of each list by source, also the `windows_background` rows. Rows without a stored source count as `sample`. | nested in `NetworkSummary` |
 | `NetworkUnattributedCounts` | `{dns, http, tcp, udp, threats}`. Records of the sensor summary of an older report that no sample process is linked to. The lists do not return them. | nested in `NetworkSummary` |
-| `NetworkSubmissionOnlyAlerts` | `{scope, source, total, omitted, rows}`. Suricata alerts outside the remote addresses of the sample (`source_scope == "submission_ip_scoped"`). `rows` are at most 100 `NetworkSubmissionOnlyAlertRow` (`line_number`, `sid`, `signature`, `severity`, `protocol`, `source_ip`, `destination_ip`). `get_network_threats()` does not return them. | nested in `NetworkSummary` |
+| `NetworkSubmissionOnlyAlerts` | `{scope, source, total, omitted, rows}`. Suricata alerts outside the remote addresses of the sample (`source_scope == "submission_ip_scoped"`). `scope` (which traffic the alerts cover) and `source` (where the alerts come from) are one analyst sentence each, or `None`; they are not codes, and their text can change. `rows` are at most 100 `NetworkSubmissionOnlyAlertRow` (`line_number`, `sid`, `signature`, `severity`, `protocol`, `source_ip`, `destination_ip`). `get_network_threats()` does not return them. | nested in `NetworkSummary` |
 | `NetworkRowSource` | `{attribution, attribution_reason, process_id, process_image}` on every network row. `attribution` is `NetworkAttribution` (`sample`, `sample_child`, `sensor_only`, `windows_background`, or a new value). The server sends `sample` for rows of older reports; each field is `None` when an older server omits it. | base of the network rows |
 | `DnsQuery` | `{id, host, type, status, status_text, records, answered, timeshift, timeshift_seconds, source_scope}` plus the `NetworkRowSource` fields. `answered` is `False` for a query that got no answer. `status` is `TIMEOUT` for such a query and `UNKNOWN` for a non-standard sensor text; `status_text` keeps the sensor text. | `GET /submissions/:uuid/network/dns` |
 | `HttpRequest` | `{id, host, ip, port, country, source_scope}` plus the `NetworkRowSource` fields &mdash; slimmed-down shape. Read the method, URL, headers and bodies with `get_http_request_packets(uuid, row.id)`. | `GET /submissions/:uuid/network/http` |
@@ -235,10 +235,11 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 - `KillchainDroppedFile.path_authority` is `KillchainPathAuthority` (`literal`,
   `verified_volume_map`, `unverified`). `retention` is `KillchainFileRetention` (`retained`,
   `observed_only`, `invalid_ref`, `unavailable`, `ambiguous`, `withheld`).
-- `KillchainInventoryCoverage.source_error` is `KillchainInventorySourceError`
-  (`inventory_not_captured`, `inventory_coverage_missing`, `sidecar_source_unavailable`,
-  `sidecar_folder_missing`, `sidecar_dir_missing`, `sidecar_count_limit`, `sidecar_byte_limit`,
-  `source_unreadable`). When `source_status` is not `available`, the counts are not measured
+- `KillchainInventoryCoverage.source_error` is one analyst sentence on why the file capture
+  source is not available, for example "Not available because the file capture folder was
+  missing", or `None` when no cause is recorded. It is free text, not a code
+  (`KillchainInventorySourceError` is `str`); do not match on it, as the wording can change.
+  When `source_status` is not `available`, the counts are not measured
   values. `artifact_inventory_coverage` is `None` on reports without a Windows V2 inventory.
 - `dump_collector_active` is `False` when the memory dump collector did not run. Then an empty
   `mem_dumps` does not tell that no dump was possible.
