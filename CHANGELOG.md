@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The server sends one analyst sentence for each, or `null`, in place of the codes
   `submission_unattributed` and `pinned_offline_eve`. The SDK no longer fails to parse
   `get_network_summary()` when either is `null`. Do not match on their text; it can change.
+- `KillchainInventoryCoverage.source_error` is documented as one analyst sentence or `None`
+  (for example "Not available because the file capture folder was missing"), which is what
+  the server sends. `KillchainInventorySourceError` is now `str` and no longer lists codes
+  such as `sidecar_dir_missing`; parsing is unchanged.
 
 ### Deprecated
 

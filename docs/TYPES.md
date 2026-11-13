@@ -235,10 +235,11 @@ report. Every endpoint is guarded by `ReportStatusGuard('dynamic')`; read the co
 - `KillchainDroppedFile.path_authority` is `KillchainPathAuthority` (`literal`,
   `verified_volume_map`, `unverified`). `retention` is `KillchainFileRetention` (`retained`,
   `observed_only`, `invalid_ref`, `unavailable`, `ambiguous`, `withheld`).
-- `KillchainInventoryCoverage.source_error` is `KillchainInventorySourceError`
-  (`inventory_not_captured`, `inventory_coverage_missing`, `sidecar_source_unavailable`,
-  `sidecar_folder_missing`, `sidecar_dir_missing`, `sidecar_count_limit`, `sidecar_byte_limit`,
-  `source_unreadable`). When `source_status` is not `available`, the counts are not measured
+- `KillchainInventoryCoverage.source_error` is one analyst sentence on why the file capture
+  source is not available, for example "Not available because the file capture folder was
+  missing", or `None` when no cause is recorded. It is free text, not a code
+  (`KillchainInventorySourceError` is `str`); do not match on it, as the wording can change.
+  When `source_status` is not `available`, the counts are not measured
   values. `artifact_inventory_coverage` is `None` on reports without a Windows V2 inventory.
 - `dump_collector_active` is `False` when the memory dump collector did not run. Then an empty
   `mem_dumps` does not tell that no dump was possible.

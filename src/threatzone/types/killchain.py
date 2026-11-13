@@ -21,21 +21,10 @@ KillchainFileRetention = (
 )
 """Retention state of the bytes of a dropped file. A newer server can send another value."""
 
-KillchainInventorySourceError = (
-    Literal[
-        "inventory_not_captured",
-        "inventory_coverage_missing",
-        "sidecar_source_unavailable",
-        "sidecar_folder_missing",
-        "sidecar_dir_missing",
-        "sidecar_count_limit",
-        "sidecar_byte_limit",
-        "source_unreadable",
-    ]
-    | str
-)
-"""Code that tells why the file capture source is not available. An unknown cause is
-``source_unreadable``. A newer server can send another value."""
+KillchainInventorySourceError = str
+"""One analyst sentence that tells why the file capture source is not available, for example
+``"Not available because the file capture folder was missing"``. It is free text, not a
+code: do not match on it, as the wording can change."""
 
 
 class KillchainProcess(BaseModel):
@@ -166,6 +155,8 @@ class KillchainInventoryCoverage(BaseModel):
     """State of the file capture source, for example ``available``. When the state is not
     ``available``, the counts are not measured values."""
     source_error: KillchainInventorySourceError | None = Field(default=None, alias="sourceError")
+    """One analyst sentence on why the file capture source is not available, or ``None`` when no
+    cause is recorded. Free text, not a code."""
     counts: list[KillchainCoverageCount]
     """Inventory counts, sorted by name."""
     unretained_rows_omitted: int | None = Field(default=None, alias="unretainedRowsOmitted")

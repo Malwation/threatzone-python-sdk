@@ -1266,6 +1266,17 @@ class TestKillchainTypes:
         assert kc.artifact_inventory_coverage is not None
         assert kc.artifact_inventory_coverage.source_error == "future_error"
 
+    def test_killchain_inventory_source_error_is_a_sentence(
+        self, sample_killchain: dict[str, Any]
+    ) -> None:
+        sentence = "Not available because the file capture folder was missing"
+        payload = sample_killchain
+        payload["artifactInventoryCoverage"]["sourceStatus"] = "unavailable"
+        payload["artifactInventoryCoverage"]["sourceError"] = sentence
+        kc = Killchain.model_validate(payload)
+        assert kc.artifact_inventory_coverage is not None
+        assert kc.artifact_inventory_coverage.source_error == sentence
+
     def test_killchain_round_trip(self, sample_killchain: dict[str, Any]) -> None:
         first = Killchain.model_validate(sample_killchain)
         dumped = first.model_dump(by_alias=True)
