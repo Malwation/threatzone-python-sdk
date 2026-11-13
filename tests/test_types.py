@@ -131,7 +131,9 @@ from threatzone.types import (
     UrlAnalysisUrlResult,
     UrlDownloadFile,
     UrlDownloadSubmission,
+    UrlScoreEvidenceFact,
     UrlScoreIndicator,
+    UrlSimilarPages,
     UserInfo,
     UserInfoDetails,
     Verdict,
@@ -3448,3 +3450,129 @@ class TestUrlDownloadFile:
         assert download.filename == "résumé.exe.zip"
         assert download.file_size == 123456
         assert await download.read() == b"PK-ZIP"
+
+
+class TestUrlDetectionBreadthFields:
+    def test_indicator_without_evidence_facts_from_an_older_server(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        indicator = UrlScoreIndicator.model_validate(
+            url_analysis_indicators_payload["snapshot"]["indicators"][0]
+        )
+        assert indicator.evidence is None
+        assert indicator.evidence_total is None
+        assert indicator.evidence_refs[0].label is None
+
+    def test_indicator_evidence_facts(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        snapshot = url_analysis_indicators_payload["snapshot"]
+        snapshot["schemaVersion"] = 2
+        indicator = snapshot["indicators"][0]
+        whois_ref = {"kind": "report", "id": "whois", "available": True, "label": "WHOIS record"}
+        indicator["evidenceRefs"] = [whois_ref]
+        indicator["evidence"] = [
+            {"kind": "observed", "label": "Domain age", "value": "3 days", "ref": whois_ref},
+            {
+                "kind": "would_confirm",
+                "label": "Registrar abuse",
+                "value": "Not checked",
+                "ref": None,
+            },
+        ]
+        indicator["evidenceTotal"] = 11
+        result = UrlAnalysisIndicators.model_validate(url_analysis_indicators_payload)
+        assert result.snapshot is not None
+        assert result.snapshot.schema_version == 2
+        parsed = result.snapshot.indicators[0]
+        assert parsed.evidence_refs[0].label == "WHOIS record"
+        assert parsed.evidence is not None
+        assert all(isinstance(fact, UrlScoreEvidenceFact) for fact in parsed.evidence)
+        observed, would_confirm = parsed.evidence
+        assert (observed.kind, observed.label, observed.value) == (
+            "observed",
+            "Domain age",
+            "3 days",
+        )
+        assert observed.ref is not None
+        assert observed.ref.id == "whois"
+        assert observed.ref.label == "WHOIS record"
+        assert would_confirm.kind == "would_confirm"
+        assert would_confirm.ref is None
+        assert parsed.evidence_total == 11
+        dumped = parsed.model_dump(by_alias=True, exclude_unset=True)
+        assert dumped["evidenceTotal"] == 11
+        assert dumped["evidence"][0]["ref"]["label"] == "WHOIS record"
+
+    def test_indicator_keeps_an_unknown_fact_kind(self) -> None:
+        fact = UrlScoreEvidenceFact.model_validate(
+            {"kind": "inferred", "label": "Kit marker", "value": "evilginx"}
+        )
+        assert fact.kind == "inferred"
+        assert fact.ref is None
+
+    def test_indicator_with_an_empty_fact_list(
+        self, url_analysis_indicators_payload: dict[str, Any]
+    ) -> None:
+        indicator = url_analysis_indicators_payload["snapshot"]["indicators"][0]
+        indicator["evidence"] = []
+        indicator["evidenceTotal"] = 0
+        parsed = UrlScoreIndicator.model_validate(indicator)
+        assert parsed.evidence == []
+        assert parsed.evidence_total == 0
+
+    def test_similar_pages(self, url_similar_pages_payload: dict[str, Any]) -> None:
+        result = UrlSimilarPages.model_validate(url_similar_pages_payload)
+        assert result.total == 2
+        first, second = result.items
+        assert first.submission_uuid == "b2c3d4e5-f6a7-4b89-8cde-f01234567891"
+        assert first.host == "login-example.net"
+        assert first.verdict == "malicious"
+        assert first.scored_at is not None
+        assert first.scored_at.isoformat() == "2026-11-10T08:15:00+00:00"
+        assert first.matched_dimensions == ["dom", "favicon", "form"]
+        assert second.scored_at is None
+        assert result.model_dump(by_alias=True, mode="json")["items"][0]["submissionUuid"] == (
+            first.submission_uuid
+        )
+
+    def test_similar_pages_keeps_unknown_values(self) -> None:
+        result = UrlSimilarPages.model_validate(
+            {
+                "total": 1,
+                "items": [
+                    {
+                        "submissionUuid": "b2c3d4e5-f6a7-4b89-8cde-f01234567891",
+                        "host": "login-example.net",
+                        "verdict": "phishing",
+                        "scoredAt": None,
+                        "matchedDimensions": ["dom", "layout"],
+                    }
+                ],
+            }
+        )
+        assert result.items[0].verdict == "phishing"
+        assert result.items[0].matched_dimensions == ["dom", "layout"]
+
+    def test_similar_pages_empty(self) -> None:
+        result = UrlSimilarPages.model_validate({"total": 0, "items": []})
+        assert result.total == 0
+        assert result.items == []
+
+    def test_similar_pages_has_no_hidden_row_hint(self) -> None:
+        assert set(UrlSimilarPages.model_fields) == {"total", "items"}
+
+    def test_submission_list_item_source_url(
+        self, sample_submission_list_item: dict[str, Any]
+    ) -> None:
+        item = SubmissionListItem.model_validate(sample_submission_list_item)
+        assert item.source_url is None
+        fetched = SubmissionListItem.model_validate(
+            {
+                **sample_submission_list_item,
+                "url": "https://files.example/invoice.exe",
+                "sourceUrl": "https://files.example/invoice.exe",
+            }
+        )
+        assert fetched.url == "https://files.example/invoice.exe"
+        assert fetched.source_url == "https://files.example/invoice.exe"

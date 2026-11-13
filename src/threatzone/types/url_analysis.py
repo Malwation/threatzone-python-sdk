@@ -43,6 +43,8 @@ UrlDownloadedFileState = (
 )
 UrlDownloadInitiator = Literal["navigation", "script", "unknown"] | str
 UrlDownloadLimitReason = Literal["too_large", "run_bytes_exceeded", "file_count_exceeded"] | str
+UrlScoreEvidenceFactKind = Literal["observed", "would_confirm"] | str
+UrlSimilarPageDimension = Literal["dom", "phash", "favicon", "title", "form", "js", "kit"] | str
 
 
 class UrlAnalysisThreatStatus(BaseModel):
@@ -314,6 +316,8 @@ class UrlAnalysisIntelDetection(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     source: str
+    """Source ID, for example ``malware_feed`` (a malware URL feed) or ``phishing_feed``.
+    New source IDs can appear."""
     detection_type: str = Field(alias="detectionType")
     severity: str
     details: str | None = None
@@ -428,6 +432,26 @@ class UrlScoreEvidenceRef(BaseModel):
     kind: UrlScoreEvidenceKind
     id: str
     available: bool
+    label: str | None = None
+    """Short display label of the evidence. ``None`` on older explanations and servers."""
+
+
+class UrlScoreEvidenceFact(BaseModel):
+    """One fact that explains a score indicator.
+
+    ``label`` is display text and can change. ``kind`` is ``observed`` (the analysis saw it)
+    or ``would_confirm`` (a check that would confirm the indicator).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    kind: UrlScoreEvidenceFactKind
+    label: str
+    value: str
+    ref: UrlScoreEvidenceRef | None = None
+    """Evidence reference of the fact. When ``ref.id`` is also in
+    ``UrlScoreIndicator.evidence_refs``, read it with
+    ``get_url_analysis_indicator_evidence()``. ``None`` when the fact has no stored evidence."""
 
 
 class UrlScoreIndicator(BaseModel):
@@ -454,6 +478,11 @@ class UrlScoreIndicator(BaseModel):
     checked_url: str | None = Field(default=None, alias="checkedUrl")
     """The URL that the indicator checked. Set from explanation schema version 2."""
     evidence_refs: list[UrlScoreEvidenceRef] = Field(default_factory=list, alias="evidenceRefs")
+    evidence: list[UrlScoreEvidenceFact] | None = None
+    """Facts that explain the indicator (8 or fewer). ``None`` on explanations written before
+    this field and on older servers. An empty list means the indicator has no facts."""
+    evidence_total: int | None = Field(default=None, alias="evidenceTotal")
+    """Number of facts before the cut to 8. ``None`` when ``evidence`` is ``None``."""
 
 
 class UrlScoreReputationCredit(BaseModel):
@@ -491,6 +520,9 @@ class UrlScoreVerdictAdjustment(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     rule_id: str = Field(alias="ruleId")
+    """``quorum``, ``impersonation``, ``allowlist``, ``collection_failure`` or
+    ``captcha_gate``. ``captcha_gate`` sets the verdict to ``unknown`` when a CAPTCHA stops
+    the analysis and no measured indicator is suspicious or malicious. New rule IDs can appear."""
     from_: UrlScoreVerdict = Field(alias="from")
     to: UrlScoreVerdict
     reason: str
@@ -553,3 +585,36 @@ class UrlAnalysisBrowserSection(BaseModel):
     updated_at: int | None = Field(default=None, alias="updatedAt")
     # Free-form: the section data follows the report page and can add fields.
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class UrlSimilarPage(BaseModel):
+    """One URL analysis report on another domain whose page matches the analysed page."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    submission_uuid: str = Field(alias="submissionUuid")
+    """UUID of the submission. Read it with ``get_url_analysis()``."""
+    host: str
+    """Registrable domain of the similar page."""
+    verdict: UrlScoreVerdict
+    """Current verdict of the URL analysis report of that submission."""
+    scored_at: datetime | None = Field(default=None, alias="scoredAt")
+    """Time of the last score of that report. ``None`` when it has no score."""
+    matched_dimensions: list[UrlSimilarPageDimension] = Field(
+        default_factory=list, alias="matchedDimensions"
+    )
+    """Page dimensions that match, at least two."""
+
+
+class UrlSimilarPages(BaseModel):
+    """Response of ``GET /submissions/{uuid}/url-analysis/similar-pages``.
+
+    The list holds only submissions that the API token can open. ``total`` counts the same
+    submissions, at most 200. ``items`` holds the first ``limit`` of them, with the most
+    matched dimensions first.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int
+    items: list[UrlSimilarPage] = Field(default_factory=list)

@@ -228,7 +228,36 @@ print(tls.revision, tls.data)
   `"tls"` or `"network-summary"` (redirects, hosts and IP addresses). Another name raises
   `NotFoundError` (`URL_BROWSER_SECTION_NOT_FOUND`). A run without browser data raises
   `NotFoundError` (`URL_BROWSER_SECTION_UNAVAILABLE`). The API never returns cookies, full
-  network entries, or request and response bodies.
+  network entries, request and response bodies, or the page script list.
+- `indicator.evidence` lists at most 8 facts that explain the indicator, and
+  `indicator.evidence_total` is the fact count before the cut. Each fact has `kind`
+  (`"observed"` or `"would_confirm"`), `label`, `value` and an optional `ref`. When `ref.id`
+  is also in `indicator.evidence_refs`, read it with `get_url_analysis_indicator_evidence()`.
+  `ref.label` and `evidence_refs[].label` are short display labels. The three fields are `None`
+  on older explanations and older servers. `schema_version` stays `2`.
+
+Similar pages (all plans):
+
+```python
+similar = client.get_url_analysis_similar_pages(created.uuid, limit=20)
+print(similar.total)
+for page in similar.items:
+    print(page.host, page.verdict, page.scored_at, page.matched_dimensions)
+    other = client.get_url_analysis(page.submission_uuid)
+```
+
+- `get_url_analysis_similar_pages(uuid, *, limit=20)` calls
+  `GET https://app.threat.zone/public-api/submissions/{uuid}/url-analysis/similar-pages`. It
+  returns the URL analysis reports on other domains whose pages match the analysed page in at
+  least two dimensions in the last 30 days.
+- The list holds only submissions that the API token can open: public submissions and private
+  submissions of the token workspace. `total` counts the same submissions, at most 200.
+  `items` holds the first `limit` of them, with the most matched dimensions first.
+- `matched_dimensions` holds `"dom"`, `"phash"`, `"favicon"`, `"title"`, `"form"`, `"js"` or
+  `"kit"`. New values do not fail the parse.
+- `limit` is an integer from 1 to 50. Another value raises `BadRequestError`
+  (`INVALID_QUERY_PARAM`). A report from before this feature has no page fingerprint and
+  returns `total == 0`.
 
 Media from the session:
 
@@ -760,7 +789,12 @@ client = ThreatZone(
 ```
 
 Available scenarios: `seed_malicious_pe`, `seed_benign_document`, `seed_cdr_document`,
-`seed_phishing_url`, `seed_static_only_submission`, `seed_private_cross_workspace`.
+`seed_phishing_url`, `seed_similar_pages`, `seed_static_only_submission`,
+`seed_private_cross_workspace`.
+
+`fake.register_similar_page(uuid, similar_uuid, matched_dimensions)` adds a similar page to a
+URL submission. `seed_similar_pages` adds two public matches and one private match of another
+workspace, so `get_url_analysis_similar_pages()` returns `total == 2`.
 
 Switches for error paths: `fake.rate_limit_heavy_routes(retry_after=60)` makes the heavy routes
 return 429 `RATE_LIMIT_EXCEEDED`, and `fake.mark_quota_unavailable(retry_after=30)` makes the

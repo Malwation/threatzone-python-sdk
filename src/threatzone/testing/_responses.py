@@ -78,6 +78,7 @@ from threatzone.types import (
     UrlAnalysisResponse,
     UrlAnalysisSession,
     UrlDownloadSubmission,
+    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -2220,7 +2221,23 @@ def _url_score_indicators(state: SubmissionState) -> list[dict[str, Any]]:
             "weightedPoints": 5,
             "disposition": "contributing",
             "suppressedBy": None,
-            "evidenceRefs": [{"kind": "report", "id": "whois", "available": True}],
+            "evidenceRefs": [
+                {"kind": "report", "id": "whois", "available": True, "label": "WHOIS record"}
+            ],
+            "evidence": [
+                {
+                    "kind": "observed",
+                    "label": "Domain age",
+                    "value": "3 days",
+                    "ref": {
+                        "kind": "report",
+                        "id": "whois",
+                        "available": True,
+                        "label": "WHOIS record",
+                    },
+                }
+            ],
+            "evidenceTotal": 1,
         }
     ]
     if state.level == "malicious":
@@ -2242,6 +2259,26 @@ def _url_score_indicators(state: SubmissionState) -> list[dict[str, Any]]:
                     {"kind": "intel", "id": "intel-urlhaus", "available": True},
                     {"kind": "network", "id": "net-0", "available": False},
                 ],
+                "evidence": [
+                    {
+                        "kind": "observed",
+                        "label": "Listed URL",
+                        "value": state.url or "",
+                        "ref": {
+                            "kind": "intel",
+                            "id": "intel-urlhaus",
+                            "available": True,
+                            "label": "Malware URL feed entry",
+                        },
+                    },
+                    {
+                        "kind": "would_confirm",
+                        "label": "Engine verdict of the download",
+                        "value": "Not measured",
+                        "ref": None,
+                    },
+                ],
+                "evidenceTotal": 2,
             }
         )
     return indicators
@@ -2313,6 +2350,31 @@ def build_url_analysis_indicator_evidence(
             "state": "available",
             "text": text[:URL_SCORE_EVIDENCE_TEXT_LIMIT],
             "truncated": len(text) > URL_SCORE_EVIDENCE_TEXT_LIMIT,
+        }
+    )
+
+
+def build_url_similar_pages(
+    matches: list[tuple[SubmissionState, list[str]]], *, limit: int
+) -> UrlSimilarPages:
+    """Build the similar-pages response from the matches that the caller can read."""
+    return UrlSimilarPages.model_validate(
+        {
+            "total": len(matches),
+            "items": [
+                {
+                    "submissionUuid": other.uuid,
+                    "host": _domain_from_url(other.final_url or other.url or ""),
+                    "verdict": other.level,
+                    "scoredAt": (
+                        url_analysis_scored_at(other)
+                        if other.current_status() == "completed"
+                        else None
+                    ),
+                    "matchedDimensions": dimensions,
+                }
+                for other, dimensions in matches[:limit]
+            ],
         }
     )
 

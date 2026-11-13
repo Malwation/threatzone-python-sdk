@@ -103,6 +103,7 @@ from threatzone.types import (
     UrlAnalysisSession,
     UrlDownloadFile,
     UrlDownloadSubmission,
+    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -1839,6 +1840,58 @@ class TestUrlAnalysisScoreExplanation:
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
             client.get_url_analysis_browser_section(submission_uuid, "cookies")
         assert _call_url(mock).endswith("/url-analysis/browser/cookies")
+
+    def test_get_url_analysis_similar_pages(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_similar_pages_payload: dict[str, Any],
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, url_similar_pages_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.get_url_analysis_similar_pages(submission_uuid)
+        assert isinstance(result, UrlSimilarPages)
+        assert result.total == 2
+        assert result.items[0].submission_uuid == "b2c3d4e5-f6a7-4b89-8cde-f01234567891"
+        assert result.items[0].host == "login-example.net"
+        assert result.items[0].verdict == "malicious"
+        assert result.items[0].scored_at is not None
+        assert result.items[0].matched_dimensions == ["dom", "favicon", "form"]
+        assert result.items[1].scored_at is None
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(
+            f"/submissions/{submission_uuid}/url-analysis/similar-pages"
+        )
+        assert _call_params(mock) == {"limit": 20}
+
+    def test_get_url_analysis_similar_pages_sends_the_limit(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, {"total": 0, "items": []}))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.get_url_analysis_similar_pages(submission_uuid, limit=5)
+        assert result.total == 0
+        assert result.items == []
+        assert _call_params(mock) == {"limit": 5}
+
+    def test_get_url_analysis_similar_pages_invalid_limit_400(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 400,
+            "error": "Bad Request",
+            "message": "limit must be an integer from 1 to 50",
+            "code": "INVALID_QUERY_PARAM",
+        }
+        ctx, _ = _patched_client(_make_response(400, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(BadRequestError):
+            client.get_url_analysis_similar_pages(submission_uuid, limit=51)
+
+    def test_get_url_analysis_similar_pages_409(self, api_key: str, submission_uuid: str) -> None:
+        body = _409_body("URL_ANALYSIS_REPORT_UNAVAILABLE", required_report="url_analysis")
+        ctx, _ = _patched_client(_make_response(409, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
+            client.get_url_analysis_similar_pages(submission_uuid)
 
 
 # ---------------------------------------------------------------------------
