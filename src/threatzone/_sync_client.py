@@ -343,11 +343,14 @@ class ThreatZone:
                 - networkConfig: Network configuration ID (MongoDB ObjectId)
             idempotency_key: Value of the ``Idempotency-Key`` header, 1 to 128 characters.
                 When it is omitted, the SDK sends a new UUID4 and reuses it on its own
-                retries. An error raised by this call carries the key it sent as
+                retries. An SDK error raised by this call carries the key it sent as
                 ``idempotency_key``. Pass that key to send the submission again after a
-                timeout or a server error: the server then returns the first submission
-                instead of creating a second one. The server matches the key alone, so a
-                key sent again with a different file also returns the first submission.
+                timeout or a server error. If the first request succeeded, the server
+                returns its submission instead of creating a second one. While the first
+                request still runs, the call raises ``SubmissionInProgressError``. If the
+                first request failed, the server runs the new one. The server matches the
+                key alone, so a key sent again with a different file also returns the
+                first submission.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -361,7 +364,8 @@ class ThreatZone:
                 (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
             SubmissionInProgressError: When a submission with the same ``idempotency_key``
                 is still running (HTTP 409, ``IDEMPOTENCY_IN_PROGRESS``). Send it again later
-                with the same key to get the first submission.
+                with the same key: once the first request has finished, the server returns
+                its submission if it succeeded, and runs the new request if it failed.
         """
         extra_fields: dict[str, Any] = {}
         if auto_select_environment:
@@ -404,11 +408,14 @@ class ThreatZone:
                 original filename verbatim. Omit to use the server default.
             idempotency_key: Value of the ``Idempotency-Key`` header, 1 to 128 characters.
                 When it is omitted, the SDK sends a new UUID4 and reuses it on its own
-                retries. An error raised by this call carries the key it sent as
+                retries. An SDK error raised by this call carries the key it sent as
                 ``idempotency_key``. Pass that key to send the submission again after a
-                timeout or a server error: the server then returns the first submission
-                instead of creating a second one. The server matches the key alone, so a
-                key sent again with a different file also returns the first submission.
+                timeout or a server error. If the first request succeeded, the server
+                returns its submission instead of creating a second one. While the first
+                request still runs, the call raises ``SubmissionInProgressError``. If the
+                first request failed, the server runs the new one. The server matches the
+                key alone, so a key sent again with a different file also returns the
+                first submission.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -422,7 +429,8 @@ class ThreatZone:
                 (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
             SubmissionInProgressError: When a submission with the same ``idempotency_key``
                 is still running (HTTP 409, ``IDEMPOTENCY_IN_PROGRESS``). Send it again later
-                with the same key to get the first submission.
+                with the same key: once the first request has finished, the server returns
+                its submission if it succeeded, and runs the new request if it failed.
         """
         multipart = self._http._build_multipart_data(
             file,
@@ -458,11 +466,14 @@ class ThreatZone:
                 original filename verbatim. Omit to use the server default.
             idempotency_key: Value of the ``Idempotency-Key`` header, 1 to 128 characters.
                 When it is omitted, the SDK sends a new UUID4 and reuses it on its own
-                retries. An error raised by this call carries the key it sent as
+                retries. An SDK error raised by this call carries the key it sent as
                 ``idempotency_key``. Pass that key to send the submission again after a
-                timeout or a server error: the server then returns the first submission
-                instead of creating a second one. The server matches the key alone, so a
-                key sent again with a different file also returns the first submission.
+                timeout or a server error. If the first request succeeded, the server
+                returns its submission instead of creating a second one. While the first
+                request still runs, the call raises ``SubmissionInProgressError``. If the
+                first request failed, the server runs the new one. The server matches the
+                key alone, so a key sent again with a different file also returns the
+                first submission.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -476,7 +487,8 @@ class ThreatZone:
                 (HTTP 503, ``QUOTA_UNAVAILABLE``). Retry after ``retry_after`` seconds.
             SubmissionInProgressError: When a submission with the same ``idempotency_key``
                 is still running (HTTP 409, ``IDEMPOTENCY_IN_PROGRESS``). Send it again later
-                with the same key to get the first submission.
+                with the same key: once the first request has finished, the server returns
+                its submission if it succeeded, and runs the new request if it failed.
         """
         multipart = self._http._build_multipart_data(
             file,

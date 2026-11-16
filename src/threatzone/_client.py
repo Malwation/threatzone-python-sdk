@@ -98,13 +98,18 @@ def _submission_key(key: str | None) -> str:
 
 def _keyed_error(error: ThreatZoneError, key: str) -> ThreatZoneError:
     """The error of a file submission, carrying the key it sent."""
-    if isinstance(error, TimeoutError):
-        error = TimeoutError(
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        error = type(error)(
             f"{error.message} To send it again without creating a second submission, "
             f"pass idempotency_key={key!r}."
         )
     error.idempotency_key = key
     return error
+
+
+def _transport_error(error: httpx.TransportError) -> ConnectionError:
+    """A transport failure that ``_request`` does not map, such as a dropped response."""
+    return ConnectionError(f"The connection failed during the request: {error}.")
 
 
 def is_list_route(path: str) -> bool:
@@ -339,6 +344,8 @@ class SyncHTTPClient(BaseClient):
             if keyed is error:
                 raise
             raise keyed from error
+        except httpx.TransportError as error:
+            raise _keyed_error(_transport_error(error), key) from error
 
     def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""
@@ -526,6 +533,8 @@ class AsyncHTTPClient(BaseClient):
             if keyed is error:
                 raise
             raise keyed from error
+        except httpx.TransportError as error:
+            raise _keyed_error(_transport_error(error), key) from error
 
     async def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""

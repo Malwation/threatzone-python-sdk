@@ -15,7 +15,8 @@ class ThreatZoneError(Exception):
     Attributes:
         idempotency_key: The ``Idempotency-Key`` that the failed file submission sent, or
             ``None`` for any other call. Pass it as ``idempotency_key=`` to send the same
-            submission again without creating a second one.
+            submission again: if the first request succeeded, the server returns its
+            submission instead of creating a second one.
     """
 
     idempotency_key: str | None = None
@@ -235,7 +236,8 @@ class SubmissionInProgressError(ReportUnavailableError):
 
     The server answers ``409 IDEMPOTENCY_IN_PROGRESS`` while the first request with the key
     runs. Send the submission again later with the same key: once the first request has
-    finished, the server returns its submission.
+    finished, the server returns its submission if it succeeded, and runs the new request if
+    it failed.
     """
 
 

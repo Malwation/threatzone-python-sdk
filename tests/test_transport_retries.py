@@ -12,6 +12,7 @@ import pytest
 from threatzone import (
     APIError,
     AsyncThreatZone,
+    ConnectionError,
     NotFoundError,
     PermissionDeniedError,
     RateLimitError,
@@ -505,3 +506,34 @@ class TestSubmissionIdempotencyKey:
         with _sync(handler) as client, pytest.raises(APIError) as raised:
             client.get_user_info()
         assert raised.value.idempotency_key is None
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.RemoteProtocolError("Server disconnected without sending a response."),
+            httpx.ReadError("connection reset"),
+            httpx.WriteError("broken pipe"),
+        ],
+    )
+    def test_dropped_response_raises_a_keyed_connection_error(self, failure: Exception) -> None:
+        handler, seen = _sequence(failure)
+        with _sync(handler) as client, pytest.raises(ConnectionError) as raised:
+            client.create_sandbox_submission(b"MZ")
+        key = seen[0].headers["Idempotency-Key"]
+        assert raised.value.idempotency_key == key
+        assert f"idempotency_key='{key}'" in str(raised.value)
+        assert raised.value.__cause__ is failure
+
+    def test_connect_error_after_retries_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"))
+        with _sync(handler, max_retries=1) as client, pytest.raises(ConnectionError) as raised:
+            client.create_static_submission(b"MZ")
+        assert len(seen) == 2
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]
+
+    async def test_async_dropped_response_raises_a_keyed_connection_error(self) -> None:
+        handler, seen = _sequence(httpx.RemoteProtocolError("Server disconnected."))
+        async with _async(handler) as client:
+            with pytest.raises(ConnectionError) as raised:
+                await client.create_cdr_submission(b"MZ")
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]
