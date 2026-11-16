@@ -20,6 +20,7 @@ from ._config import ClientConfig
 from ._constants import MAX_RETRY_AFTER_SECONDS
 from ._exceptions import (
     ConnectionError,
+    ThreatZoneError,
     TimeoutError,
     raise_for_status,
     retry_after_seconds,
@@ -91,9 +92,19 @@ def _status_retry_delay(method: str, response: httpx.Response, attempt: int) -> 
     return delay
 
 
-def idempotency_headers(key: str | None) -> dict[str, str]:
-    """The ``Idempotency-Key`` header of one submission: ``key``, or a new UUID4."""
-    return {IDEMPOTENCY_KEY_HEADER: key if key is not None else str(uuid.uuid4())}
+def _submission_key(key: str | None) -> str:
+    return key if key is not None else str(uuid.uuid4())
+
+
+def _keyed_error(error: ThreatZoneError, key: str) -> ThreatZoneError:
+    """The error of a file submission, carrying the key it sent."""
+    if isinstance(error, TimeoutError):
+        error = TimeoutError(
+            f"{error.message} To send it again without creating a second submission, "
+            f"pass idempotency_key={key!r}."
+        )
+    error.idempotency_key = key
+    return error
 
 
 def is_list_route(path: str) -> bool:
@@ -316,6 +327,19 @@ class SyncHTTPClient(BaseClient):
         finally:
             self._cleanup_files(files)
 
+    def post_submission(
+        self, path: str, multipart: Mapping[str, Any], idempotency_key: str | None
+    ) -> httpx.Response:
+        """POST a file submission with its ``Idempotency-Key``; an error carries the key."""
+        key = _submission_key(idempotency_key)
+        try:
+            return self.post(path, **multipart, headers={IDEMPOTENCY_KEY_HEADER: key})
+        except ThreatZoneError as error:
+            keyed = _keyed_error(error, key)
+            if keyed is error:
+                raise
+            raise keyed from error
+
     def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""
         return self._request("PUT", path, json=json)
@@ -489,6 +513,19 @@ class AsyncHTTPClient(BaseClient):
             )
         finally:
             self._cleanup_files(files)
+
+    async def post_submission(
+        self, path: str, multipart: Mapping[str, Any], idempotency_key: str | None
+    ) -> httpx.Response:
+        """POST a file submission with its ``Idempotency-Key``; an error carries the key."""
+        key = _submission_key(idempotency_key)
+        try:
+            return await self.post(path, **multipart, headers={IDEMPOTENCY_KEY_HEADER: key})
+        except ThreatZoneError as error:
+            keyed = _keyed_error(error, key)
+            if keyed is error:
+                raise
+            raise keyed from error
 
     async def put(self, path: str, *, json: Any | None = None) -> httpx.Response:
         """Make a PUT request."""

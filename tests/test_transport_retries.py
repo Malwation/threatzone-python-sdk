@@ -10,11 +10,14 @@ import httpx
 import pytest
 
 from threatzone import (
+    APIError,
     AsyncThreatZone,
     NotFoundError,
     PermissionDeniedError,
     RateLimitError,
+    ReportUnavailableError,
     ServiceUnavailableError,
+    SubmissionInProgressError,
     ThreatZone,
     TimeoutError,
 )
@@ -458,3 +461,47 @@ class TestSubmissionIdempotencyKey:
         async with _async(handler) as client:
             await client.create_cdr_submission(b"MZ", idempotency_key="order-43")
         assert seen[0].headers["Idempotency-Key"] == "order-43"
+
+    def test_read_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ReadTimeout("read timed out"))
+        with _sync(handler) as client, pytest.raises(TimeoutError) as raised:
+            client.create_sandbox_submission(b"MZ")
+        key = seen[0].headers["Idempotency-Key"]
+        assert raised.value.idempotency_key == key
+        assert f"idempotency_key='{key}'" in str(raised.value)
+
+    def test_proxy_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.Response(524, text="error code: 524"))
+        with _sync(handler) as client, pytest.raises(APIError) as raised:
+            client.create_sandbox_submission(b"MZ", idempotency_key="order-44")
+        assert raised.value.status_code == 524
+        assert raised.value.idempotency_key == "order-44"
+        assert seen[0].headers["Idempotency-Key"] == "order-44"
+
+    def test_running_key_raises_submission_in_progress(self) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "A request with this Idempotency-Key is still running. Retry after it finishes.",
+            "code": "IDEMPOTENCY_IN_PROGRESS",
+        }
+        handler, seen = _sequence(_json(409, body))
+        with _sync(handler) as client, pytest.raises(SubmissionInProgressError) as raised:
+            client.create_static_submission(b"MZ", idempotency_key="order-45")
+        assert isinstance(raised.value, ReportUnavailableError)
+        assert raised.value.code == "IDEMPOTENCY_IN_PROGRESS"
+        assert raised.value.idempotency_key == "order-45"
+        assert len(seen) == 1
+
+    async def test_async_read_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ReadTimeout("read timed out"))
+        async with _async(handler) as client:
+            with pytest.raises(TimeoutError) as raised:
+                await client.create_cdr_submission(b"MZ")
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]
+
+    def test_other_calls_carry_no_key(self) -> None:
+        handler, _ = _sequence(httpx.Response(404, json={"message": "Not found"}))
+        with _sync(handler) as client, pytest.raises(APIError) as raised:
+            client.get_user_info()
+        assert raised.value.idempotency_key is None

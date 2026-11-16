@@ -61,6 +61,25 @@ The `base_url` **must** include the `/public-api` suffix. For self-signed certs,
 
 `max_retries=0` turns retries off.
 
+`create_sandbox_submission()`, `create_static_submission()` and `create_cdr_submission()` send an
+`Idempotency-Key` header: a new UUID4 per call, or the `idempotency_key=` you pass (1 to 128
+characters). An error raised by these calls carries the key as `idempotency_key`. To send the
+submission again after a timeout or a server error, pass that key: the server returns the first
+submission instead of creating a second one. While the first request still runs, the call raises
+`SubmissionInProgressError`. The server matches the key alone, so a key sent again with a
+different file also returns the first submission.
+
+```python
+from threatzone import InternalServerError, TimeoutError
+
+try:
+    created = client.create_sandbox_submission("sample.zip", entrypoint="payload.exe")
+except (TimeoutError, InternalServerError) as error:
+    created = client.create_sandbox_submission(
+        "sample.zip", entrypoint="payload.exe", idempotency_key=error.idempotency_key
+    )
+```
+
 ### List envelope
 
 `ThreatZone(list_envelope=True)` sends `envelope=1` to every list route. The routes then
