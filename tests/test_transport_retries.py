@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -9,11 +10,15 @@ import httpx
 import pytest
 
 from threatzone import (
+    APIError,
     AsyncThreatZone,
+    ConnectionError,
     NotFoundError,
     PermissionDeniedError,
     RateLimitError,
+    ReportUnavailableError,
     ServiceUnavailableError,
+    SubmissionInProgressError,
     ThreatZone,
     TimeoutError,
 )
@@ -405,3 +410,130 @@ class TestExfilAttribution:
         with _sync(handler) as client:
             client.get_network_exfil_requests(UUID, attribution=["sample", "sample_child"])
         assert seen[0].url.params.get("attribution") == "sample,sample_child"
+
+
+class TestSubmissionIdempotencyKey:
+    @pytest.mark.parametrize(
+        "submit",
+        [
+            lambda client: client.create_sandbox_submission(b"MZ"),
+            lambda client: client.create_static_submission(b"MZ"),
+            lambda client: client.create_cdr_submission(b"MZ"),
+        ],
+    )
+    def test_each_submission_sends_its_own_key(self, submit: Callable[[ThreatZone], Any]) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            submit(client)
+            submit(client)
+        keys = [request.headers["Idempotency-Key"] for request in seen]
+        assert [str(uuid.UUID(key, version=4)) for key in keys] == keys
+        assert keys[0] != keys[1]
+
+    def test_retry_reuses_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"), _json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_sandbox_submission(b"MZ")
+        assert len(seen) == 2
+        assert seen[0].headers["Idempotency-Key"] == seen[1].headers["Idempotency-Key"]
+
+    def test_caller_key_is_sent_as_given(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_sandbox_submission(b"MZ", idempotency_key="order-42")
+        assert seen[0].headers["Idempotency-Key"] == "order-42"
+
+    def test_other_posts_send_no_key(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_url_submission("https://www.example.org/")
+        assert "Idempotency-Key" not in seen[0].headers
+
+    async def test_async_retry_reuses_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"), _json(200, _CREATED))
+        async with _async(handler) as client:
+            await client.create_static_submission(b"MZ")
+        assert len(seen) == 2
+        assert seen[0].headers["Idempotency-Key"] == seen[1].headers["Idempotency-Key"]
+        uuid.UUID(seen[0].headers["Idempotency-Key"], version=4)
+
+    async def test_async_caller_key_is_sent_as_given(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        async with _async(handler) as client:
+            await client.create_cdr_submission(b"MZ", idempotency_key="order-43")
+        assert seen[0].headers["Idempotency-Key"] == "order-43"
+
+    def test_read_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ReadTimeout("read timed out"))
+        with _sync(handler) as client, pytest.raises(TimeoutError) as raised:
+            client.create_sandbox_submission(b"MZ")
+        key = seen[0].headers["Idempotency-Key"]
+        assert raised.value.idempotency_key == key
+        assert f"idempotency_key='{key}'" in str(raised.value)
+
+    def test_proxy_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.Response(524, text="error code: 524"))
+        with _sync(handler) as client, pytest.raises(APIError) as raised:
+            client.create_sandbox_submission(b"MZ", idempotency_key="order-44")
+        assert raised.value.status_code == 524
+        assert raised.value.idempotency_key == "order-44"
+        assert seen[0].headers["Idempotency-Key"] == "order-44"
+
+    def test_running_key_raises_submission_in_progress(self) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "A request with this Idempotency-Key is still running. Retry after it finishes.",
+            "code": "IDEMPOTENCY_IN_PROGRESS",
+        }
+        handler, seen = _sequence(_json(409, body))
+        with _sync(handler) as client, pytest.raises(SubmissionInProgressError) as raised:
+            client.create_static_submission(b"MZ", idempotency_key="order-45")
+        assert isinstance(raised.value, ReportUnavailableError)
+        assert raised.value.code == "IDEMPOTENCY_IN_PROGRESS"
+        assert raised.value.idempotency_key == "order-45"
+        assert len(seen) == 1
+
+    async def test_async_read_timeout_error_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ReadTimeout("read timed out"))
+        async with _async(handler) as client:
+            with pytest.raises(TimeoutError) as raised:
+                await client.create_cdr_submission(b"MZ")
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]
+
+    def test_other_calls_carry_no_key(self) -> None:
+        handler, _ = _sequence(httpx.Response(404, json={"message": "Not found"}))
+        with _sync(handler) as client, pytest.raises(APIError) as raised:
+            client.get_user_info()
+        assert raised.value.idempotency_key is None
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.RemoteProtocolError("Server disconnected without sending a response."),
+            httpx.ReadError("connection reset"),
+            httpx.WriteError("broken pipe"),
+        ],
+    )
+    def test_dropped_response_raises_a_keyed_connection_error(self, failure: Exception) -> None:
+        handler, seen = _sequence(failure)
+        with _sync(handler) as client, pytest.raises(ConnectionError) as raised:
+            client.create_sandbox_submission(b"MZ")
+        key = seen[0].headers["Idempotency-Key"]
+        assert raised.value.idempotency_key == key
+        assert f"idempotency_key='{key}'" in str(raised.value)
+        assert raised.value.__cause__ is failure
+
+    def test_connect_error_after_retries_carries_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"))
+        with _sync(handler, max_retries=1) as client, pytest.raises(ConnectionError) as raised:
+            client.create_static_submission(b"MZ")
+        assert len(seen) == 2
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]
+
+    async def test_async_dropped_response_raises_a_keyed_connection_error(self) -> None:
+        handler, seen = _sequence(httpx.RemoteProtocolError("Server disconnected."))
+        async with _async(handler) as client:
+            with pytest.raises(ConnectionError) as raised:
+                await client.create_cdr_submission(b"MZ")
+        assert raised.value.idempotency_key == seen[0].headers["Idempotency-Key"]

@@ -10,7 +10,16 @@ if TYPE_CHECKING:
 
 
 class ThreatZoneError(Exception):
-    """Base exception for all Threat.Zone Python SDK errors."""
+    """Base exception for all Threat.Zone Python SDK errors.
+
+    Attributes:
+        idempotency_key: The ``Idempotency-Key`` that the failed file submission sent, or
+            ``None`` for any other call. Pass it as ``idempotency_key=`` to send the same
+            submission again: if the first request succeeded, the server returns its
+            submission instead of creating a second one.
+    """
+
+    idempotency_key: str | None = None
 
     def __init__(self, message: str) -> None:
         self.message = message
@@ -220,6 +229,16 @@ class ReportUnavailableError(APIError):
         if self.required_report:
             return f"{base} (required_report={self.required_report}, current_status={self.current_status})"
         return base
+
+
+class SubmissionInProgressError(ReportUnavailableError):
+    """Raised when a submission with the same ``idempotency_key`` is still running.
+
+    The server answers ``409 IDEMPOTENCY_IN_PROGRESS`` while the first request with the key
+    runs. Send the submission again later with the same key: once the first request has
+    finished, the server returns its submission if it succeeded, and runs the new request if
+    it failed.
+    """
 
 
 class BehaviourIndexingError(ReportUnavailableError):
@@ -602,6 +621,10 @@ def raise_for_status(response: httpx.Response) -> None:
                 raw_available = details.get("availableReports")
                 if isinstance(raw_available, list):
                     available_reports = [item for item in raw_available if isinstance(item, str)]
+        if code == "IDEMPOTENCY_IN_PROGRESS":
+            raise SubmissionInProgressError(
+                message, status_code=status_code, response=response, body=body, code=code
+            )
         if code == "BEHAVIOUR_INDEXING":
             raise BehaviourIndexingError(
                 message,

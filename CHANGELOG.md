@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `create_sandbox_submission()`, `create_static_submission()` and `create_cdr_submission()`
+  send an `Idempotency-Key` header: a new UUID4 per call, or the `idempotency_key=` you pass.
+  An SDK error raised by these calls carries the key as `idempotency_key`. Pass that key to
+  send the submission again after a timeout or a server error. If the first request
+  succeeded, the server returns its submission instead of creating a second one. If the
+  first request failed, the server runs the new one.
+- `SubmissionInProgressError`, a `ReportUnavailableError`, is raised for
+  `409 IDEMPOTENCY_IN_PROGRESS`: a submission with the same key is still running.
+- A transport failure of these calls that the SDK did not map before, such as a response the
+  server dropped, raises `ConnectionError` carrying the key.
 - `analyze_artifact(uuid, artifact_id, ...)` submits a stored artifact of a submission for
   sandbox analysis (`POST /submissions/{uuid}/artifacts/{artifact_id}/analyze`). It takes the
   options of `create_sandbox_submission()` and returns `SubmissionCreated`.
