@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -405,3 +406,55 @@ class TestExfilAttribution:
         with _sync(handler) as client:
             client.get_network_exfil_requests(UUID, attribution=["sample", "sample_child"])
         assert seen[0].url.params.get("attribution") == "sample,sample_child"
+
+
+class TestSubmissionIdempotencyKey:
+    @pytest.mark.parametrize(
+        "submit",
+        [
+            lambda client: client.create_sandbox_submission(b"MZ"),
+            lambda client: client.create_static_submission(b"MZ"),
+            lambda client: client.create_cdr_submission(b"MZ"),
+        ],
+    )
+    def test_each_submission_sends_its_own_key(self, submit: Callable[[ThreatZone], Any]) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            submit(client)
+            submit(client)
+        keys = [request.headers["Idempotency-Key"] for request in seen]
+        assert [str(uuid.UUID(key, version=4)) for key in keys] == keys
+        assert keys[0] != keys[1]
+
+    def test_retry_reuses_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"), _json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_sandbox_submission(b"MZ")
+        assert len(seen) == 2
+        assert seen[0].headers["Idempotency-Key"] == seen[1].headers["Idempotency-Key"]
+
+    def test_caller_key_is_sent_as_given(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_sandbox_submission(b"MZ", idempotency_key="order-42")
+        assert seen[0].headers["Idempotency-Key"] == "order-42"
+
+    def test_other_posts_send_no_key(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        with _sync(handler) as client:
+            client.create_url_submission("https://www.example.org/")
+        assert "Idempotency-Key" not in seen[0].headers
+
+    async def test_async_retry_reuses_the_key(self) -> None:
+        handler, seen = _sequence(httpx.ConnectError("refused"), _json(200, _CREATED))
+        async with _async(handler) as client:
+            await client.create_static_submission(b"MZ")
+        assert len(seen) == 2
+        assert seen[0].headers["Idempotency-Key"] == seen[1].headers["Idempotency-Key"]
+        uuid.UUID(seen[0].headers["Idempotency-Key"], version=4)
+
+    async def test_async_caller_key_is_sent_as_given(self) -> None:
+        handler, seen = _sequence(_json(200, _CREATED))
+        async with _async(handler) as client:
+            await client.create_cdr_submission(b"MZ", idempotency_key="order-43")
+        assert seen[0].headers["Idempotency-Key"] == "order-43"

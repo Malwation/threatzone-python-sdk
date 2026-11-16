@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `create_sandbox_submission()`, `create_static_submission()` and `create_cdr_submission()`
+  send an `Idempotency-Key` header: a new UUID4 per call, reused on the SDK's own retries, so a
+  retried upload never creates a second submission. Pass `idempotency_key=` to reuse a key
+  across your own retries of the same submission.
 - `analyze_artifact(uuid, artifact_id, ...)` submits a stored artifact of a submission for
   sandbox analysis (`POST /submissions/{uuid}/artifacts/{artifact_id}/analyze`). It takes the
   options of `create_sandbox_submission()` and returns `SubmissionCreated`.

@@ -12,7 +12,13 @@ from urllib.parse import quote
 import httpx
 
 from . import _client as _transport
-from ._client import FileInput, SyncHTTPClient, _may_retry_timeout, _timeout_error
+from ._client import (
+    FileInput,
+    SyncHTTPClient,
+    _may_retry_timeout,
+    _timeout_error,
+    idempotency_headers,
+)
 from ._config import ClientConfig
 from ._constants import DEFAULT_POLL_INTERVAL, DEFAULT_WAIT_TIMEOUT
 from ._exceptions import (
@@ -313,6 +319,7 @@ class ThreatZone:
         entrypoint: str | None = None,
         password: str | None = None,
         configurations: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
     ) -> SubmissionCreated:
         """
         Create a new sandbox (dynamic analysis) submission.
@@ -335,6 +342,10 @@ class ThreatZone:
                 - preScript: Script to run before analysis
                 - startArguments: Command line arguments for the sample
                 - networkConfig: Network configuration ID (MongoDB ObjectId)
+            idempotency_key: Value of the ``Idempotency-Key`` header. The SDK sends a new
+                UUID4 when it is omitted and reuses it on its own retries. Pass the same
+                value again to retry a submission whose response was lost: the server then
+                returns the first submission instead of creating a second one.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -361,7 +372,9 @@ class ThreatZone:
             configurations=configurations,
             **extra_fields,
         )
-        response = self._http.post("/submissions/sandbox", **multipart)
+        response = self._http.post(
+            "/submissions/sandbox", **multipart, headers=idempotency_headers(idempotency_key)
+        )
         return SubmissionCreated.model_validate(response.json())
 
     def create_static_submission(
@@ -372,6 +385,7 @@ class ThreatZone:
         entrypoint: str | None = None,
         password: str | None = None,
         dynamic_mimetype_check: bool | None = None,
+        idempotency_key: str | None = None,
     ) -> SubmissionCreated:
         """
         Create a new static analysis submission.
@@ -385,6 +399,10 @@ class ThreatZone:
                 Magika-detected real extension is appended to the filename if
                 it differs from the declared extension. Send False to keep the
                 original filename verbatim. Omit to use the server default.
+            idempotency_key: Value of the ``Idempotency-Key`` header. The SDK sends a new
+                UUID4 when it is omitted and reuses it on its own retries. Pass the same
+                value again to retry a submission whose response was lost: the server then
+                returns the first submission instead of creating a second one.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -404,7 +422,9 @@ class ThreatZone:
             password=password,
             dynamic_mimetype_check=dynamic_mimetype_check,
         )
-        response = self._http.post("/submissions/static", **multipart)
+        response = self._http.post(
+            "/submissions/static", **multipart, headers=idempotency_headers(idempotency_key)
+        )
         return SubmissionCreated.model_validate(response.json())
 
     def create_cdr_submission(
@@ -415,6 +435,7 @@ class ThreatZone:
         entrypoint: str | None = None,
         password: str | None = None,
         dynamic_mimetype_check: bool | None = None,
+        idempotency_key: str | None = None,
     ) -> SubmissionCreated:
         """
         Create a new CDR (Content Disarm & Reconstruction) submission.
@@ -428,6 +449,10 @@ class ThreatZone:
                 Magika-detected real extension is appended to the filename if
                 it differs from the declared extension. Send False to keep the
                 original filename verbatim. Omit to use the server default.
+            idempotency_key: Value of the ``Idempotency-Key`` header. The SDK sends a new
+                UUID4 when it is omitted and reuses it on its own retries. Pass the same
+                value again to retry a submission whose response was lost: the server then
+                returns the first submission instead of creating a second one.
 
         Returns:
             SubmissionCreated with the new submission UUID.
@@ -447,7 +472,9 @@ class ThreatZone:
             password=password,
             dynamic_mimetype_check=dynamic_mimetype_check,
         )
-        response = self._http.post("/submissions/cdr", **multipart)
+        response = self._http.post(
+            "/submissions/cdr", **multipart, headers=idempotency_headers(idempotency_key)
+        )
         return SubmissionCreated.model_validate(response.json())
 
     def create_url_submission(

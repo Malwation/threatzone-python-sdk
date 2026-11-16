@@ -7,6 +7,7 @@ import contextlib
 import json
 import re
 import time
+import uuid
 import weakref
 from collections.abc import Mapping
 from io import IOBase
@@ -26,6 +27,8 @@ from ._exceptions import (
 from ._streaming import AsyncDownloadResponse, DownloadResponse
 
 FileInput = BinaryIO | bytes | str | Path | IOBase
+
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
 _RETRY_STATUSES = frozenset({429, 503})
@@ -86,6 +89,11 @@ def _status_retry_delay(method: str, response: httpx.Response, attempt: int) -> 
     if delay < 0 or delay > MAX_RETRY_AFTER_SECONDS:
         return None
     return delay
+
+
+def idempotency_headers(key: str | None) -> dict[str, str]:
+    """The ``Idempotency-Key`` header of one submission: ``key``, or a new UUID4."""
+    return {IDEMPOTENCY_KEY_HEADER: key if key is not None else str(uuid.uuid4())}
 
 
 def is_list_route(path: str) -> bool:
@@ -300,10 +308,11 @@ class SyncHTTPClient(BaseClient):
         json: Any | None = None,
         data: Mapping[str, Any] | None = None,
         files: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
         """Make a POST request."""
         try:
-            return self._request("POST", path, json=json, data=data, files=files)
+            return self._request("POST", path, json=json, data=data, files=files, headers=headers)
         finally:
             self._cleanup_files(files)
 
@@ -471,10 +480,13 @@ class AsyncHTTPClient(BaseClient):
         json: Any | None = None,
         data: Mapping[str, Any] | None = None,
         files: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
         """Make a POST request."""
         try:
-            return await self._request("POST", path, json=json, data=data, files=files)
+            return await self._request(
+                "POST", path, json=json, data=data, files=files, headers=headers
+            )
         finally:
             self._cleanup_files(files)
 
