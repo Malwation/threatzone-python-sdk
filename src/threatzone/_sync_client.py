@@ -102,6 +102,7 @@ from .types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
     UrlDownloadFile,
     UrlDownloadSubmission,
     UrlSimilarPages,
@@ -1736,7 +1737,7 @@ class ThreatZone:
         Returns:
             UrlAnalysisSession. `link` is None until `vnc_available` is True, and
             again after the session expires. `queue_position` is set only while
-            `state` is "queued".
+            `state` is "queued" and `queue_reason` is "workspace_queue".
         """
         response = self._http.get(f"/submissions/{uuid}/url-analysis/session")
         return UrlAnalysisSession.model_validate(response.json())
@@ -1784,6 +1785,34 @@ class ThreatZone:
         """
         response = self._http.post(f"/submissions/{uuid}/url-analysis/session/restart")
         return Message.model_validate(response.json())
+
+    def stop_url_analysis_session(self, uuid: str) -> UrlAnalysisSessionStop:
+        """
+        End the running interactive session now.
+
+        The session ends through its normal end path, so the browser report is built from
+        what the browser collected so far. Poll get_url_analysis_session(): its
+        ``collection_status`` moves to ``finalizing`` and then to ``completed`` or
+        ``partial``, and ``stop_requested_at`` holds the request time. A stopped session
+        cannot be extended. Call start_url_analysis_session() or
+        restart_url_analysis_session() for a new session. This call consumes no quota.
+
+        Args:
+            uuid: Submission UUID (must be a URL submission).
+
+        Returns:
+            UrlAnalysisSessionStop. ``already_ending`` is True when the session was already
+            ending, so a second call and a race with the natural expiry both succeed.
+
+        Raises:
+            NotFoundError: When no interactive session exists for the submission
+                (``SESSION_NOT_FOUND``).
+            ReportUnavailableError: When the session has not reached its browser yet, or it
+                belongs to a superseded run (HTTP 409, ``SESSION_NOT_RUNNING``), or when
+                the submission is a file submission (``URL_ANALYSIS_REPORT_UNAVAILABLE``).
+        """
+        response = self._http.post(f"/submissions/{uuid}/url-analysis/session/stop")
+        return UrlAnalysisSessionStop.model_validate(response.json())
 
     def restart_url_analysis(self, uuid: str) -> Message:
         """

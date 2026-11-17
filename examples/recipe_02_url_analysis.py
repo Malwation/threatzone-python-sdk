@@ -40,7 +40,7 @@ def wait_for_session_link(
             print(f"Session ended early: {session.state} ({session.failure_code})")
             return None
         if session.state == "queued":
-            print(f"Session queued at position {session.queue_position}")
+            print(f"Session queued ({session.queue_reason}) at position {session.queue_position}")
         if interval > 0:
             time.sleep(interval)
     return None

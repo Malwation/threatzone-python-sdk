@@ -101,6 +101,7 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
     UrlDownloadFile,
     UrlDownloadSubmission,
     UrlSimilarPages,
@@ -1687,6 +1688,39 @@ class TestUrlAnalysis:
             f"/submissions/{submission_uuid}/url-analysis/session/restart"
         )
 
+    def test_stop_url_analysis_session(self, api_key: str, submission_uuid: str) -> None:
+        ctx, mock = _patched_client(
+            _make_response(
+                200,
+                {
+                    "message": "Interactive browser session stop requested",
+                    "expiresAt": 1756288860000,
+                    "alreadyEnding": False,
+                },
+            )
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            result = client.stop_url_analysis_session(submission_uuid)
+        assert isinstance(result, UrlAnalysisSessionStop)
+        assert result.expires_at == 1756288860000
+        assert result.already_ending is False
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/session/stop")
+
+    def test_get_url_analysis_session_reads_queue_reason_and_stop_time(
+        self,
+        api_key: str,
+        submission_uuid: str,
+        url_analysis_session_payload: dict[str, Any],
+    ) -> None:
+        url_analysis_session_payload["queueReason"] = "cluster_capacity"
+        url_analysis_session_payload["stopRequestedAt"] = 1756288860000
+        ctx, _ = _patched_client(_make_response(200, url_analysis_session_payload))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            session = client.get_url_analysis_session(submission_uuid)
+        assert session.queue_reason == "cluster_capacity"
+        assert session.stop_requested_at == 1756288860000
+
     def test_restart_url_analysis_posts_to_the_restart_route(
         self, api_key: str, submission_uuid: str
     ) -> None:
@@ -2738,6 +2772,39 @@ class TestUrlSessionConflict:
         ctx, _ = _patched_client(_make_response(409, body))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(ReportUnavailableError):
             client.restart_url_analysis_session(submission_uuid)
+
+    def test_stop_url_analysis_session_409_when_the_session_is_not_running(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "The interactive session is not running, so it cannot be stopped.",
+            "code": "SESSION_NOT_RUNNING",
+        }
+        ctx, _ = _patched_client(_make_response(409, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ReportUnavailableError) as exc_info,
+        ):
+            client.stop_url_analysis_session(submission_uuid)
+        assert exc_info.value.code == "SESSION_NOT_RUNNING"
+        assert exc_info.value.required_report is None
+
+    def test_stop_url_analysis_session_404_without_a_session(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 404,
+            "error": "Not Found",
+            "message": "No interactive session exists for this submission.",
+            "code": "SESSION_NOT_FOUND",
+        }
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError) as exc_info:
+            client.stop_url_analysis_session(submission_uuid)
+        assert exc_info.value.code == "SESSION_NOT_FOUND"
 
 
 class TestNetworkListTotals:

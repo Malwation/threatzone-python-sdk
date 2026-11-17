@@ -97,6 +97,7 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
     UrlDownloadSubmission,
     UrlSimilarPages,
     UserInfo,
@@ -1781,6 +1782,26 @@ class TestAsyncUrlAnalysis:
             f"/submissions/{submission_uuid}/url-analysis/session/restart"
         )
 
+    async def test_stop_url_analysis_session(self, api_key: str, submission_uuid: str) -> None:
+        ctx, mock = _patched_async_client(
+            _make_response(
+                200,
+                {
+                    "message": "Interactive browser session is already ending",
+                    "expiresAt": 1756288860000,
+                    "alreadyEnding": True,
+                },
+            )
+        )
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                result = await client.stop_url_analysis_session(submission_uuid)
+        assert isinstance(result, UrlAnalysisSessionStop)
+        assert result.expires_at == 1756288860000
+        assert result.already_ending is True
+        assert _call_method(mock) == "POST"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/url-analysis/session/stop")
+
     async def test_restart_url_analysis_posts_to_the_restart_route(
         self, api_key: str, submission_uuid: str
     ) -> None:
@@ -2710,6 +2731,22 @@ class TestAsyncUrlSessionConflict:
             async with AsyncThreatZone(api_key=api_key) as client:
                 with pytest.raises(ReportUnavailableError):
                     await client.start_url_analysis_session(submission_uuid)
+
+    async def test_stop_url_analysis_session_409_when_the_session_is_not_running(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "The interactive session is not running, so it cannot be stopped.",
+            "code": "SESSION_NOT_RUNNING",
+        }
+        ctx, _ = _patched_async_client(_make_response(409, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ReportUnavailableError) as exc_info:
+                    await client.stop_url_analysis_session(submission_uuid)
+        assert exc_info.value.code == "SESSION_NOT_RUNNING"
 
 
 class TestNetworkListTotals:

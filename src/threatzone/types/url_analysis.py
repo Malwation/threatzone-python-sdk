@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .common import ReportStatusValue, ThreatLevel
 
 UrlAnalysisNetworkConfigSource = Literal["submit", "admin-default"] | str
+UrlAnalysisSessionQueueReason = Literal["workspace_queue", "cluster_capacity"] | str
 UrlScoreIndicatorsState = Literal["available", "pending", "unavailable"] | str
 UrlScoreExplanationUnavailableReason = Literal["legacy", "size_limit", "scoring_error"] | str
 UrlScoreEvidenceKind = Literal["network", "finding", "intel", "report"] | str
@@ -348,6 +349,12 @@ class UrlAnalysisSession(BaseModel):
     collection_status: str = Field(alias="collectionStatus")
     recording_status: str = Field(alias="recordingStatus")
     queue_position: int | None = Field(default=None, alias="queuePosition")
+    """Place in the workspace session queue. Set only while ``state`` is ``queued`` and
+    ``queue_reason`` is ``workspace_queue``."""
+    queue_reason: UrlAnalysisSessionQueueReason | None = Field(default=None, alias="queueReason")
+    """Why a ``queued`` session waits: ``workspace_queue`` (the workspace is at its
+    concurrent-session capacity) or ``cluster_capacity`` (the cluster has no room for the
+    browser yet). ``None`` in every other state, and on older servers."""
     vnc_available: bool = Field(alias="vncAvailable")
     report_available: bool = Field(alias="reportAvailable")
     started_at: int | None = Field(default=None, alias="startedAt")
@@ -357,9 +364,27 @@ class UrlAnalysisSession(BaseModel):
     failure_code: str | None = Field(default=None, alias="failureCode")
     extensions_used: int = Field(default=0, alias="extensionsUsed")
     extensions_max: int = Field(default=0, alias="extensionsMax")
+    stop_requested_at: int | None = Field(default=None, alias="stopRequestedAt")
+    """Unix milliseconds when the session was stopped early with
+    ``stop_url_analysis_session()``. ``None`` while the session runs to its deadline, and on
+    older servers."""
     session_config: UrlAnalysisSessionConfig | None = Field(default=None, alias="sessionConfig")
     link: str | None = None
     expired: bool
+
+
+class UrlAnalysisSessionStop(BaseModel):
+    """Result of a request to stop the interactive browser session now."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str
+    expires_at: int = Field(alias="expiresAt")
+    """Unix milliseconds of the session deadline after the request. Equal to the request time
+    when the stop was applied."""
+    already_ending: bool = Field(alias="alreadyEnding")
+    """``True`` when the session was already ending (natural expiry, finalizing, or an earlier
+    stop request), so the call changed nothing."""
 
 
 class UrlAnalysisResponse(BaseModel):
