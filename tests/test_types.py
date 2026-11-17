@@ -128,6 +128,7 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
     UrlAnalysisUrlResult,
     UrlDownloadFile,
     UrlDownloadSubmission,
@@ -1786,6 +1787,51 @@ class TestUrlAnalysisSessionTypes:
         assert session.session_config.network_config_id is None
         assert session.session_config.session_duration_seconds == 240
         assert session.session_config.device_preset_id == "68b0000000000000000000a1"
+
+    def test_url_analysis_session_from_an_older_server(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.queue_reason is None
+        assert session.stop_requested_at is None
+
+    def test_url_analysis_session_queue_reason_and_stop_time(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_session_payload.update(
+            {
+                "state": "queued",
+                "queuePosition": 2,
+                "queueReason": "workspace_queue",
+                "stopRequestedAt": 1756288860000,
+            }
+        )
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.queue_reason == "workspace_queue"
+        assert session.queue_position == 2
+        assert session.stop_requested_at == 1756288860000
+        dumped = session.model_dump(by_alias=True)
+        assert dumped["queueReason"] == "workspace_queue"
+        assert dumped["stopRequestedAt"] == 1756288860000
+
+    def test_url_analysis_session_accepts_a_new_queue_reason(
+        self, url_analysis_session_payload: dict[str, Any]
+    ) -> None:
+        url_analysis_session_payload["queueReason"] = "maintenance"
+        session = UrlAnalysisSession.model_validate(url_analysis_session_payload)
+        assert session.queue_reason == "maintenance"
+
+    def test_url_analysis_session_stop(self) -> None:
+        stop = UrlAnalysisSessionStop.model_validate(
+            {
+                "message": "Interactive browser session stop requested",
+                "expiresAt": 1756288860000,
+                "alreadyEnding": False,
+            }
+        )
+        assert stop.expires_at == 1756288860000
+        assert stop.already_ending is False
+        assert stop.model_dump(by_alias=True)["alreadyEnding"] is False
 
     def test_url_analysis_session_without_config(
         self, url_analysis_session_payload: dict[str, Any]

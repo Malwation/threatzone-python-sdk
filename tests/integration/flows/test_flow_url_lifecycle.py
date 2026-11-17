@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from threatzone import BadRequestError, ReportUnavailableError, ThreatZone
+from threatzone import BadRequestError, NotFoundError, ReportUnavailableError, ThreatZone
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
     DevicePresetOption,
@@ -12,6 +12,7 @@ from threatzone.types import (
     Submission,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
 )
 
 
@@ -123,6 +124,42 @@ def test_start_and_restart_the_url_session(
     restarted = sync_client.restart_url_analysis_session(created.uuid)
     assert isinstance(restarted, Message)
     assert sync_client.get_url_analysis_session(created.uuid).vnc_available is True
+
+
+def test_stop_the_url_session(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
+    target = scenarios.seed_phishing_url(fake_api)
+    created = sync_client.create_url_submission(target)
+    sync_client.start_url_analysis_session(created.uuid)
+
+    stopped = sync_client.stop_url_analysis_session(created.uuid)
+    assert isinstance(stopped, UrlAnalysisSessionStop)
+    assert stopped.already_ending is False
+
+    session = sync_client.get_url_analysis_session(created.uuid)
+    assert session.state == "finished"
+    assert session.stop_requested_at == stopped.expires_at
+    assert session.expires_at == stopped.expires_at
+    assert session.link is None
+    assert session.queue_reason is None
+
+    again = sync_client.stop_url_analysis_session(created.uuid)
+    assert again.already_ending is True
+    assert again.expires_at == stopped.expires_at
+
+    sync_client.restart_url_analysis_session(created.uuid)
+    restarted = sync_client.get_url_analysis_session(created.uuid)
+    assert restarted.state == "running"
+    assert restarted.stop_requested_at is None
+
+
+def test_stop_without_a_session_is_not_found(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    target = scenarios.seed_phishing_url(fake_api)
+    created = sync_client.create_url_submission(target)
+    with pytest.raises(NotFoundError) as exc_info:
+        sync_client.stop_url_analysis_session(created.uuid)
+    assert exc_info.value.code == "SESSION_NOT_FOUND"
 
 
 def test_seeded_interactive_session_is_running(

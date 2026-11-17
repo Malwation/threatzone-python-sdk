@@ -171,7 +171,7 @@ created = client.create_url_submission(
 # Poll for the viewer link. A session over workspace capacity is queued, not rejected.
 session = client.get_url_analysis_session(created.uuid)
 if session.state == "queued":
-    print(f"Queued at position {session.queue_position}")
+    print(f"Queued ({session.queue_reason}) at position {session.queue_position}")
 if session.vnc_available:
     print(f"Viewer: {session.link}")
 
@@ -191,7 +191,16 @@ Session control:
 - `start_url_analysis_session(uuid)` opens a session on an existing submission.
 - `restart_url_analysis_session(uuid)` ends the current session and starts a clean one
   with the same device and network choice.
-- Neither call consumes daily submission quota.
+- `stop_url_analysis_session(uuid)` ends the running session now. The browser report is
+  built from what the browser collected so far. The result is a `UrlAnalysisSessionStop`:
+  `already_ending` is `True` when the session was already ending. `session.stop_requested_at`
+  then holds the request time. A session that has not reached its browser yet raises
+  `ReportUnavailableError` with `code == "SESSION_NOT_RUNNING"`.
+- None of these calls consumes daily submission quota.
+- `session.queue_reason` tells why a `queued` session waits: `"workspace_queue"` (the
+  workspace is at its concurrent-session capacity; `queue_position` holds the place) or
+  `"cluster_capacity"` (the cluster has no room for the browser yet; `queue_position` is
+  `None`).
 - `restart_url_analysis(uuid)` re-runs the analysis itself. It counts against the
   concurrent-submission quota.
 

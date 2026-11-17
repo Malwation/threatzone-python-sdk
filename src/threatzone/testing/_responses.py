@@ -77,6 +77,7 @@ from threatzone.types import (
     UrlAnalysisIndicators,
     UrlAnalysisResponse,
     UrlAnalysisSession,
+    UrlAnalysisSessionStop,
     UrlDownloadSubmission,
     UrlSimilarPages,
     UserInfo,
@@ -2116,22 +2117,27 @@ _RISK_LEVEL_BY_LEVEL: dict[str, str] = {
 def build_url_analysis_session(state: SubmissionState) -> UrlAnalysisSession:
     """Build the interactive browser session state for a URL submission."""
     active = state.session_active()
+    stopped_at = state.session_stop_requested_at
+    live = active and stopped_at is None
     started_at = int(state.created_at.timestamp() * 1000)
     duration = state.session_duration_seconds or 120
+    expires_at = stopped_at if stopped_at is not None else started_at + duration * 1000
     payload: dict[str, Any] = {
-        "state": "running" if active else "unavailable",
-        "collectionStatus": "collecting" if active else "unavailable",
-        "recordingStatus": "recording" if active else "unavailable",
+        "state": ("running" if live else "finished") if active else "unavailable",
+        "collectionStatus": ("collecting" if live else "completed") if active else "unavailable",
+        "recordingStatus": ("recording" if live else "available") if active else "unavailable",
         "queuePosition": None,
-        "vncAvailable": active,
+        "queueReason": None,
+        "vncAvailable": live,
         "reportAvailable": state.current_status() == "completed",
         "startedAt": started_at if active else None,
         "readyAt": started_at + 4000 if active else None,
-        "expiresAt": started_at + duration * 1000 if active else None,
-        "finishedAt": None,
+        "expiresAt": expires_at if active else None,
+        "finishedAt": stopped_at if active else None,
         "failureCode": None,
         "extensionsUsed": 0,
         "extensionsMax": 3,
+        "stopRequestedAt": stopped_at if active else None,
         "sessionConfig": (
             {
                 "deviceProfileId": device_preset_base_key_for(state.session_device_preset_id),
@@ -2146,11 +2152,25 @@ def build_url_analysis_session(state: SubmissionState) -> UrlAnalysisSession:
             else None
         ),
         "link": (f"wss://fake.threat.zone/vnc/{state.uuid}?token=fake-session-token")
-        if active
+        if live
         else None,
-        "expired": not active,
+        "expired": not live,
     }
     return UrlAnalysisSession.model_validate(payload)
+
+
+def build_url_analysis_session_stop(
+    *, expires_at: int, already_ending: bool
+) -> UrlAnalysisSessionStop:
+    """Build the result of a stop request for the interactive browser session."""
+    message = (
+        "Interactive browser session is already ending"
+        if already_ending
+        else "Interactive browser session stop requested"
+    )
+    return UrlAnalysisSessionStop.model_validate(
+        {"message": message, "expiresAt": expires_at, "alreadyEnding": already_ending}
+    )
 
 
 def _network_config_name(config_id: str | None) -> str | None:

@@ -93,6 +93,7 @@ class SubmissionState:
     safe_browsing: bool = False
     session_started: bool = False
     session_restarts: int = 0
+    session_stop_requested_at: int | None = None
     report_restarts: int = 0
     session_device_preset_id: str | None = None
     session_device_preset_name: str | None = None

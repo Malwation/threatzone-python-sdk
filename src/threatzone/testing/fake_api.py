@@ -849,6 +849,7 @@ class FakeThreatZoneAPI:
             "get_url_analysis_similar_pages": self._handle_get_url_analysis_similar_pages,
             "start_url_analysis_session": self._handle_start_url_analysis_session,
             "restart_url_analysis_session": self._handle_restart_url_analysis_session,
+            "stop_url_analysis_session": self._handle_stop_url_analysis_session,
             "restart_url_analysis": self._handle_restart_url_analysis,
             "get_screenshot": self._handle_get_screenshot,
             "list_media": self._handle_list_media,
@@ -2711,6 +2712,7 @@ class FakeThreatZoneAPI:
         if guard is not None:
             return guard
         state.session_started = True
+        state.session_stop_requested_at = None
         return _json(_responses.build_message("Interactive browser session start initiated"))
 
     def _handle_restart_url_analysis_session(
@@ -2725,7 +2727,36 @@ class FakeThreatZoneAPI:
             return guard
         state.session_started = True
         state.session_restarts += 1
+        state.session_stop_requested_at = None
         return _json(_responses.build_message("Interactive browser session restart initiated"))
+
+    def _handle_stop_url_analysis_session(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        guard = self._require_url_submission(state)
+        if guard is not None:
+            return guard
+        if not state.session_active():
+            return _error(
+                404,
+                "Not Found",
+                "No interactive session exists for this submission.",
+                "SESSION_NOT_FOUND",
+            )
+        stopped_at = state.session_stop_requested_at
+        already_ending = stopped_at is not None
+        if stopped_at is None:
+            stopped_at = int(datetime.now(timezone.utc).timestamp() * 1000)
+            state.session_stop_requested_at = stopped_at
+        return _json(
+            _responses.build_url_analysis_session_stop(
+                expires_at=stopped_at, already_ending=already_ending
+            )
+        )
 
     def _handle_restart_url_analysis(
         self, _request: httpx.Request, match: RouteMatch

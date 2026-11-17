@@ -167,10 +167,13 @@ for item in client.list_media_files(created.uuid, source="url_analysis"):
 - The scoring fields are `None` (or `[]` for `intel_detections`) until scoring finishes.
 - `start_url_analysis_session(uuid)` opens a session on an existing submission.
   `restart_url_analysis_session(uuid)` gives a clean session with the same configuration.
-  Neither consumes daily submission quota.
+  `stop_url_analysis_session(uuid)` ends the running session now, and the browser report is
+  built from what the browser collected so far. None of these calls consumes daily
+  submission quota.
 - `restart_url_analysis(uuid)` re-runs the analysis. It counts against the
   concurrent-submission quota.
-- A session over workspace capacity is queued, not rejected. Read `queue_position`.
+- A session over capacity is queued, not rejected. Read `queue_reason`:
+  `workspace_queue` sets `queue_position`, `cluster_capacity` leaves it `None`.
 - Use `create_open_in_browser_submission(url, environment="w10_x64")` instead if you
   need the full dynamic + browser capture on top of the URL analysis.
 
@@ -406,6 +409,8 @@ with ThreatZone() as client:
 - `ReportUnavailableError.code` is one of `DYNAMIC_REPORT_UNAVAILABLE`,
   `STATIC_REPORT_UNAVAILABLE`, `CDR_REPORT_UNAVAILABLE`, or
   `URL_ANALYSIS_REPORT_UNAVAILABLE`. Branch on this if you're wrapping several endpoints.
+  `stop_url_analysis_session()` also raises it with `SESSION_NOT_RUNNING` when the session
+  has not reached its browser yet.
 - `.current_status` is `None` when the report has not even been scheduled yet (e.g.
   a static-only submission's dynamic report). Treat `None` as "never coming" and exit
   early.

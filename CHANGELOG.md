@@ -56,6 +56,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `UrlScoreIndicator.evidence_total` give the facts that explain an indicator.
   `UrlScoreEvidenceRef.label` gives a short display label. The three fields are `None` on older
   explanations and older servers. `UrlScoreExplanation.schema_version` stays an integer.
+- `stop_url_analysis_session(uuid)` ends the running interactive browser session now
+  (`POST /submissions/{uuid}/url-analysis/session/stop`). The browser report is built from what
+  the browser collected so far. It returns `UrlAnalysisSessionStop` (`message`, `expires_at`,
+  `already_ending`). `already_ending` is `True` when the session was already ending, so a
+  second call and a race with the natural expiry both succeed. A session that has not reached
+  its browser yet raises `ReportUnavailableError` with `code == "SESSION_NOT_RUNNING"`. No
+  session raises `NotFoundError` with `code == "SESSION_NOT_FOUND"`.
+- `UrlAnalysisSession.stop_requested_at` (Unix milliseconds of the stop request) and
+  `UrlAnalysisSession.queue_reason` (`UrlAnalysisSessionQueueReason`: `workspace_queue`,
+  `cluster_capacity`, or a new value). `queue_reason` tells why a `queued` session waits. A
+  `cluster_capacity` session has `queue_position=None`. Both fields are `None` when an older
+  server omits them.
+- `ApiErrorCode` adds `SESSION_NOT_RUNNING`.
+- The fake API supports `stop_url_analysis_session()`. Its session state reports
+  `stop_requested_at` and `queue_reason`.
 - `SubmissionListItem.source_url` reads the `sourceUrl` field of the deprecated v2 list. The v1
   list sends the source URL of a fetched file in `url`. `url` is `None` for an upload.
 - The fake API supports `get_url_analysis_similar_pages()`, with
