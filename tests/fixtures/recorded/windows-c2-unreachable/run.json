@@ -1,0 +1,19 @@
+{
+ "javaOutput": null,
+ "analysisCutShort": {
+  "basis": "manual_stop",
+  "endedAtS": 110.5,
+  "requestedWindowS": 180,
+  "text": "redacted",
+  "transfer": null
+ },
+ "networkNotes": [],
+ "submissionHints": [],
+ "runNotes": [
+  {
+   "code": "c2_unreachable",
+   "text": "redacted"
+  }
+ ],
+ "isDumpCollectorActivated": false
+}

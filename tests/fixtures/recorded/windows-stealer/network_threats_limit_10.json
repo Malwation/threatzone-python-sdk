@@ -1,0 +1,334 @@
+[
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 49695,
+  "destinationIp": "192.0.2.9",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted"
+   ]
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 23,
+   "url_scheme": "https"
+  },
+  "tls": null,
+  "capture": "decrypted_https",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 4256,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 49695,
+  "destinationIp": "192.0.2.9",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Any"
+   ],
+   "attack_target": [],
+   "confidence": [],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": []
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 23,
+   "url_scheme": "https"
+  },
+  "tls": null,
+  "capture": "decrypted_https",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 4256,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "UDP",
+  "appProto": "DNS",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 59326,
+  "destinationIp": "192.0.2.5",
+  "destinationPort": 53,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "blockchain",
+    "tonapi",
+    "redacted"
+   ]
+  },
+  "details": {},
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 49694,
+  "destinationIp": "192.0.2.7",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted"
+   ]
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 165,
+   "url_scheme": "https"
+  },
+  "tls": null,
+  "capture": "decrypted_https",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 4256,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 49694,
+  "destinationIp": "192.0.2.7",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Any"
+   ],
+   "attack_target": [],
+   "confidence": [],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": []
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 165,
+   "url_scheme": "https"
+  },
+  "tls": null,
+  "capture": "decrypted_https",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 4256,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "TLS",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 49682,
+  "destinationIp": "192.0.2.4",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Any"
+   ],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "performance_impact": [
+    "Low"
+   ],
+   "reviewed_at": [
+    "redacted"
+   ],
+   "signature_severity": [
+    "Informational"
+   ],
+   "tag": [
+    "DoH"
+   ],
+   "updated_at": [
+    "redacted"
+   ]
+  },
+  "details": {
+   "sni": "redacted",
+   "version": "redacted",
+   "ja3_hash": "55555555555555555555555555555555",
+   "ja3_string": "redacted",
+   "ja3s_hash": "66666666666666666666666666666666",
+   "ja3s_string": "redacted"
+  },
+  "tls": {
+   "version": "redacted",
+   "sni": "redacted",
+   "ja3Hash": "55555555555555555555555555555555",
+   "ja3sHash": "66666666666666666666666666666666",
+   "ja3String": "redacted",
+   "ja3sString": "redacted"
+  },
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ }
+]

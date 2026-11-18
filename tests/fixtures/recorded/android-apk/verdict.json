@@ -1,0 +1,69 @@
+{
+ "format": "android-v2-worker-1",
+ "score": 0,
+ "tier": "Benign",
+ "summary": "redacted",
+ "narrative": {
+  "headline": "redacted",
+  "sequence": [
+   {
+    "seq": 0,
+    "tOffsetS": -0.6,
+    "pid": 6415,
+    "image": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "decisive": [
+   {
+    "source": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "tierReason": "redacted",
+  "notObserved": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "wouldRaise": [],
+  "wouldLower": [],
+  "coverageNote": null,
+  "text": "redacted"
+ },
+ "story": {
+  "summary": [
+   "redacted",
+   "redacted"
+  ],
+  "truncated": false,
+  "steps": [
+   {
+    "tOffsetS": 0,
+    "process": {
+     "image": "redacted",
+     "pid": 6415
+    },
+    "category": "execution",
+    "text": "started",
+    "count": 1,
+    "evidenceSeqs": []
+   },
+   {
+    "tOffsetS": 1.2,
+    "process": {
+     "image": "redacted",
+     "pid": 6415
+    },
+    "category": "other",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     25
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,43 @@
+{
+ "items": [
+  {
+   "rule": "FingerprintHardware",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "anti_dbg",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "db_connection",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "SEH_Init",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "SEH_Save",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  }
+ ],
+ "total": 8,
+ "page": 1,
+ "limit": 20,
+ "totalPages": 1
+}

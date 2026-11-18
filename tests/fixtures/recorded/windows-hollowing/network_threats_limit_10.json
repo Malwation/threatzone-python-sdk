@@ -1,0 +1,399 @@
+[
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "low",
+  "severityLevel": 2,
+  "protocol": "UDP",
+  "appProto": "DNS",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 51959,
+  "destinationIp": "192.0.2.4",
+  "destinationPort": 53,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Any"
+   ],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [
+    "TA0007"
+   ],
+   "mitre_technique_id": [
+    "T1614"
+   ],
+   "mitre_tactic_name": [
+    "Discovery"
+   ],
+   "mitre_technique_name": [
+    "System_Location_Discovery"
+   ],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "external_ip_lookup"
+   ]
+  },
+  "details": {},
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "low",
+  "severityLevel": 2,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 49680,
+  "destinationIp": "192.0.2.1",
+  "destinationPort": 80,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": []
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 13,
+   "url_scheme": "http"
+  },
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "low",
+  "severityLevel": 2,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 49683,
+  "destinationIp": "192.0.2.1",
+  "destinationPort": 80,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": []
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "redacted",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 200,
+   "length": 16,
+   "url_scheme": "http"
+  },
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "UDP",
+  "appProto": "DNS",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 50670,
+  "destinationIp": "192.0.2.4",
+  "destinationPort": 53,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted"
+   ]
+  },
+  "details": {},
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "UDP",
+  "appProto": "DNS",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 50670,
+  "destinationIp": "192.0.2.4",
+  "destinationPort": 53,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [],
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "telegram",
+    "redacted"
+   ]
+  },
+  "details": {},
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "TLS",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 49682,
+  "destinationIp": "192.0.2.2",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "performance_impact": [
+    "Low"
+   ],
+   "signature_severity": [
+    "Informational"
+   ],
+   "tag": [
+    "redacted"
+   ],
+   "updated_at": [
+    "redacted"
+   ]
+  },
+  "details": {
+   "subject": "redacted",
+   "issuerdn": "redacted",
+   "serial": "redacted",
+   "fingerprint": "redacted",
+   "sni": "redacted",
+   "version": "redacted",
+   "ja3_hash": "dddddddddddddddddddddddddddddddd",
+   "ja3_string": "redacted",
+   "ja3s_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "ja3s_string": "redacted",
+   "valid_from": "2026-11-17T13:15:28",
+   "valid_to": "2027-11-17T13:15:28"
+  },
+  "tls": {
+   "version": "redacted",
+   "sni": "redacted",
+   "ja3Hash": "dddddddddddddddddddddddddddddddd",
+   "ja3sHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "ja3String": "redacted",
+   "ja3sString": "redacted"
+  },
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "TLS",
+  "sourceIp": "192.0.2.5",
+  "sourcePort": 49682,
+  "destinationIp": "192.0.2.2",
+  "destinationPort": 443,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "attack_target": [
+    "Client_Endpoint"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Perimeter"
+   ],
+   "performance_impact": [
+    "Low"
+   ],
+   "signature_severity": [
+    "Informational"
+   ],
+   "tag": [
+    "Telegram",
+    "redacted"
+   ],
+   "tls_state": [
+    "TLSDecrypt"
+   ],
+   "updated_at": [
+    "redacted"
+   ]
+  },
+  "details": {
+   "subject": "redacted",
+   "issuerdn": "redacted",
+   "serial": "redacted",
+   "fingerprint": "redacted",
+   "sni": "redacted",
+   "version": "redacted",
+   "ja3_hash": "dddddddddddddddddddddddddddddddd",
+   "ja3_string": "redacted",
+   "ja3s_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "ja3s_string": "redacted",
+   "valid_from": "2026-11-17T13:15:28",
+   "valid_to": "2027-11-17T13:15:28"
+  },
+  "tls": {
+   "version": "redacted",
+   "sni": "redacted",
+   "ja3Hash": "dddddddddddddddddddddddddddddddd",
+   "ja3sHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "ja3String": "redacted",
+   "ja3sString": "redacted"
+  },
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ }
+]

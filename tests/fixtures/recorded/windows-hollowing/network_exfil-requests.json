@@ -1,0 +1,21 @@
+[
+ {
+  "api": "telegram_bot",
+  "kind": "send_file",
+  "host": "redacted",
+  "method": "POST",
+  "apiMethod": "sendDocument",
+  "targetId": "redacted",
+  "maskedTarget": "redacted",
+  "requestBytes": 4114,
+  "replyStatus": null,
+  "requestCount": 3,
+  "capture": "decrypted_https",
+  "firstSeen": "2026-11-18T13:15:28.804Z",
+  "score": 80,
+  "tier": "Malicious",
+  "processId": 1624,
+  "processImage": "redacted",
+  "text": "redacted"
+ }
+]

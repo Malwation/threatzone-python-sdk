@@ -1,0 +1,105 @@
+{
+ "items": [
+  {
+   "artifact": "65f0aa000000000000000004",
+   "data": {
+    "verified": "Unsigned",
+    "verify_description": null,
+    "publisher": null,
+    "company": null,
+    "description": null,
+    "product": null,
+    "prod_version": null,
+    "file_version": null,
+    "binary_version": null,
+    "original_name": null,
+    "internal_name": null,
+    "copyright": null,
+    "comments": null,
+    "date_signed": null,
+    "verification_time": null,
+    "signers": [],
+    "counter_signers": [],
+    "tags": [
+     "unsigned"
+    ]
+   }
+  },
+  {
+   "artifact": "65f0aa000000000000000001",
+   "data": {
+    "verified": "Unsigned",
+    "verify_description": null,
+    "publisher": null,
+    "company": "redacted",
+    "description": "redacted",
+    "product": "redacted",
+    "prod_version": "redacted",
+    "file_version": "redacted",
+    "binary_version": "redacted",
+    "original_name": "redacted",
+    "internal_name": "redacted",
+    "copyright": "redacted",
+    "comments": "redacted",
+    "date_signed": null,
+    "verification_time": null,
+    "signers": [],
+    "counter_signers": [],
+    "tags": [
+     "unsigned"
+    ]
+   }
+  },
+  {
+   "artifact": "65f0aa000000000000000003",
+   "data": {
+    "verified": "Unsigned",
+    "verify_description": null,
+    "publisher": null,
+    "company": null,
+    "description": null,
+    "product": null,
+    "prod_version": null,
+    "file_version": null,
+    "binary_version": null,
+    "original_name": null,
+    "internal_name": null,
+    "copyright": null,
+    "comments": null,
+    "date_signed": null,
+    "verification_time": null,
+    "signers": [],
+    "counter_signers": [],
+    "tags": [
+     "unsigned"
+    ]
+   }
+  },
+  {
+   "artifact": "65f0aa000000000000000002",
+   "data": {
+    "verified": "Unsigned",
+    "verify_description": null,
+    "publisher": null,
+    "company": null,
+    "description": null,
+    "product": null,
+    "prod_version": null,
+    "file_version": null,
+    "binary_version": null,
+    "original_name": null,
+    "internal_name": null,
+    "copyright": null,
+    "comments": null,
+    "date_signed": null,
+    "verification_time": null,
+    "signers": [],
+    "counter_signers": [],
+    "tags": [
+     "unsigned"
+    ]
+   }
+  }
+ ],
+ "total": 4
+}

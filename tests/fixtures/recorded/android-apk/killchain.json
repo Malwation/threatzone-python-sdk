@@ -1,0 +1,61 @@
+{
+ "dumpCollectorActive": false,
+ "artifactInventoryCoverage": {
+  "sourceStatus": "unavailable",
+  "sourceError": "redacted",
+  "counts": [],
+  "unretainedRowsOmitted": 0
+ },
+ "createdProcesses": [
+  {
+   "pid": 6415,
+   "pidGen": 1,
+   "origin": "sample",
+   "ppid": 0,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "fork",
+   "workDir": "",
+   "timestamp": 1795014745,
+   "exitTimestamp": null,
+   "events": {
+    "items": [
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     }
+    ],
+    "count": 89
+   },
+   "network": {
+    "items": [],
+    "count": 0
+   }
+  }
+ ],
+ "droppedFiles": [],
+ "memDumps": []
+}

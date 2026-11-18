@@ -65,6 +65,7 @@ from .types import (
     IndicatorsResponse,
     IocExportFormat,
     IoCsResponse,
+    IoCTierFilter,
     IoCType,
     Killchain,
     MediaFile,
@@ -994,6 +995,7 @@ class AsyncThreatZone:
         uuid: str,
         *,
         type: IoCType | None = None,
+        tier: IoCTierFilter | None = None,
         page: int | None = None,
         limit: int | None = None,
     ) -> IoCsResponse:
@@ -1003,6 +1005,9 @@ class AsyncThreatZone:
         Args:
             uuid: Submission UUID.
             type: Filter by IoC type.
+            tier: ``"ioc"`` for the indicators, ``"strings"`` for the values that only
+                strings found in the files of the submission hold, ``"all"`` for both. The
+                server default is ``"all"``. Each item carries its ``tier``.
             page: 1-indexed page number.
             limit: Maximum items per page (1-100).
 
@@ -1012,6 +1017,8 @@ class AsyncThreatZone:
         params: dict[str, Any] = {}
         if type is not None:
             params["type"] = type
+        if tier is not None:
+            params["tier"] = tier
         if page is not None:
             params["page"] = page
         if limit is not None:

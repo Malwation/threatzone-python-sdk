@@ -114,8 +114,8 @@ print(f"MITRE techniques: {completed.mitre_techniques}")
 ```python
 detail = client.get_submission(submission.uuid)
 print(detail.score)  # 78.5
+print(detail.finalized)  # False while later analysis jobs can still change the score
 if detail.score_breakdown is not None:
-    print(detail.score_breakdown.deciding_layer)  # indicator_mean
     for contributor in detail.score_breakdown.contributors:
         print(contributor.points, contributor.indicator_id, contributor.title)
 ```
@@ -124,6 +124,8 @@ if detail.score_breakdown is not None:
   verdict.
 - `contributors[].title` and `what_would_change` are display text. The text can change
   between releases. Match on `indicator_id`, not on the title.
+- `score` and `level` are the submission verdict: static analysis, YARA and the behaviour
+  run together. `get_verdict()` describes the behaviour run alone.
 - The detail response also carries `overview.duration`, `file.history` (other names of the
   same sample), `reports[].metafields` (the analysis options) and `tags[].author`.
 
@@ -205,7 +207,7 @@ Session control:
   concurrent-submission quota.
 
 Scoring fields (`threat_score`, `risk_level`, `privacy_score`, `privacy_risk_level`,
-`privacy_breakdown`, `verdict_provenance`, `impersonation_target`,
+`privacy_breakdown`, `privacy_context`, `impersonation_target`,
 `completeness`, `intel_detections`, `metafields`, `scored_at`) are `None` or empty until
 scoring finishes. Read them after the report reaches `completed`.
 
@@ -403,17 +405,18 @@ uuid = completed.uuid
 for row in client.get_indicators(uuid).items:
     # Windows V2 rows carry the analyst text, the acting process and the related events.
     # These fields are None on legacy rows.
-    print(row.name, row.rule_source, row.what_happened)
+    print(row.name, row.level, row.score, row.attack_codes, row.what_happened)
     if row.actor is not None:
         print(row.actor.image, row.actor.pid, row.actor.pid_gen)
     for event in row.related or []:
         print(event.event_id, event.t_offset_s, event.text)
-    # Overview rows have an empty id. finding_source names the job that produced them.
+    # Overview rows have an empty id. source names the engine that produced them.
     if not row.id:
-        print(row.finding_source, row.artifacts)
+        print(row.source, row.artifacts)
 
-for ioc in client.get_iocs(uuid).items:
-    print(ioc.type, ioc.raw_type, ioc.value)  # raw_type: the type text as stored
+# tier="ioc" leaves out the values that only strings found in the files hold.
+for ioc in client.get_iocs(uuid, tier="ioc").items:
+    print(ioc.type, ioc.value, ioc.ports)
 
 # Filter by the stored source value; an unknown value raises BadRequestError.
 for artifact in client.get_artifacts(uuid, source="dynamic_report").items:
@@ -670,6 +673,7 @@ note, in a "Pinned evidence" section. Other workspaces do not see them.
 ```python
 # The Windows V2 verdict with its narrative and story, as the web report shows it.
 verdict = client.get_verdict(uuid)  # every field is None for a legacy report
+print(verdict.tier, verdict.score, verdict.summary)
 if verdict.story is not None:
     for step in verdict.story.steps:
         print(step.t_offset_s, step.process.image, step.text)
@@ -679,7 +683,7 @@ run = client.get_run(uuid)
 if run.java_output is not None:
     print(run.java_output.text)
 for note in run.run_notes:
-    print(note.code, note.text)
+    print(note.text)  # show the text; note.code is for automation
 
 # Evidence pins and the note of your workspace. Each write returns the full view.
 annotations = client.pin_evidence(uuid, kind="technique", ref="technique:T1055", label="Injection")

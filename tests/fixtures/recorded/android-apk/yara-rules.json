@@ -1,0 +1,15 @@
+{
+ "items": [
+  {
+   "rule": "SUSP_APK_No_Launcher_Activity_Apr_08",
+   "category": "suspicious",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  }
+ ],
+ "total": 1,
+ "page": 1,
+ "limit": 20,
+ "totalPages": 1
+}

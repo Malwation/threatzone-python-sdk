@@ -1,0 +1,144 @@
+{
+ "items": [
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.7",
+    "192.0.2.8"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "DNS",
+    "HTTP",
+    "TLS"
+   ],
+   "source": "sample",
+   "firstTimeshift": 0,
+   "lastTimeshift": 71210,
+   "requestCount": 4,
+   "alertCount": 6,
+   "maxAlertSeverity": "3",
+   "processIds": [
+    2604,
+    4256
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.9",
+    "192.0.2.10"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "DNS",
+    "HTTP",
+    "TLS"
+   ],
+   "source": "sample",
+   "firstTimeshift": 0,
+   "lastTimeshift": 71800,
+   "requestCount": 4,
+   "alertCount": 4,
+   "maxAlertSeverity": "3",
+   "processIds": [
+    2604,
+    4256
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.1",
+    "192.0.2.5"
+   ],
+   "ports": [
+    443,
+    53
+   ],
+   "protocols": [
+    "DNS",
+    "TLS",
+    "QUIC"
+   ],
+   "source": "sample",
+   "firstTimeshift": 0,
+   "lastTimeshift": 63130,
+   "requestCount": 13,
+   "alertCount": 2,
+   "maxAlertSeverity": "3",
+   "processIds": [
+    2604,
+    4256
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.4",
+    "192.0.2.6"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "DNS",
+    "TLS"
+   ],
+   "source": "sample",
+   "firstTimeshift": 0,
+   "lastTimeshift": 62250,
+   "requestCount": 3,
+   "alertCount": 1,
+   "maxAlertSeverity": "3",
+   "processIds": [
+    2604,
+    4256
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.2"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "TLS",
+    "QUIC"
+   ],
+   "source": "sample",
+   "firstTimeshift": 11210,
+   "lastTimeshift": 63070,
+   "requestCount": 6,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [
+    2604,
+    4256
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  }
+ ],
+ "total": 9,
+ "truncated": true
+}

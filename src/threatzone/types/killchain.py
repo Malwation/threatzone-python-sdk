@@ -39,8 +39,12 @@ class KillchainProcess(BaseModel):
     origin: ProcessOrigin | None = None
     """Who started the process. ``None`` on reports that do not record it."""
     ppid: int
-    tid: int | None = None
-    """Thread ID. ``None`` when the report does not record an integer value."""
+    tid: int | None = Field(
+        default=None,
+        deprecated="tid is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release. ``None`` when the report does not
+    record an integer value."""
     process_name: str | None = Field(default=None, alias="processName")
     image: str | None = None
     """Full path of the process image."""
@@ -83,19 +87,59 @@ class KillchainMemoryDump(BaseModel):
 class KillchainDroppedFile(KillchainMemoryDump):
     """A file that a process wrote during the analysis."""
 
-    raw_path: str | None = Field(default=None, alias="rawPath")
-    """Path as the sandbox recorded it, before the volume map. ``None`` on V1 reports."""
-    path_authority: KillchainPathAuthority | None = Field(default=None, alias="pathAuthority")
-    """Source of ``path``. ``None`` on V1 reports."""
-    path_authority_reason: str | None = Field(default=None, alias="pathAuthorityReason")
-    source_actor_bound: bool | None = Field(default=None, alias="sourceActorBound")
-    """True when the write is bound to the process of the group. ``None`` on V1 reports."""
-    capture_closed: bool | None = Field(default=None, alias="captureClosed")
-    """True when the sandbox observed a native close of the file. It does not prove a
-    completed write. ``None`` on V1 reports."""
+    raw_path: str | None = Field(
+        default=None,
+        alias="rawPath",
+        deprecated="raw_path is removed from the API in its next release. Read path.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``path``."""
+    path_authority: KillchainPathAuthority | None = Field(
+        default=None,
+        alias="pathAuthority",
+        deprecated=(
+            "path_authority is removed from the API in its next release. "
+            "Read retention and retention_detail."
+        ),
+    )
+    """Deprecated: removed from the API in its next release. Read ``retention`` and
+    ``retention_detail``."""
+    path_authority_reason: str | None = Field(
+        default=None,
+        alias="pathAuthorityReason",
+        deprecated=(
+            "path_authority_reason is removed from the API in its next release. "
+            "Read retention and retention_detail."
+        ),
+    )
+    """Deprecated: removed from the API in its next release. Read ``retention`` and
+    ``retention_detail``."""
+    source_actor_bound: bool | None = Field(
+        default=None,
+        alias="sourceActorBound",
+        deprecated=(
+            "source_actor_bound is removed from the API in its next release. "
+            "Read retention and retention_detail."
+        ),
+    )
+    """Deprecated: removed from the API in its next release. Read ``retention`` and
+    ``retention_detail``."""
+    capture_closed: bool | None = Field(
+        default=None,
+        alias="captureClosed",
+        deprecated=(
+            "capture_closed is removed from the API in its next release. "
+            "Read retention and retention_detail."
+        ),
+    )
+    """Deprecated: removed from the API in its next release. Read ``retention`` and
+    ``retention_detail``."""
     retention: KillchainFileRetention | None = None
     """Retention state of the file bytes. ``None`` on V1 reports."""
     retention_detail: str | None = Field(default=None, alias="retentionDetail")
+    guest_size: int | None = Field(default=None, alias="guestSize")
+    """Size of the file in the analysis machine when the sandbox kept only part of it or none
+    of it; ``sha256`` is then ``None``. ``None`` for every other file and on older
+    servers."""
     pid_gen: int | None = Field(default=None, alias="pidGen")
     """Incarnation number of the writing process. ``None`` on V1 reports."""
     event_seq: int | None = Field(default=None, alias="eventSeq")
@@ -157,8 +201,12 @@ class KillchainInventoryCoverage(BaseModel):
     source_error: KillchainInventorySourceError | None = Field(default=None, alias="sourceError")
     """One analyst sentence on why the file capture source is not available, or ``None`` when no
     cause is recorded. Free text, not a code."""
-    counts: list[KillchainCoverageCount]
-    """Inventory counts, sorted by name."""
+    counts: list[KillchainCoverageCount] = Field(
+        default_factory=list,
+        deprecated="counts is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release. Inventory counts, sorted by
+    name."""
     unretained_rows_omitted: int | None = Field(default=None, alias="unretainedRowsOmitted")
     """Unretained observations the worker did not store because of the row limit."""
 

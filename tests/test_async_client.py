@@ -989,6 +989,15 @@ class TestAsyncIndicatorsSurface:
         params = _call_params(mock)
         assert params == {"type": "domain", "page": 2, "limit": 50}
 
+    async def test_get_iocs_with_tier(
+        self, api_key: str, sample_iocs_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_iocs_response))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_iocs("sub-789", tier="strings")
+        assert _call_params(mock) == {"tier": "strings"}
+
     async def test_get_iocs_403(self, api_key: str) -> None:
         ctx, _ = _patched_async_client(_make_response(403, {"message": "no"}))
         with ctx:

@@ -1,0 +1,170 @@
+{
+ "uuid": "00000000-0000-4000-8000-000000000002",
+ "type": "file",
+ "level": "suspicious",
+ "score": 62,
+ "family": null,
+ "private": false,
+ "tags": [
+  {
+   "author": "system",
+   "type": "suspicious",
+   "value": "redacted",
+   "origin": "dynamic"
+  }
+ ],
+ "reports": [
+  {
+   "type": "dynamic",
+   "status": "completed",
+   "level": "suspicious",
+   "duration": 133.9,
+   "format": "regular",
+   "operatingSystem": {
+    "name": "redacted",
+    "platform": "windows"
+   },
+   "score": 55,
+   "metafields": {
+    "Execution Duration": "redacted",
+    "Work Path": "Desktop",
+    "HTTPS Inspection": "True",
+    "Internet Connection": "True",
+    "Fast Bootup": "True",
+    "Bypass Sleep Evasion": "False",
+    "Smart Tracing": "True",
+    "Dump Collector": "False",
+    "Trace Profile": "Heavy",
+    "Region": "redacted",
+    "Human Simulation": "False"
+   },
+   "metafieldValues": {
+    "timeout": 180,
+    "work_path": "desktop",
+    "https_inspection": true,
+    "internet_connection": true,
+    "snapshot": true,
+    "sleep_evasion": false,
+    "smart_tracing": true,
+    "dump_collector": false,
+    "trace_profile": "65f0aa000000000000000013",
+    "region_preset": "",
+    "human_simulation": false
+   },
+   "executionDurationSeconds": 180
+  },
+  {
+   "type": "static",
+   "status": "completed",
+   "level": "suspicious",
+   "duration": 13.2,
+   "format": "exe",
+   "operatingSystem": null,
+   "score": 55,
+   "metafields": null,
+   "metafieldValues": null,
+   "executionDurationSeconds": null
+  }
+ ],
+ "overview": {
+  "status": "completed",
+  "jobs": {
+   "total": 5,
+   "succeeded": 5,
+   "failed": 0,
+   "skipped": 0,
+   "finished": 5,
+   "completed": 5
+  },
+  "duration": 133.9
+ },
+ "indicators": {
+  "levels": {
+   "malicious": 0,
+   "suspicious": 4,
+   "benign": 6
+  },
+  "artifactCount": 1
+ },
+ "mitreTechniques": [
+  "T1071",
+  "redacted",
+  "T1568",
+  "redacted",
+  "T1622"
+ ],
+ "createdAt": "2026-11-18T13:07:28.776Z",
+ "updatedAt": "2026-11-18T13:11:01.975Z",
+ "filename": "redacted",
+ "hashes": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+ },
+ "file": {
+  "name": "redacted",
+  "size": 1677312,
+  "extension": "exe",
+  "declaredExtension": "exe",
+  "realExtension": "exe",
+  "isMimetypeMismatched": false,
+  "mimetype": "redacted",
+  "isMimetypeChecked": true,
+  "entrypoint": null,
+  "source": {
+   "type": "upload",
+   "url": null
+  },
+  "history": null
+ },
+ "scoreBreakdown": {
+  "decidingLayer": "indicator_mean",
+  "verdict": "Suspicious",
+  "score": 62,
+  "cap": 62,
+  "contributors": [
+   {
+    "source": "dynamic_scan",
+    "indicatorId": "65f0aa000000000000000014",
+    "title": "redacted",
+    "points": 55,
+    "level": "suspicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 62,
+    "level": "suspicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 62,
+    "level": "suspicious"
+   },
+   {
+    "source": "dynamic_scan",
+    "indicatorId": "65f0aa000000000000000002",
+    "title": "redacted",
+    "points": 45,
+    "level": "suspicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 30,
+    "level": "benign"
+   }
+  ],
+  "whatWouldChange": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ]
+ },
+ "finalized": true
+}

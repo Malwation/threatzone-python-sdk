@@ -1,0 +1,163 @@
+{
+ "nodes": [
+  {
+   "pid": 2736,
+   "ppid": 0,
+   "pidGen": 89,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "children": [
+    {
+     "pid": 1624,
+     "ppid": 2736,
+     "pidGen": 90,
+     "origin": "sample",
+     "tid": 0,
+     "name": "redacted",
+     "cmd": "redacted",
+     "cwd": "redacted",
+     "children": [
+      {
+       "pid": 3300,
+       "ppid": 1624,
+       "pidGen": 91,
+       "origin": "sample",
+       "tid": 0,
+       "name": "redacted",
+       "cmd": "redacted",
+       "cwd": "redacted",
+       "children": [
+        {
+         "pid": 3000,
+         "ppid": 3300,
+         "pidGen": 92,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 2284,
+         "ppid": 3300,
+         "pidGen": 93,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 3960,
+         "ppid": 3300,
+         "pidGen": 95,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        }
+       ]
+      },
+      {
+       "pid": 4168,
+       "ppid": 1624,
+       "pidGen": 96,
+       "origin": "sample",
+       "tid": 0,
+       "name": "redacted",
+       "cmd": "redacted",
+       "cwd": "redacted",
+       "children": [
+        {
+         "pid": 2136,
+         "ppid": 4168,
+         "pidGen": 97,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 1936,
+         "ppid": 4168,
+         "pidGen": 98,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 912,
+         "ppid": 4168,
+         "pidGen": 100,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        }
+       ]
+      },
+      {
+       "pid": 3036,
+       "ppid": 1624,
+       "pidGen": 101,
+       "origin": "sample",
+       "tid": 0,
+       "name": "redacted",
+       "cmd": "redacted",
+       "cwd": "redacted",
+       "children": [
+        {
+         "pid": 4956,
+         "ppid": 3036,
+         "pidGen": 102,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 340,
+         "ppid": 3036,
+         "pidGen": 103,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        },
+        {
+         "pid": 2304,
+         "ppid": 3036,
+         "pidGen": 105,
+         "origin": "sample",
+         "tid": 0,
+         "name": "redacted",
+         "cmd": "redacted",
+         "cwd": "redacted",
+         "children": []
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

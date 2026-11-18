@@ -1,0 +1,146 @@
+{
+ "submission": "00000000-0000-4000-8000-000000000001",
+ "status": "completed",
+ "reportFormat": "dotnet",
+ "level": "suspicious",
+ "score": 55,
+ "fileInfo": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "ssdeep": "redacted",
+  "mime_type": "redacted",
+  "file_type": "redacted",
+  "entropy": 6.55,
+  "filesize": "redacted",
+  "realFilename": null,
+  "realSha256": null
+ },
+ "strings": {
+  "totalCount": 7829
+ },
+ "dieResults": [],
+ "analysisTime": "redacted",
+ "metafields": null,
+ "peExeInfo": {
+  "checksum": false,
+  "has_overlay": false,
+  "overlay_entropy": null,
+  "imphash": "",
+  "packed": false,
+  "packer": null
+ },
+ "peExeHeaders": {
+  "rich": null,
+  "file": {
+   "machine": "IMAGE_FILE_MACHINE_AMD64",
+   "image_base": "redacted",
+   "entrypoint_name": null,
+   "number_of_sections": 2,
+   "time_date_stamp": "redacted",
+   "pointer_to_symbol_table": 0,
+   "number_of_symbols": 0,
+   "size_of_optional_header": "redacted",
+   "compiler_flags": {
+    "is_aslr": true,
+    "is_nxcompat": true,
+    "is_seh": true,
+    "is_cfg": false,
+    "is_gs": false
+   }
+  }
+ },
+ "characteristics": {
+  "file": {
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_FILE_EXECUTABLE_IMAGE",
+    "IMAGE_FILE_LARGE_ADDRESS_AWARE"
+   ]
+  },
+  "dll": {
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA",
+    "IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE",
+    "IMAGE_DLLCHARACTERISTICS_NX_COMPAT",
+    "IMAGE_DLLCHARACTERISTICS_NO_SEH",
+    "redacted"
+   ]
+  }
+ },
+ "assemblyInfo": {
+  "entrypoint": "redacted",
+  "machine": "AMD64",
+  "runtime": "redacted",
+  "characteristics": "redacted",
+  "has_resource": true,
+  "has_exported_types": false,
+  "function_count": 570,
+  "is_visual_basic": true
+ },
+ "deobfuscationResult": null,
+ "imports": {
+  "files": [],
+  "entries": []
+ },
+ "peExeExports": [],
+ "antiMethods": {
+  "anti_tamper": false,
+  "anti_dump": false,
+  "anti_debug": false
+ },
+ "emulationResults": [
+  {
+   "func_name": "redacted",
+   "args": [],
+   "location": "redacted",
+   "position": 39,
+   "description": "redacted"
+  }
+ ],
+ "peExeSections": [
+  {
+   "name": "redacted",
+   "virtual_address": "redacted",
+   "virtual_size": "redacted",
+   "raw_size": "redacted",
+   "entropy": 6.55,
+   "md5": "ffffffffffffffffffffffffffffffff",
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_SCN_CNT_CODE",
+    "IMAGE_SCN_MEM_EXECUTE",
+    "IMAGE_SCN_MEM_READ"
+   ]
+  },
+  {
+   "name": "redacted",
+   "virtual_address": "redacted",
+   "virtual_size": "redacted",
+   "raw_size": "redacted",
+   "entropy": 2.83,
+   "md5": "10101010101010101010101010101010",
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_SCN_CNT_INITIALIZED_DATA",
+    "IMAGE_SCN_MEM_READ"
+   ]
+  }
+ ],
+ "peExeResources": [
+  {
+   "rtype": "RT_VERSION",
+   "name": null,
+   "id": "16",
+   "size": "redacted",
+   "offset": "redacted",
+   "resource_magic": "redacted",
+   "lang": "LANG_NEUTRAL",
+   "sublang": "SUBLANG_NEUTRAL",
+   "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "entropy": 3.64
+  }
+ ],
+ "peExeDebugInfo": []
+}

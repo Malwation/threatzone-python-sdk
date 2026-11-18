@@ -1,0 +1,156 @@
+{
+ "format": "windows-v2-worker-1",
+ "score": 100,
+ "tier": "Malicious",
+ "summary": "redacted",
+ "narrative": {
+  "headline": "redacted",
+  "sequence": [
+   {
+    "seq": 3095,
+    "tOffsetS": 0,
+    "pid": 2604,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 6470,
+    "tOffsetS": 31.2,
+    "pid": 2604,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 20730,
+    "tOffsetS": 35.2,
+    "pid": 2604,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 21206,
+    "tOffsetS": 35.3,
+    "pid": 2604,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 21340,
+    "tOffsetS": 35.3,
+    "pid": 2604,
+    "image": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "decisive": [
+   {
+    "source": "redacted",
+    "text": "redacted"
+   },
+   {
+    "source": "redacted",
+    "text": "redacted"
+   },
+   {
+    "source": "redacted",
+    "text": "redacted"
+   },
+   {
+    "source": "cooccurrence",
+    "text": "redacted"
+   }
+  ],
+  "tierReason": "redacted",
+  "notObserved": [
+   "redacted",
+   "redacted"
+  ],
+  "wouldRaise": [],
+  "wouldLower": [],
+  "coverageNote": "redacted",
+  "text": "redacted"
+ },
+ "story": {
+  "summary": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "truncated": true,
+  "steps": [
+   {
+    "tOffsetS": 0,
+    "process": {
+     "image": "redacted",
+     "pid": 2604
+    },
+    "category": "execution",
+    "text": "started",
+    "count": 1,
+    "evidenceSeqs": []
+   },
+   {
+    "tOffsetS": 31.2,
+    "process": {
+     "image": "redacted",
+     "pid": 4256
+    },
+    "category": "network",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     6470,
+     27244,
+     43413
+    ]
+   },
+   {
+    "tOffsetS": 66.9,
+    "process": {
+     "image": "redacted",
+     "pid": 4256
+    },
+    "category": "network",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     27244,
+     43413
+    ]
+   },
+   {
+    "tOffsetS": 66.9,
+    "process": {
+     "image": "redacted",
+     "pid": 4256
+    },
+    "category": "network",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     25833,
+     26083,
+     26139,
+     26529,
+     27130
+    ]
+   },
+   {
+    "tOffsetS": 70.5,
+    "process": {
+     "image": "redacted",
+     "pid": 4256
+    },
+    "category": "credential",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     43386,
+     43413
+    ]
+   }
+  ]
+ }
+}

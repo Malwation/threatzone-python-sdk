@@ -1,0 +1,37 @@
+{
+ "score": 62,
+ "family": null,
+ "indicators": {
+  "total": 10,
+  "levels": {
+   "malicious": 0,
+   "suspicious": 1,
+   "benign": 9
+  }
+ },
+ "behaviorEventCount": 108706,
+ "behaviorEventCountAvailable": true,
+ "syscallCount": 133695,
+ "iocCount": 170,
+ "yaraRuleCount": 25,
+ "configCount": 0,
+ "artifactCount": 51,
+ "mitreTechniqueCount": 1,
+ "network": {
+  "dnsCount": 5,
+  "httpCount": 6,
+  "tcpCount": 8,
+  "udpCount": 9,
+  "threatCount": 5,
+  "exfilRequestCount": 0,
+  "windowsBackgroundCount": 26,
+  "hostAppBackgroundCount": 6,
+  "countsAvailable": true,
+  "availability": {
+   "state": "observed",
+   "reason": null,
+   "coverage": "partial"
+  },
+  "sourceScope": "submission_ip_scoped"
+ }
+}

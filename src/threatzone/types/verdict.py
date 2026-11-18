@@ -57,8 +57,12 @@ class VerdictDecisive(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    source: str
-    """Source of the indicator row, for example ``policy:win.collect.clipboard_policy``."""
+    source: str | None = Field(
+        default=None,
+        deprecated="source is removed from the API in its next release. Read text.",
+    )
+    """Deprecated: removed from the API in its next release. ``None`` when the server leaves
+    it out."""
     text: str
 
 
@@ -158,8 +162,11 @@ class Verdict(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    format: str | None = None
-    """Report format of the verdict, for example ``windows-v2-worker-1``."""
+    format: str | None = Field(
+        default=None,
+        deprecated="format is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     score: float | None = None
     """Dynamic verdict score from 0 to 100."""
     tier: VerdictTier | None = None
@@ -222,9 +229,9 @@ class RunNote(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    code: str
+    code: str | None = None
     """A stable snake_case code, for example ``sample_exited_early``. New codes can appear;
-    show ``text``, not this code."""
+    show ``text``, not this code. ``None`` when the server leaves it out."""
     text: str
 
 

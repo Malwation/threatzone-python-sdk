@@ -1,0 +1,239 @@
+{
+ "submission": "00000000-0000-4000-8000-000000000002",
+ "status": "completed",
+ "reportFormat": "apk",
+ "level": "suspicious",
+ "score": 55,
+ "fileInfo": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "ssdeep": "redacted",
+  "mime_type": "redacted",
+  "file_type": "redacted",
+  "entropy": 7.97,
+  "filesize": "redacted",
+  "realFilename": null,
+  "realSha256": null
+ },
+ "strings": {
+  "totalCount": 24050
+ },
+ "dieResults": [
+  {
+   "name": "Android",
+   "string": "redacted",
+   "type": "operation_system",
+   "version": "14"
+  },
+  {
+   "name": "redacted",
+   "string": "redacted",
+   "type": "package",
+   "version": "1.0"
+  }
+ ],
+ "analysisTime": "redacted",
+ "metafields": null,
+ "apkInfo": {
+  "application_name": "redacted",
+  "package_name": "redacted",
+  "version_code": "1",
+  "version_name": "1.0",
+  "target_sdk_version": "34",
+  "max_sdk_version": null,
+  "min_sdk_version": "26",
+  "main_activity": "redacted"
+ },
+ "apkReportInfo": {
+  "firebase_db": [],
+  "unpacker": null
+ },
+ "manifestFileContent": "redacted",
+ "signerCertificate": {
+  "signed": true,
+  "v1_signature": false,
+  "v2_signature": true,
+  "v3_signature": false,
+  "unique_certificates": 1,
+  "certificates": [
+   {
+    "subject": "redacted",
+    "signature_algorithm": "rsassa_pkcs1v15",
+    "valid_from": "redacted",
+    "valid_to": "redacted",
+    "issuer": "redacted",
+    "serial_number": "redacted",
+    "hash_algorithm": "sha1",
+    "md5": "44444444444444444444444444444444",
+    "sha1": "5555555555555555555555555555555555555555",
+    "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "sha512": "77777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+    "public_key_algorithm": "rsa",
+    "bit_size": 2048
+   }
+  ]
+ },
+ "permissions": [
+  {
+   "name": "redacted",
+   "protection_level": "dangerous",
+   "label": "redacted",
+   "description": "redacted"
+  },
+  {
+   "name": "redacted",
+   "protection_level": "dangerous",
+   "label": "redacted",
+   "description": "redacted"
+  },
+  {
+   "name": "redacted",
+   "protection_level": "dangerous",
+   "label": "redacted",
+   "description": "redacted"
+  },
+  {
+   "name": "redacted",
+   "protection_level": "normal",
+   "label": "redacted",
+   "description": "redacted"
+  },
+  {
+   "name": "redacted",
+   "protection_level": "normal",
+   "label": "redacted",
+   "description": "redacted"
+  }
+ ],
+ "entrypoints": {
+  "activities": [
+   {
+    "name": "redacted",
+    "intents": [
+     "redacted"
+    ]
+   },
+   {
+    "name": "redacted",
+    "intents": []
+   },
+   {
+    "name": "redacted",
+    "intents": []
+   }
+  ],
+  "receivers": [
+   {
+    "name": "redacted",
+    "intents": [
+     "redacted",
+     "redacted",
+     "redacted",
+     "redacted"
+    ]
+   }
+  ],
+  "services": [],
+  "providers": [
+   "redacted"
+  ],
+  "libraries": []
+ },
+ "files": [
+  "redacted",
+  "redacted",
+  "redacted",
+  "redacted",
+  "redacted"
+ ],
+ "trackers": {
+  "detected_trackers": 0,
+  "total_trackers": 428,
+  "trackers": []
+ },
+ "apiCalls": [
+  {
+   "class_name": "redacted",
+   "method": "redacted",
+   "descriptor": "redacted"
+  },
+  {
+   "class_name": "redacted",
+   "method": "redacted",
+   "descriptor": "redacted"
+  },
+  {
+   "class_name": "redacted",
+   "method": "onCreate",
+   "descriptor": "redacted"
+  },
+  {
+   "class_name": "redacted",
+   "method": "intValue",
+   "descriptor": "redacted"
+  },
+  {
+   "class_name": "redacted",
+   "method": "values",
+   "descriptor": "redacted"
+  }
+ ],
+ "ids": [
+  {
+   "filename": "redacted",
+   "matches": [
+    {
+     "category": "compiler",
+     "rules": [
+      "redacted"
+     ]
+    }
+   ]
+  },
+  {
+   "filename": "redacted",
+   "matches": [
+    {
+     "category": "compiler",
+     "rules": [
+      "redacted"
+     ]
+    }
+   ]
+  },
+  {
+   "filename": "redacted",
+   "matches": [
+    {
+     "category": "compiler",
+     "rules": [
+      "redacted"
+     ]
+    }
+   ]
+  },
+  {
+   "filename": "redacted",
+   "matches": [
+    {
+     "category": "compiler",
+     "rules": [
+      "redacted"
+     ]
+    }
+   ]
+  },
+  {
+   "filename": "redacted",
+   "matches": [
+    {
+     "category": "compiler",
+     "rules": [
+      "redacted"
+     ]
+    }
+   ]
+  }
+ ]
+}

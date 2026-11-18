@@ -1,0 +1,15 @@
+{
+ "nodes": [
+  {
+   "pid": 6415,
+   "ppid": 0,
+   "pidGen": 1,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "",
+   "children": []
+  }
+ ]
+}

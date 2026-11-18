@@ -1,0 +1,88 @@
+{
+ "items": [
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [],
+   "ports": [],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sample",
+   "firstTimeshift": 29480,
+   "lastTimeshift": 29480,
+   "requestCount": 1,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [
+    596
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.1"
+   ],
+   "ports": [
+    53
+   ],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 29480,
+   "lastTimeshift": 108890,
+   "requestCount": 16,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.2"
+   ],
+   "ports": [
+    80
+   ],
+   "protocols": [],
+   "source": "sensor_only",
+   "firstTimeshift": 5790,
+   "lastTimeshift": 5790,
+   "requestCount": 1,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": null,
+   "ips": [
+    "192.0.2.3"
+   ],
+   "ports": [
+    49673
+   ],
+   "protocols": [],
+   "source": "sensor_only",
+   "firstTimeshift": 99480,
+   "lastTimeshift": 99480,
+   "requestCount": 1,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  }
+ ],
+ "total": 4,
+ "truncated": false
+}

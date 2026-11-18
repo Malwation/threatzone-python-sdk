@@ -1,0 +1,256 @@
+{
+ "items": [
+  {
+   "pid": 2736,
+   "ppid": 0,
+   "pidGen": 89,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795007639.021702,
+   "exitTimestamp": 1795007714.14302,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 2230
+   }
+  },
+  {
+   "pid": 1624,
+   "ppid": 2736,
+   "pidGen": 90,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795007674.654017,
+   "exitTimestamp": null,
+   "network": {
+    "items": [
+     {
+      "ip": "192.0.2.1",
+      "port": 80,
+      "protocol": "TCPv4"
+     },
+     {
+      "ip": "192.0.2.2",
+      "port": 443,
+      "protocol": "TCPv4"
+     }
+    ],
+    "count": 2
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 18130
+   }
+  },
+  {
+   "pid": 3300,
+   "ppid": 1624,
+   "pidGen": 91,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795007719.272795,
+   "exitTimestamp": 1795007724.581144,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 227
+   }
+  },
+  {
+   "pid": 3000,
+   "ppid": 3300,
+   "pidGen": 92,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795007719.357039,
+   "exitTimestamp": 1795007724.586967,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 212
+   }
+  },
+  {
+   "pid": 2284,
+   "ppid": 3300,
+   "pidGen": 93,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795007720.172368,
+   "exitTimestamp": 1795007723.662039,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 480
+   }
+  }
+ ],
+ "total": 14
+}

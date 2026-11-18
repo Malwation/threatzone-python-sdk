@@ -1,0 +1,297 @@
+{
+ "items": [
+  {
+   "pid": 2604,
+   "ppid": 0,
+   "pidGen": 91,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795014627.403158,
+   "exitTimestamp": 1795014663.435511,
+   "network": {
+    "items": [
+     {
+      "ip": "192.0.2.1",
+      "port": 443,
+      "protocol": "UDPv4"
+     },
+     {
+      "ip": "192.0.2.2",
+      "port": 443,
+      "protocol": "UDPv4"
+     },
+     {
+      "ip": "2001:db8::3",
+      "port": 443,
+      "protocol": "UDPv6"
+     },
+     {
+      "ip": "192.0.2.4",
+      "port": 443,
+      "protocol": "TCPv4"
+     },
+     {
+      "ip": "192.0.2.1",
+      "port": 443,
+      "protocol": "TCPv4"
+     }
+    ],
+    "count": 8
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 13972
+   }
+  },
+  {
+   "pid": 4256,
+   "ppid": 2604,
+   "pidGen": 92,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795014663.378246,
+   "exitTimestamp": null,
+   "network": {
+    "items": [
+     {
+      "ip": "192.0.2.1",
+      "port": 443,
+      "protocol": "UDPv4"
+     },
+     {
+      "ip": "192.0.2.2",
+      "port": 443,
+      "protocol": "UDPv4"
+     },
+     {
+      "ip": "2001:db8::3",
+      "port": 443,
+      "protocol": "UDPv6"
+     },
+     {
+      "ip": "192.0.2.4",
+      "port": 443,
+      "protocol": "TCPv4"
+     },
+     {
+      "ip": "192.0.2.1",
+      "port": 443,
+      "protocol": "TCPv4"
+     }
+    ],
+    "count": 8
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 14681
+   }
+  },
+  {
+   "pid": 3172,
+   "ppid": 4256,
+   "pidGen": 93,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795014697.817225,
+   "exitTimestamp": 1795014713.504543,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 22260
+   }
+  },
+  {
+   "pid": 3000,
+   "ppid": 3172,
+   "pidGen": 94,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795014697.928051,
+   "exitTimestamp": 1795014713.51286,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 479
+   }
+  },
+  {
+   "pid": 4180,
+   "ppid": 4256,
+   "pidGen": 95,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "redacted",
+   "image": "redacted",
+   "method": "NtCreateUserProcess",
+   "timestamp": 1795014698.406991,
+   "exitTimestamp": 1795014701.084193,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 1047
+   }
+  }
+ ],
+ "total": 7
+}

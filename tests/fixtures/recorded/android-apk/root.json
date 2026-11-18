@@ -1,0 +1,126 @@
+{
+ "uuid": "00000000-0000-4000-8000-000000000002",
+ "type": "file",
+ "level": "suspicious",
+ "score": 62,
+ "family": null,
+ "private": true,
+ "tags": [],
+ "reports": [
+  {
+   "type": "dynamic",
+   "status": "completed",
+   "level": "benign",
+   "duration": 235.8,
+   "format": "regular",
+   "operatingSystem": {
+    "name": "redacted",
+    "platform": "android"
+   },
+   "score": 0,
+   "metafields": {
+    "AI Report": "False",
+    "Execution Duration": "redacted",
+    "Work Path": "Desktop",
+    "HTTPS Inspection": "True",
+    "Internet Connection": "True",
+    "Fast Bootup": "True",
+    "Bypass Sleep Evasion": "False",
+    "Smart Tracing": "True",
+    "Dump Collector": "False",
+    "Trace Profile": "redacted"
+   },
+   "metafieldValues": {
+    "ai_report": false,
+    "timeout": 180,
+    "work_path": "desktop",
+    "https_inspection": true,
+    "internet_connection": true,
+    "snapshot": true,
+    "sleep_evasion": false,
+    "smart_tracing": true,
+    "dump_collector": false,
+    "trace_profile": "65f0aa000000000000000015"
+   },
+   "executionDurationSeconds": 180
+  },
+  {
+   "type": "static",
+   "status": "completed",
+   "level": "suspicious",
+   "duration": 8.8,
+   "format": "apk",
+   "operatingSystem": null,
+   "score": 55,
+   "metafields": null,
+   "metafieldValues": null,
+   "executionDurationSeconds": null
+  }
+ ],
+ "overview": {
+  "status": "completed",
+  "jobs": {
+   "total": 5,
+   "succeeded": 5,
+   "failed": 0,
+   "skipped": 0,
+   "finished": 5,
+   "completed": 5
+  },
+  "duration": 235.8
+ },
+ "indicators": {
+  "levels": {
+   "malicious": 0,
+   "suspicious": 1,
+   "benign": 1
+  },
+  "artifactCount": 1
+ },
+ "mitreTechniques": [],
+ "createdAt": "2026-11-18T15:10:52.535Z",
+ "updatedAt": "2026-11-18T15:17:02.028Z",
+ "filename": "redacted",
+ "hashes": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+ },
+ "file": {
+  "name": "redacted",
+  "size": 11959167,
+  "extension": "apk",
+  "declaredExtension": "apk",
+  "realExtension": "apk",
+  "isMimetypeMismatched": false,
+  "mimetype": "redacted",
+  "isMimetypeChecked": true,
+  "entrypoint": null,
+  "source": {
+   "type": "upload",
+   "url": null
+  },
+  "history": null
+ },
+ "scoreBreakdown": {
+  "decidingLayer": "indicator_mean",
+  "verdict": "Suspicious",
+  "score": 62,
+  "cap": 62,
+  "contributors": [
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 62,
+    "level": "suspicious"
+   }
+  ],
+  "whatWouldChange": [
+   "redacted",
+   "redacted",
+   "redacted"
+  ]
+ },
+ "finalized": true
+}

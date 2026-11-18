@@ -1,0 +1,97 @@
+{
+ "techniques": [
+  "T1016",
+  "T1033",
+  "T1055",
+  "redacted",
+  "redacted"
+ ],
+ "total": 19,
+ "attackVersion": "20.0",
+ "domain": "redacted",
+ "items": [
+  {
+   "techniqueId": "T1016",
+   "name": "redacted",
+   "tacticIds": [
+    "TA0007"
+   ],
+   "score": 100,
+   "scoreMaximum": 100,
+   "inVerdictChain": false,
+   "attempted": false,
+   "indicatorIds": [
+    "65f0aa000000000000000006",
+    "65f0aa000000000000000010"
+   ]
+  },
+  {
+   "techniqueId": "T1033",
+   "name": "redacted",
+   "tacticIds": [
+    "TA0007"
+   ],
+   "score": 5,
+   "scoreMaximum": 100,
+   "inVerdictChain": false,
+   "attempted": false,
+   "indicatorIds": [
+    "65f0aa000000000000000011"
+   ]
+  },
+  {
+   "techniqueId": "T1055",
+   "name": "redacted",
+   "tacticIds": [
+    "TA0004",
+    "TA0005"
+   ],
+   "score": 100,
+   "scoreMaximum": 100,
+   "inVerdictChain": true,
+   "attempted": false,
+   "indicatorIds": [
+    "65f0aa000000000000000005",
+    "65f0aa000000000000000007",
+    "65f0aa000000000000000012",
+    "65f0aa000000000000000013",
+    "65f0aa000000000000000014"
+   ]
+  },
+  {
+   "techniqueId": "redacted",
+   "name": "redacted",
+   "tacticIds": [
+    "TA0004",
+    "TA0005"
+   ],
+   "score": 100,
+   "scoreMaximum": 100,
+   "inVerdictChain": true,
+   "attempted": false,
+   "indicatorIds": [
+    "65f0aa000000000000000005",
+    "65f0aa000000000000000015"
+   ]
+  },
+  {
+   "techniqueId": "redacted",
+   "name": "redacted",
+   "tacticIds": [
+    "TA0004",
+    "TA0005"
+   ],
+   "score": 100,
+   "scoreMaximum": 100,
+   "inVerdictChain": true,
+   "attempted": false,
+   "indicatorIds": [
+    "65f0aa000000000000000005",
+    "65f0aa000000000000000016",
+    "65f0aa000000000000000017",
+    "65f0aa000000000000000018",
+    "65f0aa000000000000000015"
+   ]
+  }
+ ]
+}

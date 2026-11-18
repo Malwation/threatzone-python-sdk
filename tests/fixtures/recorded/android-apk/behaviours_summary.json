@@ -1,0 +1,54 @@
+{
+ "totalCount": 90,
+ "firstTimestamp": 1795014745,
+ "lastTimestamp": 1795014757.113,
+ "byType": [
+  {
+   "value": "redacted",
+   "count": 68
+  },
+  {
+   "value": "redacted",
+   "count": 22
+  }
+ ],
+ "byOperation": [
+  {
+   "value": "redacted",
+   "count": 64
+  },
+  {
+   "value": "redacted",
+   "count": 12
+  },
+  {
+   "value": "redacted",
+   "count": 6
+  },
+  {
+   "value": "redacted",
+   "count": 3
+  },
+  {
+   "value": "redacted",
+   "count": 2
+  }
+ ],
+ "byProcess": [
+  {
+   "processId": 6415,
+   "processName": "redacted",
+   "count": 89,
+   "firstTimestamp": 1795014746.013,
+   "lastTimestamp": 1795014757.113
+  },
+  {
+   "processId": 470,
+   "processName": "",
+   "count": 1,
+   "firstTimestamp": 1795014745,
+   "lastTimestamp": 1795014745
+  }
+ ],
+ "exits": []
+}
