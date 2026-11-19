@@ -78,10 +78,8 @@ from threatzone.types import (
     OverviewSummary,
     PaginatedSubmissions,
     PdfReportStatus,
-    PreviousRun,
     ProcessesResponse,
     ProcessTreeResponse,
-    RunComparison,
     RunNotes,
     SignatureCheckResponse,
     StaticScanResponse,
@@ -99,7 +97,6 @@ from threatzone.types import (
     UrlAnalysisSession,
     UrlAnalysisSessionStop,
     UrlDownloadSubmission,
-    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -1917,38 +1914,6 @@ class TestUrlAnalysisScoreExplanation:
             async with AsyncThreatZone(api_key=api_key) as client:
                 await client.get_url_analysis_browser_section(submission_uuid, "cookies")
 
-    async def test_get_url_analysis_similar_pages(
-        self,
-        api_key: str,
-        submission_uuid: str,
-        url_similar_pages_payload: dict[str, Any],
-    ) -> None:
-        ctx, mock = _patched_async_client(_make_response(200, url_similar_pages_payload))
-        with ctx:
-            async with AsyncThreatZone(api_key=api_key) as client:
-                result = await client.get_url_analysis_similar_pages(submission_uuid, limit=2)
-        assert isinstance(result, UrlSimilarPages)
-        assert result.total == 2
-        assert [item.host for item in result.items] == ["login-example.net", "example-login.org"]
-        assert _call_url(mock).endswith(
-            f"/submissions/{submission_uuid}/url-analysis/similar-pages"
-        )
-        assert _call_params(mock) == {"limit": 2}
-
-    async def test_get_url_analysis_similar_pages_invalid_limit_400(
-        self, api_key: str, submission_uuid: str
-    ) -> None:
-        body = {
-            "statusCode": 400,
-            "error": "Bad Request",
-            "message": "limit must be an integer from 1 to 50",
-            "code": "INVALID_QUERY_PARAM",
-        }
-        ctx, _ = _patched_async_client(_make_response(400, body))
-        with ctx, pytest.raises(BadRequestError):
-            async with AsyncThreatZone(api_key=api_key) as client:
-                await client.get_url_analysis_similar_pages(submission_uuid, limit=0)
-
 
 # ---------------------------------------------------------------------------
 # Network endpoints
@@ -3070,25 +3035,6 @@ class TestAsyncAnnotations:
         assert _call_method(mock) == "PUT"
         assert _call_url(mock).endswith("/submissions/sub-789/annotations/note")
         assert _call_json(mock) == {"text": "Second stage."}
-
-
-class TestAsyncRunCompare:
-    async def test_get_previous_run(self, api_key: str) -> None:
-        ctx, mock = _patched_async_client(_make_response(200, {"previousRunUuid": None}))
-        with ctx:
-            async with AsyncThreatZone(api_key=api_key) as client:
-                previous = await client.get_previous_run("sub-789")
-        assert isinstance(previous, PreviousRun)
-        assert previous.previous_run_uuid is None
-        assert _call_url(mock).endswith("/submissions/sub-789/previous-run")
-
-    async def test_compare_runs(self, api_key: str, sample_run_comparison: dict[str, Any]) -> None:
-        ctx, mock = _patched_async_client(_make_response(200, sample_run_comparison))
-        with ctx:
-            async with AsyncThreatZone(api_key=api_key) as client:
-                comparison = await client.compare_runs("sub-789", "sub-123")
-        assert isinstance(comparison, RunComparison)
-        assert _call_url(mock).endswith("/submissions/sub-789/compare/sub-123")
 
 
 class TestAsyncIocExport:

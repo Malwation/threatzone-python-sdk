@@ -37,9 +37,6 @@ from threatzone.types import (
     BehaviourSummary,
     CdrResponse,
     CdrSanitizedFileInfoDetail,
-    CompareDetection,
-    CompareDroppedFile,
-    CompareIoc,
     Connection,
     ConnectionPackets,
     DevicePresetOption,
@@ -92,13 +89,11 @@ from threatzone.types import (
     PdfReportStatus,
     PlanInfo,
     PlanPermissions,
-    PreviousRun,
     Process,
     ProcessesResponse,
     ProcessTreeNode,
     ProcessTreeResponse,
     ReportStatus,
-    RunComparison,
     RunJavaOutput,
     RunNote,
     RunNotes,
@@ -134,7 +129,6 @@ from threatzone.types import (
     UrlDownloadSubmission,
     UrlScoreEvidenceFact,
     UrlScoreIndicator,
-    UrlSimilarPages,
     UserInfo,
     UserInfoDetails,
     Verdict,
@@ -3224,27 +3218,6 @@ class TestAnnotationTypes:
         assert set(dumped["pins"][0]) == {"id", "kind", "ref", "label", "createdBy", "createdAt"}
 
 
-class TestRunCompareTypes:
-    def test_run_comparison(self, sample_run_comparison: dict[str, Any]) -> None:
-        comparison = RunComparison.model_validate(sample_run_comparison)
-        assert comparison.other_submission_uuid == "b1b2c3d4-e5f6-4789-abcd-ef1234567891"
-        assert isinstance(comparison.detections.added[0], CompareDetection)
-        assert comparison.detections.removed[0].level == "suspicious"
-        assert comparison.techniques.added == ["T1059"]
-        assert comparison.techniques.removed_total == 1
-        assert isinstance(comparison.iocs.added[0], CompareIoc)
-        assert comparison.iocs.added[0].category == "ip"
-        dropped = comparison.dropped_files
-        assert isinstance(dropped.added[0], CompareDroppedFile)
-        assert dropped.added[1].sha256 is None
-        assert (dropped.added_total, dropped.removed_total) == (2, 0)
-
-    def test_previous_run(self) -> None:
-        assert PreviousRun.model_validate({"previousRunUuid": "b1"}).previous_run_uuid == "b1"
-        assert PreviousRun.model_validate({"previousRunUuid": None}).previous_run_uuid is None
-        assert PreviousRun.model_validate({}).previous_run_uuid is None
-
-
 class TestAnnotationErrorCodes:
     @pytest.mark.parametrize(
         "code",
@@ -3576,47 +3549,6 @@ class TestUrlDetectionBreadthFields:
         parsed = UrlScoreIndicator.model_validate(indicator)
         assert parsed.evidence == []
         assert parsed.evidence_total == 0
-
-    def test_similar_pages(self, url_similar_pages_payload: dict[str, Any]) -> None:
-        result = UrlSimilarPages.model_validate(url_similar_pages_payload)
-        assert result.total == 2
-        first, second = result.items
-        assert first.submission_uuid == "b2c3d4e5-f6a7-4b89-8cde-f01234567891"
-        assert first.host == "login-example.net"
-        assert first.verdict == "malicious"
-        assert first.scored_at is not None
-        assert first.scored_at.isoformat() == "2026-11-10T08:15:00+00:00"
-        assert first.matched_dimensions == ["dom", "favicon", "form"]
-        assert second.scored_at is None
-        assert result.model_dump(by_alias=True, mode="json")["items"][0]["submissionUuid"] == (
-            first.submission_uuid
-        )
-
-    def test_similar_pages_keeps_unknown_values(self) -> None:
-        result = UrlSimilarPages.model_validate(
-            {
-                "total": 1,
-                "items": [
-                    {
-                        "submissionUuid": "b2c3d4e5-f6a7-4b89-8cde-f01234567891",
-                        "host": "login-example.net",
-                        "verdict": "phishing",
-                        "scoredAt": None,
-                        "matchedDimensions": ["dom", "layout"],
-                    }
-                ],
-            }
-        )
-        assert result.items[0].verdict == "phishing"
-        assert result.items[0].matched_dimensions == ["dom", "layout"]
-
-    def test_similar_pages_empty(self) -> None:
-        result = UrlSimilarPages.model_validate({"total": 0, "items": []})
-        assert result.total == 0
-        assert result.items == []
-
-    def test_similar_pages_has_no_hidden_row_hint(self) -> None:
-        assert set(UrlSimilarPages.model_fields) == {"total", "items"}
 
     def test_submission_list_item_source_url(
         self, sample_submission_list_item: dict[str, Any]

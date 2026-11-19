@@ -1771,29 +1771,6 @@ def url_analysis_browser_section_payload() -> dict[str, Any]:
 
 
 @pytest.fixture
-def url_similar_pages_payload() -> dict[str, Any]:
-    return {
-        "total": 2,
-        "items": [
-            {
-                "submissionUuid": "b2c3d4e5-f6a7-4b89-8cde-f01234567891",
-                "host": "login-example.net",
-                "verdict": "malicious",
-                "scoredAt": "2026-11-10T08:15:00.000Z",
-                "matchedDimensions": ["dom", "favicon", "form"],
-            },
-            {
-                "submissionUuid": "c3d4e5f6-a7b8-4c90-9def-012345678912",
-                "host": "example-login.org",
-                "verdict": "suspicious",
-                "scoredAt": None,
-                "matchedDimensions": ["dom", "title"],
-            },
-        ],
-    }
-
-
-@pytest.fixture
 def device_presets_payload() -> list[dict[str, Any]]:
     return [
         {
@@ -2173,44 +2150,5 @@ def sample_annotations() -> dict[str, Any]:
             "text": "The sample drops a second stage.",
             "updatedBy": "64a000000000000000000001",
             "updatedAt": "2026-10-14T08:05:00.000Z",
-        },
-    }
-
-
-@pytest.fixture
-def sample_run_comparison() -> dict[str, Any]:
-    """A run comparison, as in the public API docs."""
-    return {
-        "submissionUuid": "a1b2c3d4-e5f6-4789-abcd-ef1234567890",
-        "otherSubmissionUuid": "b1b2c3d4-e5f6-4789-abcd-ef1234567891",
-        "detections": {
-            "added": [{"title": "Writes an executable to disk", "level": "malicious"}],
-            "removed": [{"title": "Reads browser credentials", "level": "suspicious"}],
-            "addedTotal": 1,
-            "removedTotal": 1,
-        },
-        "techniques": {
-            "added": ["T1059"],
-            "removed": ["T1112"],
-            "addedTotal": 1,
-            "removedTotal": 1,
-        },
-        "iocs": {
-            "added": [{"value": "192.0.2.10", "category": "ip"}],
-            "removed": [{"value": "198.51.100.7", "category": "ip"}],
-            "addedTotal": 1,
-            "removedTotal": 1,
-        },
-        "droppedFiles": {
-            "added": [
-                {
-                    "path": "C:\\Users\\analyst\\AppData\\Local\\Temp\\payload.exe",
-                    "sha256": "a" * 64,
-                },
-                {"path": "C:\\Users\\analyst\\notes.txt", "sha256": None},
-            ],
-            "removed": [],
-            "addedTotal": 2,
-            "removedTotal": 0,
         },
     }

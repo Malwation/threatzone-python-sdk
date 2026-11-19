@@ -1,4 +1,4 @@
-"""Flow — verdict, run notes, annotations, run compare, IoC export and SHA-256 search scope."""
+"""Flow — verdict, run notes, annotations, IoC export and SHA-256 search scope."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from threatzone import (
     ThreatZone,
 )
 from threatzone.testing import FakeThreatZoneAPI, scenarios
-from threatzone.types import Annotations, RunComparison, RunNotes, Verdict
+from threatzone.types import Annotations, RunNotes, Verdict
 
 
 def _submit(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> str:
@@ -115,49 +115,6 @@ def test_unpin_rejects_a_pin_id_that_is_not_uuid_v4(
     assert (exc_info.value.body or {}).get("code") == "INVALID_QUERY_PARAM"
 
 
-def test_previous_run_and_compare(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
-    uuid = _submit(fake_api, sync_client)
-    assert sync_client.get_previous_run(uuid).previous_run_uuid is None
-
-    previous_uuid = fake_api.register_previous_run(
-        uuid,
-        indicators=[("T1112", "suspicious", [1508])],
-        iocs=[("ip", "198.51.100.7")],
-        mitre_techniques=["T1112"],
-        dropped_files=[],
-    )
-    assert sync_client.get_previous_run(uuid).previous_run_uuid == previous_uuid
-    assert sync_client.get_previous_run(previous_uuid).previous_run_uuid is None
-
-    comparison = sync_client.compare_runs(uuid, previous_uuid)
-    assert isinstance(comparison, RunComparison)
-    assert comparison.other_submission_uuid == previous_uuid
-    assert comparison.detections.removed == []
-    assert {d.title for d in comparison.detections.added} == {
-        "Indicator T1055",
-        "Indicator T1547.001",
-    }
-    assert set(comparison.techniques.added) == {"T1055", "T1547.001", "T1059.001"}
-    assert comparison.techniques.removed == []
-    assert [(i.category, i.value) for i in comparison.iocs.removed] == [("ip", "198.51.100.7")]
-    assert comparison.dropped_files.added_total == 1
-    assert comparison.dropped_files.added[0].sha256 == "0" * 64
-
-    same = sync_client.compare_runs(uuid, uuid)
-    assert same.iocs.added_total == 0
-    assert same.techniques.removed_total == 0
-
-
-def test_private_runs_of_another_workspace_stay_hidden(
-    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
-) -> None:
-    uuid = _submit(fake_api, sync_client)
-    hidden = fake_api.register_previous_run(uuid, private=True, owning_workspace="other-workspace")
-    assert sync_client.get_previous_run(uuid).previous_run_uuid is None
-    with pytest.raises(NotFoundError):
-        sync_client.compare_runs(uuid, hidden)
-
-
 @pytest.mark.parametrize(
     ("export_format", "content_type", "suffix"),
     [
@@ -221,7 +178,7 @@ def test_sha256_search_scope(fake_api: FakeThreatZoneAPI, sync_client: ThreatZon
     assert sync_client.search_by_sha256(sha, scope="public") == []
 
 
-async def test_async_annotations_and_compare(
+async def test_async_annotations_and_ioc_export(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone, async_client: AsyncThreatZone
 ) -> None:
     uuid = _submit(fake_api, sync_client)
@@ -229,9 +186,5 @@ async def test_async_annotations_and_compare(
     [pin] = pinned.pins
     assert (await async_client.get_annotations(uuid)).pins[0].id == pin.id
     assert (await async_client.unpin_evidence(uuid, pin.id)).pins == []
-    previous_uuid = fake_api.register_previous_run(uuid)
-    assert (await async_client.get_previous_run(uuid)).previous_run_uuid == previous_uuid
-    comparison = await async_client.compare_runs(uuid, previous_uuid)
-    assert comparison.iocs.added == []
     async with await async_client.download_iocs(uuid, format="text") as download:
         assert (await download.read()).decode().count("\n") == 3
