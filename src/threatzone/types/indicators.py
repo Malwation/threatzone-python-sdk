@@ -46,7 +46,13 @@ class IndicatorRelated(BaseModel):
 
     event_id: int | None = Field(default=None, alias="eventId")
     """Behaviour event ID. ``None`` when the event has no behaviour event."""
-    signal_id: str = Field(alias="signalId")
+    signal_id: str | None = Field(
+        default=None,
+        alias="signalId",
+        deprecated="signal_id is removed from the API in its next release. Use event_id.",
+    )
+    """Deprecated: removed from the API in its next release. ``event_id`` is the key of the
+    evidence. ``None`` when the server leaves it out."""
     text: str
     t_offset_s: float | None = Field(default=None, alias="tOffsetS")
     """Seconds from the sample start. ``None`` on rows stored before the time was recorded."""
@@ -74,6 +80,27 @@ class IndicatorTarget(BaseModel):
     value: str | None = None
 
 
+IndicatorUrlAnalysisConfidence = Literal["high", "heuristic"] | str
+
+
+class IndicatorUrlAnalysis(BaseModel):
+    """URL analysis fields of an indicator row."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    indicator_id: str = Field(alias="indicatorId")
+    """``UrlScoreIndicator.id`` of the row in ``get_url_analysis_indicators()``."""
+    rule_id: str = Field(alias="ruleId")
+    family: str | None = None
+    checked_url: str | None = Field(default=None, alias="checkedUrl")
+    """URL that the rule checked. ``None`` when the indicator applies to the whole
+    analysis."""
+    confidence: IndicatorUrlAnalysisConfidence
+    evidence_paths: list[str] = Field(default_factory=list, alias="evidencePaths")
+    """Path of the evidence route for each evidence reference, relative to the API base
+    URL."""
+
+
 class Indicator(BaseModel):
     """A behavioural indicator emitted by the dynamic report."""
 
@@ -92,8 +119,13 @@ class Indicator(BaseModel):
     category: list[str]
     level: IndicatorLevel
     score: float
-    score_maximum: int | None = Field(default=None, alias="scoreMaximum")
-    """Deprecated: every score is on the 0-100 scale, so the value is always ``100``."""
+    score_maximum: int | None = Field(
+        default=None,
+        alias="scoreMaximum",
+        deprecated="score_maximum is always 100 and is removed from the API in its next release.",
+    )
+    """Deprecated: every score is on the 0-100 scale, so the value is always ``100``. Removed
+    from the API in its next release."""
     pids: list[int]
     attack_codes: list[str] = Field(alias="attackCodes")
     attempted_attack_codes: list[str] | None = Field(default=None, alias="attemptedAttackCodes")
@@ -101,10 +133,19 @@ class Indicator(BaseModel):
     that the sandbox did not confirm. ``None`` when the row has none and on older servers."""
     event_ids: list[int] = Field(alias="eventIds")
     syscall_line_numbers: list[int] = Field(alias="syscallLineNumbers")
-    author: IndicatorAuthor
+    author: IndicatorAuthor | None = Field(
+        default=None,
+        deprecated="author is removed from the API in its next release.",
+    )
+    """Deprecated: ``system`` on every row. Removed from the API in its next release."""
     pid_gens: list[int] | None = Field(default=None, alias="pidGens")
     """PID generation of each entry in ``pids``, in the same order."""
-    rule_source: str | None = Field(default=None, alias="ruleSource")
+    rule_source: str | None = Field(
+        default=None,
+        alias="ruleSource",
+        deprecated="rule_source is removed from the API in its next release. Join rows by id.",
+    )
+    """Deprecated: removed from the API in its next release. Join rows by ``id``."""
     what_happened: str | None = Field(default=None, alias="whatHappened")
     why_it_matters: str | None = Field(default=None, alias="whyItMatters")
     why_this_tier: str | None = Field(default=None, alias="whyThisTier")
@@ -112,19 +153,41 @@ class Indicator(BaseModel):
     outcome: str | None = None
     score_note: str | None = Field(default=None, alias="scoreNote")
     """Score note as stored. The text can change; read the ``score_*`` fields for machine use."""
-    score_factors: list[str] | None = Field(default=None, alias="scoreFactors")
-    score_result: float | None = Field(default=None, alias="scoreResult")
-    score_cap: float | None = Field(default=None, alias="scoreCap")
+    score_factors: list[str] | None = Field(
+        default=None,
+        alias="scoreFactors",
+        deprecated="score_factors is removed from the API in its next release. Read score.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``score``."""
+    score_result: float | None = Field(
+        default=None,
+        alias="scoreResult",
+        deprecated="score_result is removed from the API in its next release. Read score.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``score``."""
+    score_cap: float | None = Field(
+        default=None,
+        alias="scoreCap",
+        deprecated="score_cap is removed from the API in its next release. Read score.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``score``."""
     related: list[IndicatorRelated] | None = None
     actor: IndicatorActor | None = None
     target: IndicatorTarget | None = None
     t_offset_s: float | None = Field(default=None, alias="tOffsetS")
     span_s: float | None = Field(default=None, alias="spanS")
     occurrences: int | None = None
-    finding_source: str | None = Field(default=None, alias="findingSource")
-    """Analysis job that produced an overview row (a row with an empty ``id``)."""
+    finding_source: str | None = Field(
+        default=None,
+        alias="findingSource",
+        deprecated="finding_source is removed from the API in its next release. Read source.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``source``."""
     artifacts: list[str] | None = None
     dynamic_indicator_id: str | None = Field(default=None, alias="dynamicIndicatorId")
+    url_analysis: IndicatorUrlAnalysis | None = Field(default=None, alias="urlAnalysis")
+    """Set only on URL analysis overview rows. ``None`` on every other row and on older
+    servers."""
 
 
 class IndicatorsResponse(ListEnvelopeFields):
@@ -157,7 +220,14 @@ IoCType = (
     | str
 )
 """IoC type. Any other string is also accepted, so a new server value does not fail the
-parse. ``IoC.raw_type`` keeps the type text as the extractor stored it."""
+parse."""
+
+IoCTier = Literal["ioc", "strings"] | str
+"""``ioc`` for an indicator. ``strings`` for a value that only strings found in the files of
+the submission hold. A ``strings`` value is not counted as an IoC and is never exported."""
+
+IoCTierFilter = Literal["ioc", "strings", "all"] | str
+"""Tier filter of ``get_iocs()``. The server default is ``all``."""
 
 
 class IoC(BaseModel):
@@ -168,8 +238,18 @@ class IoC(BaseModel):
     type: IoCType
     value: str
     artifacts: list[str]
-    raw_type: str | None = Field(default=None, alias="rawType")
-    """Type text as the extractor stored it, before the API maps it to ``type``."""
+    raw_type: str | None = Field(
+        default=None,
+        alias="rawType",
+        deprecated="raw_type is removed from the API in its next release. Read type.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``type``."""
+    tier: IoCTier | None = None
+    """``ioc`` or ``strings``. Every item is ``ioc`` while the platform keeps strings with the
+    IoCs, or while the analysis is still running. ``None`` on older servers."""
+    ports: list[int] | None = None
+    """Ports an IP or domain IoC was contacted on. ``None`` when no port was recorded and on
+    older servers."""
 
 
 class IoCsResponse(ListEnvelopeFields):
@@ -298,8 +378,11 @@ class Artifact(BaseModel):
     hashes: ArtifactHashes
     tags: list[str]
     process_attribution: ArtifactProcessAttribution | None = Field(
-        default=None, alias="processAttribution"
+        default=None,
+        alias="processAttribution",
+        deprecated="process_attribution is removed from the API in its next release.",
     )
+    """Deprecated: removed from the API in its next release."""
     analysis_status: ArtifactAnalysisStatus | None = Field(default=None, alias="analysisStatus")
     analysis_trigger: ArtifactAnalysisTrigger | None = Field(default=None, alias="analysisTrigger")
     analysis_reason: str | None = Field(default=None, alias="analysisReason")
@@ -391,6 +474,14 @@ class SummaryNetwork(BaseModel):
     counts_available: bool | None = Field(default=None, alias="countsAvailable")
     availability: NetworkAvailability | None = None
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
+    exfil_request_count: int | None = Field(default=None, alias="exfilRequestCount")
+    """Chat bot and webhook requests. ``None`` on older servers."""
+    windows_background_count: int | None = Field(default=None, alias="windowsBackgroundCount")
+    """Rows of known Windows background traffic, left out of the counts above. ``None`` on
+    older servers."""
+    host_app_background_count: int | None = Field(default=None, alias="hostAppBackgroundCount")
+    """Rows of the application that opened the sample to its own known services, left out of
+    the counts above. ``None`` on older servers."""
 
 
 class OverviewSummary(BaseModel):
@@ -402,6 +493,12 @@ class OverviewSummary(BaseModel):
     family: str | None = None
     indicators: SummaryIndicators
     behavior_event_count: int = Field(alias="behaviorEventCount")
+    behavior_event_count_available: bool | None = Field(
+        default=None, alias="behaviorEventCountAvailable"
+    )
+    """``False`` when the behaviour index of the run is not built yet, so
+    ``behavior_event_count`` is 0 and not a real count. A later request gives the count.
+    ``None`` on older servers."""
     syscall_count: int = Field(alias="syscallCount")
     ioc_count: int = Field(alias="iocCount")
     yara_rule_count: int = Field(alias="yaraRuleCount")

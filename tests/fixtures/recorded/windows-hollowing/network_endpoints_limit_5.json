@@ -1,0 +1,124 @@
+{
+ "items": [
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.2"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "DNS",
+    "HTTP",
+    "TLS"
+   ],
+   "source": "sample_child",
+   "firstTimeshift": 0,
+   "lastTimeshift": 166610,
+   "requestCount": 5,
+   "alertCount": 8,
+   "maxAlertSeverity": "3",
+   "processIds": [
+    1624
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.1",
+    "192.0.2.3"
+   ],
+   "ports": [
+    80
+   ],
+   "protocols": [
+    "DNS",
+    "HTTP"
+   ],
+   "source": "sample_child",
+   "firstTimeshift": 0,
+   "lastTimeshift": 165120,
+   "requestCount": 6,
+   "alertCount": 4,
+   "maxAlertSeverity": "2",
+   "processIds": [
+    1624
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 2
+  },
+  {
+   "key": "redacted",
+   "host": null,
+   "ips": [
+    "192.0.2.4"
+   ],
+   "ports": [
+    53
+   ],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sample_child",
+   "firstTimeshift": 0,
+   "lastTimeshift": 0,
+   "requestCount": 0,
+   "alertCount": 3,
+   "maxAlertSeverity": "2",
+   "processIds": [
+    1624
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 2
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [],
+   "ports": [],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sample_child",
+   "firstTimeshift": 83760,
+   "lastTimeshift": 83760,
+   "requestCount": 1,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [
+    1624
+   ],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.4"
+   ],
+   "ports": [
+    53
+   ],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 86870,
+   "lastTimeshift": 90210,
+   "requestCount": 2,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  }
+ ],
+ "total": 7,
+ "truncated": true
+}

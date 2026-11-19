@@ -1,0 +1,60 @@
+{
+ "dnsCount": 1,
+ "httpCount": 3,
+ "tcpCount": 16,
+ "udpCount": 3,
+ "threatCount": 3,
+ "exfilRequestCount": 0,
+ "windowsBackgroundCount": 8,
+ "hostAppBackgroundCount": 0,
+ "countsAvailable": true,
+ "availability": {
+  "state": "observed",
+  "reason": null,
+  "coverage": "partial"
+ },
+ "sourceScope": "submission_ip_scoped",
+ "pcapAvailable": true,
+ "httpsPcapAvailable": true,
+ "hasHttpsInspection": true,
+ "unattributedPcapAvailable": false,
+ "submissionOnlyAlerts": null,
+ "attributionCounts": {
+  "dns": {
+   "sample": 0,
+   "sampleChild": 0,
+   "sensorOnly": 1,
+   "windowsBackground": 0,
+   "hostAppBackground": 0
+  },
+  "http": {
+   "sample": 0,
+   "sampleChild": 0,
+   "sensorOnly": 3,
+   "windowsBackground": 0,
+   "hostAppBackground": 0
+  },
+  "tcp": {
+   "sample": 0,
+   "sampleChild": 0,
+   "sensorOnly": 16,
+   "windowsBackground": 0,
+   "hostAppBackground": 0
+  },
+  "udp": {
+   "sample": 0,
+   "sampleChild": 0,
+   "sensorOnly": 3,
+   "windowsBackground": 8,
+   "hostAppBackground": 0
+  },
+  "threats": {
+   "sample": 0,
+   "sampleChild": 0,
+   "sensorOnly": 3,
+   "windowsBackground": 0,
+   "hostAppBackground": 0
+  }
+ },
+ "unattributedCounts": null
+}

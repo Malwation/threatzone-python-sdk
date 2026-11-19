@@ -1,0 +1,43 @@
+{
+ "items": [
+  {
+   "rule": "HasOverlay",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "Golang",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "IsPacked",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "BASE64_table",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  },
+  {
+   "rule": "CRC32c_poly_Constant",
+   "category": "benign",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  }
+ ],
+ "total": 46,
+ "page": 1,
+ "limit": 20,
+ "totalPages": 3
+}

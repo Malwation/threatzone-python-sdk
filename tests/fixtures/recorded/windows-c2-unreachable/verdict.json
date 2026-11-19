@@ -1,0 +1,136 @@
+{
+ "format": "windows-v2-worker-1",
+ "score": 55,
+ "tier": "Suspicious",
+ "summary": "redacted",
+ "narrative": {
+  "headline": "redacted",
+  "sequence": [
+   {
+    "seq": 3086,
+    "tOffsetS": 0,
+    "pid": 596,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 4239,
+    "tOffsetS": 22.4,
+    "pid": 596,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 11044,
+    "tOffsetS": 24.8,
+    "pid": 596,
+    "image": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "decisive": [
+   {
+    "source": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "tierReason": "redacted",
+  "notObserved": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "wouldRaise": [
+   "redacted"
+  ],
+  "wouldLower": [
+   "redacted"
+  ],
+  "coverageNote": null,
+  "text": "redacted"
+ },
+ "story": {
+  "summary": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "truncated": false,
+  "steps": [
+   {
+    "tOffsetS": 0,
+    "process": {
+     "image": "redacted",
+     "pid": 596
+    },
+    "category": "execution",
+    "text": "started",
+    "count": 1,
+    "evidenceSeqs": []
+   },
+   {
+    "tOffsetS": 0.8,
+    "process": {
+     "image": "redacted",
+     "pid": 596
+    },
+    "category": "injection",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     3980,
+     4568
+    ]
+   },
+   {
+    "tOffsetS": 22.4,
+    "process": {
+     "image": "redacted",
+     "pid": 596
+    },
+    "category": "evasion",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     4239,
+     4243
+    ]
+   },
+   {
+    "tOffsetS": 22.6,
+    "process": {
+     "image": "redacted",
+     "pid": 596
+    },
+    "category": "evasion",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     4641,
+     4650
+    ]
+   },
+   {
+    "tOffsetS": 24.7,
+    "process": {
+     "image": "redacted",
+     "pid": 596
+    },
+    "category": "evasion",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     10608,
+     10609,
+     10610,
+     10611,
+     10612
+    ]
+   }
+  ]
+ }
+}

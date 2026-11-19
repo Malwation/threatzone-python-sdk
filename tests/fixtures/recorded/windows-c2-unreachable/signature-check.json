@@ -1,0 +1,30 @@
+{
+ "items": [
+  {
+   "artifact": "65f0aa000000000000000001",
+   "data": {
+    "verified": "Unsigned",
+    "verify_description": null,
+    "publisher": null,
+    "company": null,
+    "description": null,
+    "product": null,
+    "prod_version": null,
+    "file_version": null,
+    "binary_version": null,
+    "original_name": null,
+    "internal_name": null,
+    "copyright": null,
+    "comments": null,
+    "date_signed": null,
+    "verification_time": null,
+    "signers": [],
+    "counter_signers": [],
+    "tags": [
+     "unsigned"
+    ]
+   }
+  }
+ ],
+ "total": 1
+}

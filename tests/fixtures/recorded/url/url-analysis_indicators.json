@@ -1,0 +1,244 @@
+{
+ "state": "available",
+ "unavailableReason": null,
+ "snapshot": {
+  "schemaVersion": 2,
+  "scoringVersion": "url-scoring-trace-v2",
+  "jobId": "65f0aa000000000000000013",
+  "pass": "final",
+  "scoredAt": "2026-11-18T15:26:00.117Z",
+  "browserSnapshot": {
+   "jobId": "65f0aa000000000000000013",
+   "manifestHash": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "threatScore": 0,
+  "verdict": "benign",
+  "indicators": [
+   {
+    "id": "4444444444444444444444444444444444444444444444444444444444444444",
+    "ruleId": "threatfox_url",
+    "source": "threatfox_url",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "high",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": []
+   },
+   {
+    "id": "5555555555555555555555555555555555555555555555555555555555555555",
+    "ruleId": "threatfox_domain",
+    "source": "threatfox_domain",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "high",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": []
+   },
+   {
+    "id": "6666666666666666666666666666666666666666666666666666666666666666",
+    "ruleId": "virustotal",
+    "source": "virustotal",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "not_measured",
+    "confidence": "high",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "not_measured",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": null,
+    "artifactIds": []
+   },
+   {
+    "id": "7777777777777777777777777777777777777777777777777777777777777777",
+    "ruleId": "ctx",
+    "source": "ctx",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "high",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": []
+   },
+   {
+    "id": "8888888888888888888888888888888888888888888888888888888888888888",
+    "ruleId": "blacklist",
+    "source": "blacklist",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "high",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": []
+   },
+   {
+    "id": "9999999999999999999999999999999999999999999999999999999999999999",
+    "ruleId": "cert_anomaly",
+    "source": "cert_anomaly",
+    "family": null,
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "heuristic",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [
+     {
+      "kind": "report",
+      "id": "sslCertificate",
+      "available": true
+     }
+    ],
+    "checkedUrl": "redacted",
+    "level": "benign",
+    "artifactIds": []
+   },
+   {
+    "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ruleId": "redirect_risk",
+    "source": "redirect_risk",
+    "family": "redacted",
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "heuristic",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": [],
+    "evidence": [
+     {
+      "kind": "observed",
+      "label": "redacted",
+      "value": "redacted",
+      "ref": null
+     }
+    ],
+    "evidenceTotal": 1
+   },
+   {
+    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ruleId": "wallet_drainer",
+    "source": "wallet_drainer",
+    "family": "redacted",
+    "title": "redacted",
+    "reason": "redacted",
+    "availability": "measured",
+    "confidence": "heuristic",
+    "originalRuleScore": 0,
+    "weightedPoints": 0,
+    "disposition": "no_match",
+    "suppressedBy": null,
+    "evidenceRefs": [
+     {
+      "kind": "finding",
+      "id": "redacted",
+      "available": true,
+      "label": "redacted"
+     }
+    ],
+    "checkedUrl": null,
+    "level": "benign",
+    "artifactIds": [],
+    "evidence": [
+     {
+      "kind": "observed",
+      "label": "redacted",
+      "value": "redacted",
+      "ref": {
+       "kind": "finding",
+       "id": "redacted",
+       "available": true,
+       "label": "redacted"
+      }
+     }
+    ],
+    "evidenceTotal": 1
+   }
+  ],
+  "aggregation": {
+   "highPoints": 0,
+   "heuristicPoints": 0,
+   "reputationCredits": [
+    {
+     "ruleId": "allowlist",
+     "eligible": true,
+     "nominalPoints": 30,
+     "reason": "redacted"
+    },
+    {
+     "ruleId": "domain_age_over_1y",
+     "eligible": true,
+     "nominalPoints": 10,
+     "reason": "redacted"
+    },
+    {
+     "ruleId": "domain_age_over_5y",
+     "eligible": true,
+     "nominalPoints": 10,
+     "reason": "redacted"
+    },
+    {
+     "ruleId": "trusted_certificate",
+     "eligible": true,
+     "nominalPoints": 5,
+     "reason": "redacted"
+    },
+    {
+     "ruleId": "phishing_families_clean",
+     "eligible": false,
+     "nominalPoints": 10,
+     "reason": "redacted"
+    }
+   ],
+   "creditScope": "all",
+   "effectiveCredit": 0,
+   "scoreBeforeClamp": 0,
+   "scoreAfterClamp": 0,
+   "roundingAdjustment": 0,
+   "impersonationFloorAdjustment": 0,
+   "exemptPoints": 0,
+   "bandAdjustment": 0
+  },
+  "verdictAdjustments": []
+ }
+}

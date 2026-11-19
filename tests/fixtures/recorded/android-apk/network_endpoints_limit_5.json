@@ -1,0 +1,122 @@
+{
+ "items": [
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.6"
+   ],
+   "ports": [
+    80
+   ],
+   "protocols": [
+    "HTTP"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 0,
+   "lastTimeshift": 187840,
+   "requestCount": 4,
+   "alertCount": 3,
+   "maxAlertSeverity": "3",
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": 3
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.1",
+    "192.0.2.2",
+    "192.0.2.3",
+    "192.0.2.4",
+    "192.0.2.5"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "DNS",
+    "TLS",
+    "QUIC"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 4140,
+   "lastTimeshift": 175720,
+   "requestCount": 8,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.7",
+    "192.0.2.8"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [
+    "HTTP",
+    "TLS"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 2140,
+   "lastTimeshift": 68120,
+   "requestCount": 3,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": "redacted",
+   "ips": [
+    "192.0.2.9"
+   ],
+   "ports": [
+    53
+   ],
+   "protocols": [
+    "DNS"
+   ],
+   "source": "sensor_only",
+   "firstTimeshift": 4140,
+   "lastTimeshift": 4140,
+   "requestCount": 2,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  },
+  {
+   "key": "redacted",
+   "host": null,
+   "ips": [
+    "192.0.2.10"
+   ],
+   "ports": [
+    443
+   ],
+   "protocols": [],
+   "source": "sensor_only",
+   "firstTimeshift": 0,
+   "lastTimeshift": 0,
+   "requestCount": 1,
+   "alertCount": 0,
+   "maxAlertSeverity": null,
+   "processIds": [],
+   "attributionNote": null,
+   "maxAlertSeverityLevel": null
+  }
+ ],
+ "total": 10,
+ "truncated": true
+}

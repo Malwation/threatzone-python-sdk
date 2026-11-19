@@ -27,8 +27,13 @@ class MitreTechniqueUsage(BaseModel):
     """Every tactic ID (``TA####``) of the technique, in ATT&CK matrix order."""
     score: float
     """Highest score (0 to 100) of the indicators that carry the technique."""
-    score_maximum: int = Field(alias="scoreMaximum")
-    """Top of the ``score`` scale. The value is always ``100``."""
+    score_maximum: int | None = Field(
+        default=None,
+        alias="scoreMaximum",
+        deprecated="score_maximum is always 100 and is removed from the API in its next release.",
+    )
+    """Deprecated: every score is on the 0-100 scale, so the value is always ``100``. Removed
+    from the API in its next release."""
     in_verdict_chain: bool = Field(alias="inVerdictChain")
     """``True`` when an indicator with this technique is part of the finding that set the
     verdict (Windows V2 reports). ``False`` for other reports."""

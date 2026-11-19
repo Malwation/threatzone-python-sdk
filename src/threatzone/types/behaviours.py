@@ -89,6 +89,10 @@ class BehavioursResponse(ListEnvelopeFields):
     page: int
     limit: int
     total_pages: int = Field(alias="totalPages")
+    total_exact: bool | None = Field(default=None, alias="totalExact")
+    """``True`` when ``total`` counts every matching event. ``False`` when a read limit
+    stopped the count: ``total`` and ``total_pages`` are then lower bounds. ``None`` on older
+    servers."""
     sorted_by: BehaviourPageOrder | None = Field(default=None, alias="sortedBy")
     """Row order of the page. Set only when the request used an index parameter."""
     many_processes_match: bool | None = Field(default=None, alias="manyProcessesMatch")

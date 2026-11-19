@@ -1,0 +1,18 @@
+[
+ {
+  "id": "65f0aa000000000000000007",
+  "host": "redacted",
+  "type": "-",
+  "status": "NXDOMAIN",
+  "statusText": "NXDOMAIN",
+  "records": [],
+  "answered": true,
+  "timeshift": 29480,
+  "timeshiftSeconds": 29.48,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 596,
+  "processImage": "redacted"
+ }
+]

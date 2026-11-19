@@ -15,24 +15,29 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSeriali
 
 from .common import ListEnvelopeFields
 
-DnsRecordType = Literal[
-    "A",
-    "AAAA",
-    "CNAME",
-    "MX",
-    "NS",
-    "PTR",
-    "SOA",
-    "TXT",
-    "SRV",
-    "DNSKEY",
-    "RRSIG",
-    "NSEC",
-    "NSEC3",
-    "DS",
-    "NAPTR",
-    "CAA",
-]
+DnsRecordType = (
+    Literal[
+        "A",
+        "AAAA",
+        "CNAME",
+        "MX",
+        "NS",
+        "PTR",
+        "SOA",
+        "TXT",
+        "SRV",
+        "DNSKEY",
+        "RRSIG",
+        "NSEC",
+        "NSEC3",
+        "DS",
+        "NAPTR",
+        "CAA",
+    ]
+    | str
+)
+"""DNS record type of a query. Any other string is also accepted: the API sends ``"-"``
+when the sensor did not record the type, for example on a ``TIMEOUT`` query."""
 
 DnsStatus = (
     Literal[
@@ -88,6 +93,7 @@ NetworkAttribution = (
         "sample_child",
         "sensor_only",
         "windows_background",
+        "host_app_background",
     ]
     | str
 )
@@ -167,6 +173,9 @@ class NetworkSourceCounts(BaseModel):
     sample_child: int = Field(alias="sampleChild")
     sensor_only: int = Field(alias="sensorOnly")
     windows_background: int = Field(alias="windowsBackground")
+    host_app_background: int | None = Field(default=None, alias="hostAppBackground")
+    """Rows of the application that opened the sample (Office, Acrobat, Chrome or WebView2)
+    to its own known services. ``None`` on older servers."""
 
 
 class NetworkAttributionCounts(BaseModel):
@@ -243,6 +252,10 @@ class NetworkSummary(BaseModel):
     pcap_available: bool = Field(alias="pcapAvailable")
     exfil_request_count: int | None = Field(default=None, alias="exfilRequestCount")
     windows_background_count: int | None = Field(default=None, alias="windowsBackgroundCount")
+    host_app_background_count: int | None = Field(default=None, alias="hostAppBackgroundCount")
+    """Rows of the application that opened the sample (Office, Acrobat, Chrome or WebView2)
+    to its own known services. The counts and the list routes leave them out unless
+    ``attribution`` asks for them. ``None`` on older servers."""
     counts_available: bool | None = Field(default=None, alias="countsAvailable")
     availability: NetworkAvailability | None = None
     source_scope: NetworkSourceScope | None = Field(default=None, alias="sourceScope")
@@ -294,7 +307,9 @@ class DnsQuery(NetworkRowSource):
 
     id: str
     host: str
-    type: DnsRecordType
+    type: DnsRecordType | None = None
+    """Record type of the query. ``"-"`` when the sensor did not record it. ``None`` when the
+    server leaves it out."""
     status: DnsStatus
     status_text: str | None = Field(default=None, alias="statusText")
     records: list[str]
@@ -404,7 +419,11 @@ class NetworkThreat(NetworkRowSource):
     timeshift: float
     timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
     """Seconds from the start of the capture. ``None`` when the server does not send it."""
-    metadata: dict[str, list[str]]
+    metadata: dict[str, list[str]] | None = Field(
+        default=None,
+        deprecated="metadata is removed from the API in its next release.",
+    )
+    """Deprecated: the Suricata rule metadata. Removed from the API in its next release."""
     details: dict[str, str | int]
     tls: NetworkThreatTls | None = None
     capture: NetworkThreatCapture | None = None
@@ -553,7 +572,14 @@ class NetworkEndpoint(BaseModel):
     request_count: int = Field(alias="requestCount")
     """DNS queries, HTTP requests and TCP and UDP flows of the endpoint."""
     alert_count: int = Field(alias="alertCount")
-    max_alert_severity: str | None = Field(default=None, alias="maxAlertSeverity")
+    max_alert_severity: str | None = Field(
+        default=None,
+        alias="maxAlertSeverity",
+        deprecated=(
+            "max_alert_severity is removed from the API in its next release. "
+            "Read max_alert_severity_level."
+        ),
+    )
     """Deprecated: read ``max_alert_severity_level``. Highest alert severity as text. ``"1"`` is
     the highest. ``None`` without alerts."""
     max_alert_severity_level: NetworkThreatSeverityLevel | None = Field(

@@ -1,0 +1,206 @@
+{
+ "uuid": "00000000-0000-4000-8000-000000000002",
+ "type": "file",
+ "level": "malicious",
+ "score": 100,
+ "family": "redacted",
+ "private": true,
+ "tags": [
+  {
+   "author": "system",
+   "type": "malicious",
+   "value": "redacted",
+   "origin": "yara"
+  },
+  {
+   "author": "system",
+   "type": "malicious",
+   "value": "redacted",
+   "origin": "dynamic"
+  },
+  {
+   "author": "system",
+   "type": "malicious",
+   "value": "redacted",
+   "origin": "dynamic"
+  },
+  {
+   "author": "system",
+   "type": "malicious",
+   "value": "redacted",
+   "origin": "dynamic"
+  },
+  {
+   "author": "system",
+   "type": "suspicious",
+   "value": "redacted",
+   "origin": "dynamic"
+  }
+ ],
+ "reports": [
+  {
+   "type": "dynamic",
+   "status": "completed",
+   "level": "malicious",
+   "duration": 223.7,
+   "format": "regular",
+   "operatingSystem": {
+    "name": "redacted",
+    "platform": "windows"
+   },
+   "score": 100,
+   "metafields": {
+    "Private Submission": "True",
+    "Dynamic MIMEType Check": "True",
+    "AI Report": "False",
+    "Execution Duration": "redacted",
+    "Work Path": "Desktop",
+    "HTTPS Inspection": "True",
+    "Internet Connection": "True",
+    "Fast Bootup": "True",
+    "Bypass Sleep Evasion": "False",
+    "Smart Tracing": "True",
+    "Dump Collector": "False",
+    "Trace Profile": "Heavy",
+    "Region": "redacted",
+    "Human Simulation": "False"
+   },
+   "metafieldValues": {
+    "private": true,
+    "dynamic_mimetype_check": true,
+    "ai_report": false,
+    "timeout": 180,
+    "work_path": "desktop",
+    "https_inspection": true,
+    "internet_connection": true,
+    "snapshot": true,
+    "sleep_evasion": false,
+    "smart_tracing": true,
+    "dump_collector": false,
+    "trace_profile": "65f0aa000000000000000031",
+    "region_preset": "",
+    "human_simulation": false
+   },
+   "executionDurationSeconds": 180
+  },
+  {
+   "type": "static",
+   "status": "completed",
+   "level": "malicious",
+   "duration": 0.6,
+   "format": "exe",
+   "operatingSystem": null,
+   "score": 100,
+   "metafields": null,
+   "metafieldValues": null,
+   "executionDurationSeconds": null
+  }
+ ],
+ "overview": {
+  "status": "completed",
+  "jobs": {
+   "total": 5,
+   "succeeded": 5,
+   "failed": 0,
+   "skipped": 0,
+   "finished": 5,
+   "completed": 5
+  },
+  "duration": 223.7
+ },
+ "indicators": {
+  "levels": {
+   "malicious": 5,
+   "suspicious": 10,
+   "benign": 40
+  },
+  "artifactCount": 1
+ },
+ "mitreTechniques": [
+  "T1005",
+  "T1033",
+  "redacted",
+  "T1041",
+  "T1071"
+ ],
+ "createdAt": "2026-11-18T15:09:59.246Z",
+ "updatedAt": "2026-11-18T15:15:02.021Z",
+ "filename": "redacted",
+ "hashes": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+ },
+ "file": {
+  "name": "redacted",
+  "size": 3592920,
+  "extension": "exe",
+  "declaredExtension": "exe",
+  "realExtension": "exe",
+  "isMimetypeMismatched": false,
+  "mimetype": "redacted",
+  "isMimetypeChecked": true,
+  "entrypoint": null,
+  "source": {
+   "type": "upload",
+   "url": null
+  },
+  "history": {
+   "filenames": [
+    "redacted",
+    "redacted",
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "lastReceivedAt": 1794957513757
+  }
+ },
+ "scoreBreakdown": {
+  "decidingLayer": "indicator_mean",
+  "verdict": "Malicious",
+  "score": 100,
+  "cap": 100,
+  "contributors": [
+   {
+    "source": "dynamic_scan",
+    "indicatorId": "65f0aa000000000000000002",
+    "title": "redacted",
+    "points": 100,
+    "level": "malicious"
+   },
+   {
+    "source": "dynamic_scan",
+    "indicatorId": "65f0aa000000000000000003",
+    "title": "redacted",
+    "points": 83,
+    "level": "malicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 100,
+    "level": "malicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 100,
+    "level": "malicious"
+   },
+   {
+    "source": "dynamic_scan",
+    "indicatorId": "65f0aa000000000000000004",
+    "title": "redacted",
+    "points": 70,
+    "level": "malicious"
+   }
+  ],
+  "whatWouldChange": [
+   "redacted"
+  ]
+ },
+ "finalized": true
+}

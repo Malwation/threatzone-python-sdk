@@ -1,0 +1,164 @@
+{
+ "submission": "00000000-0000-4000-8000-000000000002",
+ "status": "completed",
+ "reportFormat": "exe",
+ "level": "malicious",
+ "score": 100,
+ "fileInfo": {
+  "md5": "11111111111111111111111111111111",
+  "sha1": "2222222222222222222222222222222222222222",
+  "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "ssdeep": "redacted",
+  "mime_type": "redacted",
+  "file_type": "redacted",
+  "entropy": 8,
+  "filesize": "redacted",
+  "realFilename": null,
+  "realSha256": null
+ },
+ "strings": {
+  "totalCount": 6169
+ },
+ "dieResults": [
+  {
+   "name": "Windows",
+   "string": "redacted",
+   "type": "operation_system",
+   "version": "7"
+  },
+  {
+   "name": "UPX",
+   "string": "redacted",
+   "type": "packer",
+   "version": "5.02"
+  }
+ ],
+ "analysisTime": "redacted",
+ "metafields": null,
+ "peExeInfo": {
+  "checksum": false,
+  "has_overlay": true,
+  "overlay_entropy": 5.83,
+  "imphash": "77777777777777777777777777777777",
+  "packed": true,
+  "packer": "UPX"
+ },
+ "peExeHeaders": {
+  "rich": null,
+  "file": {
+   "machine": "IMAGE_FILE_MACHINE_I386",
+   "image_base": "redacted",
+   "entrypoint_name": "UPX1",
+   "number_of_sections": 3,
+   "time_date_stamp": "redacted",
+   "pointer_to_symbol_table": 12570112,
+   "number_of_symbols": 0,
+   "size_of_optional_header": "redacted",
+   "compiler_flags": {
+    "is_aslr": true,
+    "is_nxcompat": true,
+    "is_seh": false,
+    "is_cfg": false,
+    "is_gs": false
+   }
+  }
+ },
+ "characteristics": {
+  "file": {
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_FILE_EXECUTABLE_IMAGE",
+    "IMAGE_FILE_32BIT_MACHINE"
+   ]
+  },
+  "dll": {
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE",
+    "IMAGE_DLLCHARACTERISTICS_NX_COMPAT",
+    "redacted"
+   ]
+  }
+ },
+ "imports": {
+  "files": [
+   "redacted"
+  ],
+  "entries": [
+   {
+    "address": "redacted",
+    "name": "LoadLibraryA",
+    "blacklist": false,
+    "filename": "redacted"
+   },
+   {
+    "address": "redacted",
+    "name": "ExitProcess",
+    "blacklist": false,
+    "filename": "redacted"
+   },
+   {
+    "address": "redacted",
+    "name": "GetProcAddress",
+    "blacklist": true,
+    "filename": "redacted"
+   },
+   {
+    "address": "redacted",
+    "name": "VirtualProtect",
+    "blacklist": true,
+    "filename": "redacted"
+   }
+  ]
+ },
+ "peExeExports": [],
+ "emulationResults": [],
+ "peExeSections": [
+  {
+   "name": "UPX0",
+   "virtual_address": "redacted",
+   "virtual_size": "redacted",
+   "raw_size": "redacted",
+   "entropy": 0,
+   "md5": "88888888888888888888888888888888",
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_SCN_CNT_UNINITIALIZED_DATA",
+    "IMAGE_SCN_MEM_EXECUTE",
+    "IMAGE_SCN_MEM_READ",
+    "IMAGE_SCN_MEM_WRITE"
+   ]
+  },
+  {
+   "name": "UPX1",
+   "virtual_address": "redacted",
+   "virtual_size": "redacted",
+   "raw_size": "redacted",
+   "entropy": 8,
+   "md5": "99999999999999999999999999999999",
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_SCN_CNT_INITIALIZED_DATA",
+    "IMAGE_SCN_MEM_EXECUTE",
+    "IMAGE_SCN_MEM_READ",
+    "IMAGE_SCN_MEM_WRITE"
+   ]
+  },
+  {
+   "name": "UPX2",
+   "virtual_address": "redacted",
+   "virtual_size": "redacted",
+   "raw_size": "redacted",
+   "entropy": 1.47,
+   "md5": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "characteristics": "redacted",
+   "readable_characteristics": [
+    "IMAGE_SCN_CNT_INITIALIZED_DATA",
+    "IMAGE_SCN_MEM_READ",
+    "IMAGE_SCN_MEM_WRITE"
+   ]
+  }
+ ],
+ "peExeResources": [],
+ "peExeDebugInfo": []
+}

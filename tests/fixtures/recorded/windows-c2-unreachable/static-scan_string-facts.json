@@ -1,0 +1,88 @@
+{
+ "observables": [
+  {
+   "kind": "domain",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "domain",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "email",
+   "value": "redacted",
+   "count": 2,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "url",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "url",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  }
+ ],
+ "facts": [
+  {
+   "code": "anti-debug",
+   "value": "redacted",
+   "capability": "anti-analysis",
+   "matches": [
+    "IsDebuggerPresent"
+   ],
+   "count": 1,
+   "names": []
+  },
+  {
+   "code": "keyboard-capture",
+   "value": "redacted",
+   "capability": "input-capture",
+   "matches": [
+    "GetAsyncKeyState"
+   ],
+   "count": 1,
+   "names": []
+  },
+  {
+   "code": "clipboard",
+   "value": "redacted",
+   "capability": "clipboard",
+   "matches": [
+    "SetClipboardData"
+   ],
+   "count": 1,
+   "names": []
+  }
+ ],
+ "total": 4921,
+ "truncated": false
+}

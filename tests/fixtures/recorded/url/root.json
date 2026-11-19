@@ -1,0 +1,146 @@
+{
+ "uuid": "00000000-0000-4000-8000-000000000001",
+ "type": "url",
+ "level": "suspicious",
+ "score": 62,
+ "family": null,
+ "private": true,
+ "tags": [],
+ "reports": [
+  {
+   "type": "url_analysis",
+   "status": "completed",
+   "level": "benign",
+   "duration": null,
+   "format": "regular",
+   "operatingSystem": null,
+   "score": 0,
+   "metafields": {
+    "Private Submission": "True",
+    "Dynamic MIMEType Check": "True",
+    "AI Report": "False",
+    "Execution Duration": "redacted",
+    "Session Recording": "True",
+    "Device": "Desktop",
+    "Autonomous Interaction": "True"
+   },
+   "metafieldValues": {
+    "private": true,
+    "dynamic_mimetype_check": true,
+    "ai_report": false,
+    "timeout": 180,
+    "record_session": true,
+    "device_preset": "65f0aa000000000000000011",
+    "autonomous_interaction": true
+   },
+   "executionDurationSeconds": null
+  },
+  {
+   "type": "dynamic",
+   "status": "completed",
+   "level": "benign",
+   "duration": 270.7,
+   "format": "open_in_browser",
+   "operatingSystem": {
+    "name": "redacted",
+    "platform": "windows"
+   },
+   "score": 13,
+   "metafields": {
+    "Private Submission": "True",
+    "Dynamic MIMEType Check": "True",
+    "AI Report": "False",
+    "Execution Duration": "redacted",
+    "Smart Tracing": "True",
+    "Trace Profile": "Heavy",
+    "Human Simulation": "True"
+   },
+   "metafieldValues": {
+    "private": true,
+    "dynamic_mimetype_check": true,
+    "ai_report": false,
+    "timeout": 180,
+    "smart_tracing": true,
+    "trace_profile": "65f0aa000000000000000012",
+    "human_simulation": true
+   },
+   "executionDurationSeconds": 180
+  }
+ ],
+ "overview": {
+  "status": "completed",
+  "jobs": {
+   "total": 200,
+   "succeeded": 200,
+   "failed": 0,
+   "skipped": 0,
+   "finished": 200,
+   "completed": 200
+  },
+  "duration": 270.7
+ },
+ "indicators": {
+  "levels": {
+   "malicious": 0,
+   "suspicious": 1,
+   "benign": 9
+  },
+  "artifactCount": 51
+ },
+ "mitreTechniques": [
+  "redacted"
+ ],
+ "createdAt": "2026-11-18T15:20:35.625Z",
+ "updatedAt": "2026-11-18T15:29:02.026Z",
+ "url": "redacted",
+ "scoreBreakdown": {
+  "decidingLayer": "indicator_mean",
+  "verdict": "Suspicious",
+  "score": 62,
+  "cap": 62,
+  "contributors": [
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 62,
+    "level": "suspicious"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 30,
+    "level": "benign"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 30,
+    "level": "benign"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 30,
+    "level": "benign"
+   },
+   {
+    "source": "yara_scanner",
+    "indicatorId": null,
+    "title": "redacted",
+    "points": 30,
+    "level": "benign"
+   }
+  ],
+  "whatWouldChange": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ]
+ },
+ "finalized": true
+}

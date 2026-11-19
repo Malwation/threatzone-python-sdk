@@ -1,0 +1,63 @@
+{
+ "items": [
+  {
+   "type": "sha256",
+   "value": "redacted",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ],
+   "rawType": "sha256",
+   "tier": "ioc"
+  },
+  {
+   "type": "sha1",
+   "value": "redacted",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ],
+   "rawType": "sha1",
+   "tier": "ioc"
+  },
+  {
+   "type": "md5",
+   "value": "redacted",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ],
+   "rawType": "md5",
+   "tier": "ioc"
+  },
+  {
+   "type": "sha256",
+   "value": "redacted",
+   "artifacts": [
+    "65f0aa000000000000000004"
+   ],
+   "rawType": "sha256",
+   "tier": "ioc"
+  },
+  {
+   "type": "sha1",
+   "value": "redacted",
+   "artifacts": [
+    "65f0aa000000000000000004"
+   ],
+   "rawType": "sha1",
+   "tier": "ioc"
+  },
+  {
+   "type": "ip",
+   "value": "redacted",
+   "artifacts": [],
+   "ports": [
+    443
+   ],
+   "rawType": "ip",
+   "tier": "ioc"
+  }
+ ],
+ "total": 19,
+ "page": 1,
+ "limit": 50,
+ "totalPages": 1
+}

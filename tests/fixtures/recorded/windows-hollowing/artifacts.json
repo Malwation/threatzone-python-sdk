@@ -1,0 +1,77 @@
+{
+ "items": [
+  {
+   "id": "65f0aa000000000000000001",
+   "filename": "redacted",
+   "size": 3766784,
+   "type": "compressed_file_entry",
+   "source": "user_upload",
+   "hashes": {
+    "md5": "11111111111111111111111111111111",
+    "sha1": "2222222222222222222222222222222222222222",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+   },
+   "tags": [],
+   "processAttribution": null,
+   "analysisStatus": "analyzed",
+   "analysisTrigger": "auto",
+   "analysisReason": null,
+   "downloadLink": "redacted"
+  },
+  {
+   "id": "65f0aa000000000000000002",
+   "filename": "redacted",
+   "size": 2791,
+   "type": "file_dump",
+   "source": "dynamic_report",
+   "hashes": {
+    "md5": "44444444444444444444444444444444",
+    "sha1": "5555555555555555555555555555555555555555",
+    "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+   },
+   "tags": [],
+   "processAttribution": null,
+   "analysisStatus": "analyzed",
+   "analysisTrigger": "auto",
+   "analysisReason": null,
+   "downloadLink": "redacted"
+  },
+  {
+   "id": "65f0aa000000000000000003",
+   "filename": "redacted",
+   "size": 3005,
+   "type": "file_dump",
+   "source": "dynamic_report",
+   "hashes": {
+    "md5": "77777777777777777777777777777777",
+    "sha1": "8888888888888888888888888888888888888888",
+    "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+   },
+   "tags": [],
+   "processAttribution": null,
+   "analysisStatus": "analyzed",
+   "analysisTrigger": "auto",
+   "analysisReason": null,
+   "downloadLink": "redacted"
+  },
+  {
+   "id": "65f0aa000000000000000004",
+   "filename": "redacted",
+   "size": 2595690,
+   "type": "sample",
+   "source": "user_upload",
+   "hashes": {
+    "md5": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha1": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   },
+   "tags": [],
+   "processAttribution": null,
+   "analysisStatus": "analyzed",
+   "analysisTrigger": "auto",
+   "analysisReason": null,
+   "downloadLink": "redacted"
+  }
+ ],
+ "total": 4
+}

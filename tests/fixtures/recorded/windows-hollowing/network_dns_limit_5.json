@@ -1,0 +1,55 @@
+[
+ {
+  "id": "65f0aa000000000000000019",
+  "host": "redacted",
+  "type": "-",
+  "status": "TIMEOUT",
+  "statusText": "-",
+  "records": [],
+  "answered": false,
+  "timeshift": 83760,
+  "timeshiftSeconds": 83.76,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000020",
+  "host": "redacted",
+  "type": "A",
+  "status": "NOERROR",
+  "statusText": "NOERROR",
+  "records": [
+   "192.0.2.1",
+   "192.0.2.3"
+  ],
+  "answered": true,
+  "timeshift": 86870,
+  "timeshiftSeconds": 86.87,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000021",
+  "host": "redacted",
+  "type": "A",
+  "status": "NOERROR",
+  "statusText": "NOERROR",
+  "records": [
+   "192.0.2.2"
+  ],
+  "answered": true,
+  "timeshift": 90210,
+  "timeshiftSeconds": 90.21,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ }
+]

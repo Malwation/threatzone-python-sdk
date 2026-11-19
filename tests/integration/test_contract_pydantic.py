@@ -129,6 +129,19 @@ def test_indicator_v2_and_ioc_raw_type_contracts(
         assert ioc.type == ioc.raw_type.lower()
 
 
+def test_ioc_tier_and_finalized_contracts(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    final = sync_client.wait_for_completion(created.uuid, poll_interval=0.001, timeout=5)
+    assert final.finalized is True
+    iocs = sync_client.get_iocs(created.uuid, tier="ioc").items
+    assert iocs
+    assert {ioc.tier for ioc in iocs} == {"ioc"}
+    assert sync_client.get_iocs(created.uuid, tier="strings").items == []
+
+
 def test_mitre_items_contract(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
     scenarios.seed_malicious_pe(fake_api)
     created = sync_client.create_sandbox_submission(b"PE")

@@ -1,0 +1,185 @@
+[
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 50384,
+  "destinationIp": "192.0.2.6",
+  "destinationPort": 80,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Android"
+   ],
+   "attack_target": [
+    "Mobile_Client"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Internal",
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted",
+    "connectivity_check"
+   ]
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 204,
+   "length": 0,
+   "url_scheme": "http"
+  },
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 40326,
+  "destinationIp": "192.0.2.6",
+  "destinationPort": 80,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Android"
+   ],
+   "attack_target": [
+    "Mobile_Client"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Internal",
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted",
+    "connectivity_check"
+   ]
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 204,
+   "length": 0,
+   "url_scheme": "http"
+  },
+  "tls": null,
+  "capture": null,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ },
+ {
+  "signature": "redacted",
+  "description": "redacted",
+  "severity": "info",
+  "severityLevel": 3,
+  "protocol": "TCP",
+  "appProto": "HTTP",
+  "sourceIp": "192.0.2.11",
+  "sourcePort": 41724,
+  "destinationIp": "192.0.2.6",
+  "destinationPort": 80,
+  "timeshift": 0,
+  "timeshiftSeconds": 0,
+  "metadata": {
+   "affected_product": [
+    "Android"
+   ],
+   "attack_target": [
+    "Mobile_Client"
+   ],
+   "confidence": [
+    "High"
+   ],
+   "created_at": [
+    "redacted"
+   ],
+   "deployment": [
+    "Internal",
+    "Perimeter"
+   ],
+   "malware_family": [],
+   "mitre_tactic_id": [],
+   "mitre_technique_id": [],
+   "mitre_tactic_name": [],
+   "mitre_technique_name": [],
+   "updated_at": [
+    "redacted"
+   ],
+   "tag": [
+    "redacted",
+    "connectivity_check"
+   ]
+  },
+  "details": {
+   "hostname": "redacted",
+   "url": "redacted",
+   "http_content_type": "",
+   "http_method": "GET",
+   "protocol": "redacted",
+   "status": 204,
+   "length": 0,
+   "url_scheme": "http"
+  },
+  "tls": null,
+  "capture": "decrypted_https",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ }
+]

@@ -1,0 +1,349 @@
+{
+ "dumpCollectorActive": false,
+ "artifactInventoryCoverage": {
+  "sourceStatus": "available",
+  "sourceError": null,
+  "counts": [],
+  "unretainedRowsOmitted": 0
+ },
+ "createdProcesses": [
+  {
+   "pid": 2736,
+   "pidGen": 89,
+   "origin": "sample",
+   "ppid": 0,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "NtCreateUserProcess",
+   "workDir": "redacted",
+   "timestamp": 1795007639.021702,
+   "exitTimestamp": 1795007714.14302,
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 2230
+   },
+   "network": {
+    "items": [],
+    "count": 0
+   }
+  },
+  {
+   "pid": 1624,
+   "pidGen": 90,
+   "origin": "sample",
+   "ppid": 2736,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "NtCreateUserProcess",
+   "workDir": "redacted",
+   "timestamp": 1795007674.654017,
+   "exitTimestamp": null,
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 18130
+   },
+   "network": {
+    "items": [
+     {
+      "ip": "192.0.2.1",
+      "port": 80,
+      "protocol": "TCPv4"
+     },
+     {
+      "ip": "192.0.2.2",
+      "port": 443,
+      "protocol": "TCPv4"
+     }
+    ],
+    "count": 2
+   }
+  },
+  {
+   "pid": 3300,
+   "pidGen": 91,
+   "origin": "sample",
+   "ppid": 1624,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "NtCreateUserProcess",
+   "workDir": "redacted",
+   "timestamp": 1795007719.272795,
+   "exitTimestamp": 1795007724.581144,
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 227
+   },
+   "network": {
+    "items": [],
+    "count": 0
+   }
+  },
+  {
+   "pid": 3000,
+   "pidGen": 92,
+   "origin": "sample",
+   "ppid": 3300,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "NtCreateUserProcess",
+   "workDir": "redacted",
+   "timestamp": 1795007719.357039,
+   "exitTimestamp": 1795007724.586967,
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 212
+   },
+   "network": {
+    "items": [],
+    "count": 0
+   }
+  },
+  {
+   "pid": 2284,
+   "pidGen": 93,
+   "origin": "sample",
+   "ppid": 3300,
+   "tid": 0,
+   "processName": "redacted",
+   "image": "redacted",
+   "cmd": "redacted",
+   "method": "NtCreateUserProcess",
+   "workDir": "redacted",
+   "timestamp": 1795007720.172368,
+   "exitTimestamp": 1795007723.662039,
+   "events": {
+    "items": [
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtOpenKey"
+     },
+     {
+      "type": "registry",
+      "path": "redacted",
+      "mode": "NtQueryValueKey"
+     }
+    ],
+    "count": 480
+   },
+   "network": {
+    "items": [],
+    "count": 0
+   }
+  }
+ ],
+ "droppedFiles": [
+  {
+   "pid": 1624,
+   "pidGen": 90,
+   "processName": "redacted",
+   "executablePath": "redacted",
+   "files": [
+    {
+     "path": "redacted",
+     "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+     "fileSize": 3005,
+     "timestamp": 1795007725.976986,
+     "artifactId": "65f0aa000000000000000003",
+     "analysisStatus": "analyzed",
+     "analysisReason": null,
+     "rawPath": "redacted",
+     "pathAuthority": "verified_volume_map",
+     "pathAuthorityReason": null,
+     "sourceActorBound": true,
+     "captureClosed": true,
+     "retention": "retained",
+     "retentionDetail": null,
+     "pidGen": 90,
+     "eventSeq": 35220,
+     "guestSize": null
+    },
+    {
+     "path": "redacted",
+     "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+     "fileSize": 2791,
+     "timestamp": 1795007801.452202,
+     "artifactId": "65f0aa000000000000000002",
+     "analysisStatus": "analyzed",
+     "analysisReason": null,
+     "rawPath": "redacted",
+     "pathAuthority": "verified_volume_map",
+     "pathAuthorityReason": null,
+     "sourceActorBound": true,
+     "captureClosed": true,
+     "retention": "retained",
+     "retentionDetail": null,
+     "pidGen": 90,
+     "eventSeq": 56201,
+     "guestSize": null
+    },
+    {
+     "path": "redacted",
+     "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+     "fileSize": 3005,
+     "timestamp": 1795007729.131896,
+     "artifactId": null,
+     "analysisStatus": null,
+     "analysisReason": null,
+     "rawPath": "redacted",
+     "pathAuthority": "verified_volume_map",
+     "pathAuthorityReason": null,
+     "sourceActorBound": true,
+     "captureClosed": true,
+     "retention": "observed_only",
+     "retentionDetail": "redacted",
+     "pidGen": 90,
+     "eventSeq": 40174,
+     "guestSize": null
+    },
+    {
+     "path": "redacted",
+     "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+     "fileSize": 2791,
+     "timestamp": 1795007803.928418,
+     "artifactId": null,
+     "analysisStatus": null,
+     "analysisReason": null,
+     "rawPath": "redacted",
+     "pathAuthority": "verified_volume_map",
+     "pathAuthorityReason": null,
+     "sourceActorBound": true,
+     "captureClosed": true,
+     "retention": "observed_only",
+     "retentionDetail": "redacted",
+     "pidGen": 90,
+     "eventSeq": 58565,
+     "guestSize": null
+    }
+   ]
+  }
+ ],
+ "memDumps": []
+}

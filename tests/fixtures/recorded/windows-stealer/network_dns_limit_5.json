@@ -1,0 +1,91 @@
+[
+ {
+  "id": "65f0aa000000000000000016",
+  "host": "redacted",
+  "type": "A",
+  "status": "NOERROR",
+  "statusText": "NOERROR",
+  "records": [
+   "192.0.2.1",
+   "192.0.2.5"
+  ],
+  "answered": true,
+  "timeshift": 5770,
+  "timeshiftSeconds": 5.77,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000017",
+  "host": "redacted",
+  "type": "A",
+  "status": "NOERROR",
+  "statusText": "NOERROR",
+  "records": [
+   "192.0.2.4",
+   "192.0.2.6"
+  ],
+  "answered": true,
+  "timeshift": 26370,
+  "timeshiftSeconds": 26.37,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000018",
+  "host": "redacted",
+  "type": "-",
+  "status": "NXDOMAIN",
+  "statusText": "NXDOMAIN",
+  "records": [],
+  "answered": true,
+  "timeshift": 27430,
+  "timeshiftSeconds": 27.43,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000019",
+  "host": "redacted",
+  "type": "A",
+  "status": "NOERROR",
+  "statusText": "NOERROR",
+  "records": [
+   "192.0.2.7",
+   "192.0.2.8"
+  ],
+  "answered": true,
+  "timeshift": 35180,
+  "timeshiftSeconds": 35.18,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000020",
+  "host": "redacted",
+  "type": "-",
+  "status": "TIMEOUT",
+  "statusText": "-",
+  "records": [],
+  "answered": false,
+  "timeshift": 35630,
+  "timeshiftSeconds": 35.63,
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample",
+  "attributionReason": "redacted",
+  "processId": 2604,
+  "processImage": "redacted"
+ }
+]

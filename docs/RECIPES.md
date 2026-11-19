@@ -31,13 +31,37 @@ client = ThreatZone(api_key="<your-api-key>")
 
 ### 1. Submit a file and wait for completion
 
-**Goal.** Upload a binary for sandbox analysis, poll until every report reaches a terminal
-state, and print the verdict.
+**Goal.** Upload a binary for sandbox analysis, wait for the final verdict, and print what
+the analysis found: the behaviour verdict and its summary, the run notes, the key detections
+and the IoCs.
 
 ```python
+import time
 from pathlib import Path
 
-from threatzone import AnalysisTimeoutError, ThreatZone
+from threatzone import (
+    AnalysisTimeoutError,
+    BadRequestError,
+    ReportUnavailableError,
+    ThreatZone,
+)
+from threatzone.types import IoC, Submission
+
+def wait_for_final(client: ThreatZone, uuid: str, timeout: float = 900) -> Submission:
+    deadline = time.monotonic() + timeout
+    submission = client.wait_for_completion(uuid, timeout=timeout, poll_interval=10)
+    # finalized is None on older servers; the deadline also ends the wait.
+    while submission.finalized is False and time.monotonic() < deadline:
+        time.sleep(10)
+        submission = client.get_submission(uuid)
+    return submission
+
+def get_indicator_iocs(client: ThreatZone, uuid: str) -> list[IoC]:
+    try:
+        return client.get_iocs(uuid, tier="ioc", limit=100).items
+    except BadRequestError:
+        # Servers before IoC tiers reject tier; every row they return is an indicator.
+        return client.get_iocs(uuid, limit=100).items
 
 def submit_and_wait(sample: Path) -> None:
     with ThreatZone() as client:
@@ -49,18 +73,31 @@ def submit_and_wait(sample: Path) -> None:
         print(f"Created submission {created.uuid}")
 
         try:
-            final = client.wait_for_completion(
-                created.uuid,
-                timeout=900,
-                poll_interval=10,
-            )
+            final = wait_for_final(client, created.uuid)
         except AnalysisTimeoutError as exc:
             print(f"Still running after {exc.elapsed:.0f}s. UUID={exc.uuid}")
             return
 
-        print(f"Verdict: {final.level}")
-        for report in final.reports:
-            print(f"  {report.type:<12} -> {report.status} (level={report.level})")
+        print(f"Verdict: {final.level} ({final.score}/100)")
+
+        try:
+            verdict = client.get_verdict(created.uuid)
+            run = client.get_run(created.uuid)
+        except ReportUnavailableError:
+            print("No dynamic report for this submission.")
+        else:
+            print(f"Behaviour verdict: {verdict.tier} ({verdict.score}/100)")
+            print(verdict.summary)
+            for note in run.run_notes:
+                print(f"Run note: {note.text}")
+
+        rows = client.get_indicators(created.uuid, limit=100).items
+        for row in [row for row in rows if row.in_verdict_chain]:
+            print(f"[{row.level} {row.score:g}] {row.name} {', '.join(row.attack_codes)}")
+            print(f"  {row.description}")
+
+        for ioc in get_indicator_iocs(client, created.uuid):
+            print(f"IoC {ioc.type}: {ioc.value}")
 
 submit_and_wait(Path("./sample.exe"))
 ```
@@ -69,8 +106,17 @@ submit_and_wait(Path("./sample.exe"))
 
 - `wait_for_completion()` polls `GET /submissions/:uuid` and checks
   `submission.is_complete()`, which returns `True` only when **every** report has reached
-  `completed` or `error`. If you only need dynamic analysis, branch on
-  `submission.reports` yourself.
+  `completed` or `error`. Later analysis jobs, for example of the dropped files, can still
+  add indicators, IoCs and artifacts and change the score. Wait for
+  `submission.finalized` before you read them.
+- `final.level` and `final.score` are the submission verdict: static analysis, YARA and the
+  behaviour run together. `get_verdict()` describes the behaviour run alone, so the two can
+  differ.
+- Show the `text` of a run note. `note.code` is a stable code for automation.
+- `in_verdict_chain` marks the detections that decided the verdict. `tier="ioc"` leaves out
+  the values that only strings found in the files hold; those are never exported. Servers
+  before the release that adds IoC tiers reject `tier` with `BadRequestError`, so
+  `get_indicator_iocs()` then reads the list without it.
 - Use `create_static_submission()` for static-only analysis, `create_cdr_submission()` for
   CDR sanitization, and `create_open_in_browser_submission(url=...)` for
   URL + browser dynamic analysis.

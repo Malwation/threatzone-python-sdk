@@ -1,0 +1,26 @@
+[
+ {
+  "id": "65f0aa000000000000000022",
+  "host": "redacted",
+  "ip": "192.0.2.1",
+  "port": 80,
+  "country": "US",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ },
+ {
+  "id": "65f0aa000000000000000023",
+  "host": "redacted",
+  "ip": "192.0.2.2",
+  "port": 443,
+  "country": "GB",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sample_child",
+  "attributionReason": "redacted",
+  "processId": 1624,
+  "processImage": "redacted"
+ }
+]

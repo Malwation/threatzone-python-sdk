@@ -1,0 +1,37 @@
+{
+ "observables": [
+  {
+   "kind": "domain",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "domain",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  },
+  {
+   "kind": "domain",
+   "value": "redacted",
+   "count": 1,
+   "display": "redacted",
+   "host": "redacted",
+   "detail": null,
+   "source": "redacted",
+   "secret": false
+  }
+ ],
+ "facts": [],
+ "total": 24050,
+ "truncated": false
+}

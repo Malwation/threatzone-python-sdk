@@ -1,0 +1,38 @@
+[
+ {
+  "id": "65f0aa000000000000000004",
+  "host": "redacted",
+  "ip": "192.0.2.6",
+  "port": 80,
+  "country": "US",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ },
+ {
+  "id": "65f0aa000000000000000005",
+  "host": "redacted",
+  "ip": "192.0.2.7",
+  "port": 443,
+  "country": "US",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ },
+ {
+  "id": "65f0aa000000000000000006",
+  "host": "redacted",
+  "ip": "192.0.2.2",
+  "port": 443,
+  "country": "US",
+  "sourceScope": "submission_ip_scoped",
+  "attribution": "sensor_only",
+  "attributionReason": null,
+  "processId": null,
+  "processImage": null
+ }
+]

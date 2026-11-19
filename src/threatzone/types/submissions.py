@@ -78,13 +78,13 @@ class SubmissionOverviewJobs(BaseModel):
     failed: int
     skipped: int
     finished: int
-    completed: int = 0
-    """Deprecated alias of ``finished`` (always equal).
-
-    Kept for backward compatibility with integrations that read
-    ``overview.jobs.completed``; new code should use ``finished``. The value is
-    forced to mirror ``finished`` after validation regardless of any incoming
-    ``completed`` value.
+    completed: int = Field(
+        default=0,
+        deprecated="completed is removed from the API in its next release. Read finished.",
+    )
+    """Deprecated: read ``finished``. Always equal to ``finished``: the value is set from
+    ``finished`` after validation, whatever ``completed`` the server sends. Removed from the
+    API in its next release.
     """
 
     @model_validator(mode="after")
@@ -191,7 +191,12 @@ class ScoreBreakdown(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    deciding_layer: ScoreLayer = Field(alias="decidingLayer")
+    deciding_layer: ScoreLayer | None = Field(
+        default=None,
+        alias="decidingLayer",
+        deprecated="deciding_layer is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     verdict: str
     score: float
     cap: float | None = None
@@ -234,6 +239,12 @@ class Submission(BaseModel):
     ``None`` for a pure URL submission, before the overview exists, when the
     stored score does not come from the current score rule, and on older servers.
     """
+    finalized: bool | None = None
+    """``True`` after the platform stamps the final score. While ``False``, ``score`` and
+    ``level`` can still change, and analysis jobs can still add indicators, IoCs and
+    artifacts. The platform stamps only submissions updated in the last 24 hours, so an older
+    submission can keep ``False``: poll with a timeout. Only ``get_submission()`` sends it;
+    ``None`` on older servers."""
 
     def is_complete(self) -> bool:
         """Check if all reports have completed."""

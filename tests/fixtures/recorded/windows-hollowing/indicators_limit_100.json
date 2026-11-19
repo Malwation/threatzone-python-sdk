@@ -1,0 +1,467 @@
+{
+ "items": [
+  {
+   "id": "65f0aa000000000000000005",
+   "source": "dynamic_scan",
+   "name": "redacted",
+   "description": "redacted",
+   "summary": "redacted",
+   "category": [
+    "injection"
+   ],
+   "level": "malicious",
+   "score": 100,
+   "pids": [
+    1624,
+    3300
+   ],
+   "attackCodes": [
+    "T1055",
+    "redacted",
+    "redacted"
+   ],
+   "attemptedAttackCodes": [],
+   "eventIds": [
+    23773,
+    23804,
+    23805,
+    23828,
+    23830
+   ],
+   "syscallLineNumbers": [
+    23774,
+    23805,
+    23806,
+    23829,
+    23831
+   ],
+   "author": "system",
+   "scoreMaximum": 100,
+   "whyMatched": "redacted",
+   "inVerdictChain": true,
+   "pidGens": [
+    90,
+    91
+   ],
+   "ruleSource": "redacted",
+   "whatHappened": "redacted",
+   "whyItMatters": "redacted",
+   "whyThisTier": "redacted",
+   "notObserved": [],
+   "outcome": "",
+   "scoreNote": "redacted",
+   "scoreFactors": [
+    "redacted",
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "scoreResult": 100,
+   "scoreCap": null,
+   "related": [
+    {
+     "eventId": 23857,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 23870,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 28100,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    }
+   ],
+   "actor": {
+    "image": "redacted",
+    "pid": 1624,
+    "pidGen": 90,
+    "lineage": "redacted"
+   },
+   "target": {
+    "kind": "process",
+    "value": "redacted"
+   },
+   "tOffsetS": 80.3,
+   "spanS": 0.9,
+   "occurrences": 1
+  },
+  {
+   "id": "65f0aa000000000000000006",
+   "source": "dynamic_scan",
+   "name": "redacted",
+   "description": "redacted",
+   "summary": "redacted",
+   "category": [
+    "stealer"
+   ],
+   "level": "malicious",
+   "score": 100,
+   "pids": [
+    1624
+   ],
+   "attackCodes": [
+    "T1016",
+    "T1071",
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "attemptedAttackCodes": [
+    "redacted"
+   ],
+   "eventIds": [
+    31358,
+    33390,
+    33498,
+    34461,
+    35210
+   ],
+   "syscallLineNumbers": [
+    31359,
+    33391,
+    33499,
+    34462,
+    35211
+   ],
+   "author": "system",
+   "scoreMaximum": 100,
+   "whyMatched": "redacted",
+   "inVerdictChain": false,
+   "pidGens": [
+    90
+   ],
+   "ruleSource": "redacted",
+   "whatHappened": "redacted",
+   "whyItMatters": "redacted",
+   "whyThisTier": "redacted",
+   "notObserved": [],
+   "outcome": "observed",
+   "scoreNote": "redacted",
+   "scoreFactors": [
+    "redacted",
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "scoreResult": 100,
+   "scoreCap": null,
+   "related": [
+    {
+     "eventId": 31358,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 33498,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 34461,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 35210,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 37753,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    }
+   ],
+   "actor": {
+    "image": "redacted",
+    "pid": 1624,
+    "pidGen": 90,
+    "lineage": "redacted"
+   },
+   "target": {
+    "kind": "other",
+    "value": "redacted"
+   },
+   "tOffsetS": 84.5,
+   "spanS": 4.1,
+   "occurrences": 1
+  },
+  {
+   "id": "65f0aa000000000000000007",
+   "source": "dynamic_scan",
+   "name": "redacted",
+   "description": "redacted",
+   "summary": "redacted",
+   "category": [
+    "injection"
+   ],
+   "level": "malicious",
+   "score": 70,
+   "pids": [
+    3036,
+    3300,
+    4168
+   ],
+   "attackCodes": [
+    "T1055"
+   ],
+   "attemptedAttackCodes": [],
+   "eventIds": [
+    28153,
+    28179,
+    32018,
+    32022,
+    42249
+   ],
+   "syscallLineNumbers": [
+    28154,
+    28180,
+    32019,
+    32023,
+    42250
+   ],
+   "author": "system",
+   "scoreMaximum": 100,
+   "whyMatched": "redacted",
+   "inVerdictChain": false,
+   "pidGens": [
+    91,
+    96,
+    101
+   ],
+   "ruleSource": "redacted",
+   "whatHappened": "redacted",
+   "whyItMatters": "redacted",
+   "whyThisTier": "redacted",
+   "notObserved": [
+    "redacted",
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "outcome": "",
+   "scoreNote": "redacted",
+   "scoreFactors": [],
+   "scoreResult": null,
+   "scoreCap": null,
+   "related": [
+    {
+     "eventId": 32022,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 42254,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    },
+    {
+     "eventId": 44206,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    }
+   ],
+   "actor": {
+    "image": "redacted",
+    "pid": 3300,
+    "pidGen": 91,
+    "lineage": "redacted"
+   },
+   "target": {
+    "kind": "process",
+    "value": "redacted"
+   },
+   "tOffsetS": 81.2,
+   "spanS": 48,
+   "occurrences": 6
+  },
+  {
+   "id": "65f0aa000000000000000008",
+   "source": "dynamic_scan",
+   "name": "redacted",
+   "description": "redacted",
+   "summary": "redacted",
+   "category": [
+    "rat_c2"
+   ],
+   "level": "malicious",
+   "score": 70,
+   "pids": [
+    1624
+   ],
+   "attackCodes": [
+    "redacted"
+   ],
+   "attemptedAttackCodes": [],
+   "eventIds": [
+    37753,
+    49799,
+    58463
+   ],
+   "syscallLineNumbers": [
+    37754,
+    49800,
+    58464
+   ],
+   "author": "system",
+   "scoreMaximum": 100,
+   "whyMatched": "redacted",
+   "inVerdictChain": false,
+   "pidGens": [
+    90
+   ],
+   "ruleSource": "redacted",
+   "whatHappened": "redacted",
+   "whyItMatters": "redacted",
+   "whyThisTier": "redacted",
+   "notObserved": [
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "outcome": "",
+   "scoreNote": "redacted",
+   "scoreFactors": [],
+   "scoreResult": null,
+   "scoreCap": null,
+   "related": [],
+   "actor": {
+    "image": "redacted",
+    "pid": 1624,
+    "pidGen": 90,
+    "lineage": "redacted"
+   },
+   "target": {
+    "kind": "domain",
+    "value": "redacted"
+   },
+   "tOffsetS": 88.6,
+   "spanS": null,
+   "occurrences": 1
+  },
+  {
+   "id": "65f0aa000000000000000009",
+   "source": "dynamic_scan",
+   "name": "redacted",
+   "description": "redacted",
+   "summary": "redacted",
+   "category": [
+    "stealer"
+   ],
+   "level": "malicious",
+   "score": 70,
+   "pids": [
+    1624
+   ],
+   "attackCodes": [
+    "redacted"
+   ],
+   "attemptedAttackCodes": [],
+   "eventIds": [
+    22388
+   ],
+   "syscallLineNumbers": [
+    22389
+   ],
+   "author": "system",
+   "scoreMaximum": 100,
+   "whyMatched": "redacted",
+   "inVerdictChain": false,
+   "pidGens": [
+    90
+   ],
+   "ruleSource": "redacted",
+   "whatHappened": "redacted",
+   "whyItMatters": "redacted",
+   "whyThisTier": "redacted",
+   "notObserved": [
+    "redacted",
+    "redacted",
+    "redacted"
+   ],
+   "outcome": "redacted",
+   "scoreNote": "redacted",
+   "scoreFactors": [],
+   "scoreResult": null,
+   "scoreCap": null,
+   "related": [
+    {
+     "eventId": 22388,
+     "signalId": "redacted",
+     "text": "redacted",
+     "tOffsetS": null,
+     "actor": null
+    }
+   ],
+   "actor": {
+    "image": "redacted",
+    "pid": 1624,
+    "pidGen": 90,
+    "lineage": "redacted"
+   },
+   "target": {
+    "kind": "api",
+    "value": "redacted"
+   },
+   "tOffsetS": 78.9,
+   "spanS": null,
+   "occurrences": 1
+  },
+  {
+   "id": "",
+   "source": "yara_scanner",
+   "name": "redacted",
+   "description": "redacted",
+   "category": [
+    "yara_scanner"
+   ],
+   "level": "benign",
+   "score": 30,
+   "pids": [],
+   "attackCodes": [],
+   "eventIds": [],
+   "syscallLineNumbers": [],
+   "author": "system",
+   "scoreMaximum": 100,
+   "findingSource": "yara_scanner",
+   "artifacts": [
+    "65f0aa000000000000000001"
+   ]
+  }
+ ],
+ "total": 38,
+ "levels": {
+  "malicious": 5,
+  "suspicious": 1,
+  "benign": 32
+ },
+ "page": 1,
+ "limit": 100,
+ "totalPages": 1
+}

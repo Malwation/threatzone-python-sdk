@@ -901,6 +901,15 @@ class TestIndicatorsSurface:
         params = _call_params(mock)
         assert params == {"type": "domain", "page": 2, "limit": 50}
 
+    def test_get_iocs_with_tier(self, api_key: str, sample_iocs_response: dict[str, Any]) -> None:
+        sample_iocs_response["items"][0].update({"tier": "ioc", "ports": [443]})
+        ctx, mock = _patched_client(_make_response(200, sample_iocs_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            iocs = client.get_iocs("sub-789", tier="ioc")
+        assert _call_params(mock) == {"tier": "ioc"}
+        assert iocs.items[0].tier == "ioc"
+        assert iocs.items[0].ports == [443]
+
     def test_get_iocs_403(self, api_key: str) -> None:
         ctx, _ = _patched_client(_make_response(403, {"message": "denied"}))
         with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(PermissionDeniedError):

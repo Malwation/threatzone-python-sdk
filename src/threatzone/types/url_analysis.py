@@ -27,9 +27,11 @@ UrlScoreIndicatorDisposition = (
         "no_match",
         "not_measured",
         "unavailable",
+        "other_url",
     ]
     | str
 )
+UrlScoreIndicatorLevel = Literal["malicious", "suspicious", "benign"] | str
 UrlScoreVerdict = Literal["unknown", "benign", "suspicious", "malicious"] | str
 UrlScorePass = Literal["submit", "final"] | str
 UrlScoreCreditScope = Literal["heuristic", "all"] | str
@@ -46,6 +48,10 @@ UrlDownloadInitiator = Literal["navigation", "script", "unknown"] | str
 UrlDownloadLimitReason = Literal["too_large", "run_bytes_exceeded", "file_count_exceeded"] | str
 UrlScoreEvidenceFactKind = Literal["observed", "would_confirm"] | str
 UrlSimilarPageDimension = Literal["dom", "phash", "favicon", "title", "form", "js", "kit"] | str
+UrlAnalysisPrivacyUnavailableReason = (
+    Literal["collection_failed", "no_network", "page_not_loaded"] | str
+)
+UrlAnalysisConsentState = Literal["no_banner", "before_consent"] | str
 
 
 class UrlAnalysisThreatStatus(BaseModel):
@@ -87,7 +93,14 @@ class UrlAnalysisIpInfo(BaseModel):
     country: str | None = None
     isp: str | None = None
     organization: str | None = None
-    threat_status: UrlAnalysisThreatStatus = Field(alias="threatStatus")
+    threat_status: UrlAnalysisThreatStatus | None = Field(
+        default=None,
+        alias="threatStatus",
+        deprecated=(
+            "threat_status is removed from the API in its next release. "
+            "Read UrlAnalysisResponse.threat_analysis."
+        ),
+    )
     """Deprecated: no source writes it. The verdict is always ``unknown``. Read
     ``UrlAnalysisResponse.threat_analysis`` for verdicts."""
 
@@ -262,6 +275,22 @@ class UrlAnalysisPrivacyFactor(BaseModel):
     detail: str | None = None
 
 
+class UrlAnalysisPrivacyContext(BaseModel):
+    """Measurement context of the privacy score."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    region: str | None = None
+    """Region of the browser egress that the score was measured from. ``None`` when it is
+    not known."""
+    consent_state: UrlAnalysisConsentState = Field(alias="consentState")
+    """``no_banner``: the page showed no consent banner. ``before_consent``: the score counts
+    only what the page did before the analysis accepted a consent banner."""
+    excluded_after_consent: int = Field(alias="excludedAfterConsent")
+    """Observations first seen after the analysis accepted a consent banner. The score does
+    not count them."""
+
+
 class UrlAnalysisVerdictProvenance(BaseModel):
     """How the final verdict was produced."""
 
@@ -274,15 +303,32 @@ class UrlAnalysisVerdictProvenance(BaseModel):
     pass_: str = Field(alias="pass")
 
 
+class UrlAnalysisImpersonationEvidence(BaseModel):
+    """A finding that ties the analysed host to the impersonated brand."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str
+    technique: str
+    """For example ``homoglyph`` or ``tld-swap``. Treat an unknown value as a generic domain
+    resemblance."""
+    matched_token: str | None = Field(default=None, alias="matchedToken")
+    compared_domain: str | None = Field(default=None, alias="comparedDomain")
+
+
 class UrlAnalysisImpersonationTarget(BaseModel):
     """Brand the analysed page most likely impersonates."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     brand_name: str = Field(alias="brandName")
+    display_name: str | None = Field(default=None, alias="displayName")
+    """Human-readable name of the brand. ``None`` on older reports and servers."""
     canonical_domain: str | None = Field(default=None, alias="canonicalDomain")
     signals: list[str] = Field(default_factory=list)
     confidence: str
+    evidence: list[UrlAnalysisImpersonationEvidence] = Field(default_factory=list)
+    """Empty when the report has no structured findings and on older servers."""
 
 
 class UrlAnalysisCompleteness(BaseModel):
@@ -304,9 +350,18 @@ class UrlAnalysisBrowserSnapshot(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    job_id: str = Field(alias="jobId")
-    revision: str
-    """The same value as ``UrlAnalysisBrowserSection.revision``."""
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
+    revision: str | None = Field(
+        default=None,
+        deprecated="revision is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release. The same value as
+    ``UrlAnalysisBrowserSection.revision``."""
     sections: list[UrlAnalysisBrowserSectionName | str] = Field(default_factory=list)
     """Section names for ``get_url_analysis_browser_section()``."""
 
@@ -358,6 +413,10 @@ class UrlAnalysisSession(BaseModel):
     vnc_available: bool = Field(alias="vncAvailable")
     report_available: bool = Field(alias="reportAvailable")
     started_at: int | None = Field(default=None, alias="startedAt")
+    recording_started_at: int | None = Field(default=None, alias="recordingStartedAt")
+    """Unix milliseconds of the first frame of the session recording. Subtract it from an
+    event time to find the video position of the event. ``None`` when no recording started
+    and on older servers."""
     ready_at: int | None = Field(default=None, alias="readyAt")
     expires_at: int | None = Field(default=None, alias="expiresAt")
     finished_at: int | None = Field(default=None, alias="finishedAt")
@@ -394,7 +453,12 @@ class UrlAnalysisResponse(BaseModel):
 
     level: ThreatLevel
     status: ReportStatusValue
-    job_id: str | None = Field(default=None, alias="jobId")
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     general_info: UrlAnalysisGeneralInfo = Field(alias="generalInfo")
     screenshot: UrlAnalysisScreenshot
     ip_info: UrlAnalysisIpInfo | None = Field(default=None, alias="ipInfo")
@@ -403,7 +467,13 @@ class UrlAnalysisResponse(BaseModel):
     ssl_certificate: UrlAnalysisSslCertificate | None = Field(default=None, alias="sslCertificate")
     # Free-form: header names are not normalised by the API.
     response_headers: dict[str, Any] | None = Field(default=None, alias="responseHeaders")
-    extracted_file: UrlAnalysisExtractedFile | None = Field(default=None, alias="extractedFile")
+    extracted_file: UrlAnalysisExtractedFile | None = Field(
+        default=None,
+        alias="extractedFile",
+        deprecated=(
+            "extracted_file is removed from the API in its next release. Read downloaded_files."
+        ),
+    )
     """Deprecated: never populated; always None. Use downloaded_files."""
     downloaded_files: list[UrlAnalysisDownloadedFile] = Field(
         default_factory=list, alias="downloadedFiles"
@@ -422,9 +492,22 @@ class UrlAnalysisResponse(BaseModel):
     privacy_breakdown: list[UrlAnalysisPrivacyFactor] | None = Field(
         default=None, alias="privacyBreakdown"
     )
-    verdict_provenance: UrlAnalysisVerdictProvenance | None = Field(
-        default=None, alias="verdictProvenance"
+    privacy_unavailable_reason: UrlAnalysisPrivacyUnavailableReason | None = Field(
+        default=None, alias="privacyUnavailableReason"
     )
+    """Why ``privacy_score`` is ``None``: ``collection_failed``, ``no_network`` or
+    ``page_not_loaded``. ``None`` when a score exists and on older reports and servers."""
+    privacy_provisional: bool | None = Field(default=None, alias="privacyProvisional")
+    """``True`` when the browser collection was partial, so ``privacy_score`` can change on a
+    complete capture. ``None`` on older servers."""
+    privacy_context: UrlAnalysisPrivacyContext | None = Field(default=None, alias="privacyContext")
+    """``None`` when no privacy score was measured and on older reports and servers."""
+    verdict_provenance: UrlAnalysisVerdictProvenance | None = Field(
+        default=None,
+        alias="verdictProvenance",
+        deprecated="verdict_provenance is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     impersonation_target: UrlAnalysisImpersonationTarget | None = Field(
         default=None, alias="impersonationTarget"
     )
@@ -496,10 +579,32 @@ class UrlScoreIndicator(BaseModel):
     reason: str | None = None
     availability: UrlScoreIndicatorAvailability
     confidence: UrlScoreIndicatorConfidence
-    original_rule_score: float = Field(alias="originalRuleScore")
-    weighted_points: float = Field(alias="weightedPoints")
+    original_rule_score: float | None = Field(
+        default=None,
+        alias="originalRuleScore",
+        deprecated="original_rule_score is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
+    weighted_points: float | None = Field(
+        default=None,
+        alias="weightedPoints",
+        deprecated="weighted_points is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     disposition: UrlScoreIndicatorDisposition
-    suppressed_by: str | None = Field(default=None, alias="suppressedBy")
+    level: UrlScoreIndicatorLevel | None = None
+    """``malicious`` or ``suspicious`` when the rule matched, ``benign`` when it was measured
+    with no match. ``None`` when the rule was not measured or was unavailable, and on older
+    explanations and servers."""
+    suppressed_by: str | None = Field(
+        default=None,
+        alias="suppressedBy",
+        deprecated="suppressed_by is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
+    artifact_ids: list[str] | None = Field(default=None, alias="artifactIds")
+    """Artifact IDs of the downloaded files that the indicator is about. ``None`` on older
+    explanations and servers."""
     checked_url: str | None = Field(default=None, alias="checkedUrl")
     """The URL that the indicator checked. Set from explanation schema version 2."""
     evidence_refs: list[UrlScoreEvidenceRef] = Field(default_factory=list, alias="evidenceRefs")
@@ -537,6 +642,12 @@ class UrlScoreAggregation(BaseModel):
     score_after_clamp: float = Field(alias="scoreAfterClamp")
     rounding_adjustment: float = Field(alias="roundingAdjustment")
     impersonation_floor_adjustment: float = Field(alias="impersonationFloorAdjustment")
+    band_adjustment: float | None = Field(default=None, alias="bandAdjustment")
+    """Points that moved the shown score into the band of the final verdict. ``None`` on
+    older explanations and servers."""
+    exempt_points: float | None = Field(default=None, alias="exemptPoints")
+    """Points that reputation credits never reduce, such as a high-confidence malicious
+    download. ``None`` on older explanations and servers."""
 
 
 class UrlScoreVerdictAdjustment(BaseModel):
@@ -558,10 +669,26 @@ class UrlScoreExplanation(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    schema_version: int = Field(alias="schemaVersion")
-    scoring_version: str = Field(alias="scoringVersion")
+    schema_version: int | None = Field(
+        default=None,
+        alias="schemaVersion",
+        deprecated="schema_version is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
+    scoring_version: str | None = Field(
+        default=None,
+        alias="scoringVersion",
+        deprecated="scoring_version is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     job_id: str = Field(alias="jobId")
-    pass_: UrlScorePass = Field(alias="pass")
+    """``get_url_analysis_indicator_evidence()`` sends it to the evidence route."""
+    pass_: UrlScorePass | None = Field(
+        default=None,
+        alias="pass",
+        deprecated="pass_ is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     # The evidence route compares this text exactly, so the SDK keeps the server text.
     scored_at: str = Field(alias="scoredAt")
     browser_snapshot: UrlScoreBrowserSnapshot | None = Field(default=None, alias="browserSnapshot")

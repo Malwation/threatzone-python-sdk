@@ -1,4 +1,4 @@
-"""Deprecated SDK parameters warn and keep working."""
+"""Deprecated SDK parameters and fields warn and keep working."""
 
 from __future__ import annotations
 
@@ -10,9 +10,18 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
-from threatzone import AsyncThreatZone, ThreatZone
-from threatzone.types import UrlAnalysisIpInfo, UrlAnalysisResponse
+from threatzone import AsyncThreatZone, ThreatZone, types
+from threatzone.types import (
+    IndicatorRelated,
+    IoC,
+    RunNote,
+    SubmissionOverviewJobs,
+    UrlAnalysisIpInfo,
+    UrlAnalysisResponse,
+    VerdictDecisive,
+)
 
 UUID = "00000000-0000-4000-8000-000000000001"
 _PAGE = {"items": [], "total": 0, "page": 1, "limit": 20, "totalPages": 0}
@@ -112,5 +121,107 @@ def test_deprecated_report_fields_still_parse() -> None:
             "threatStatus": {"verdict": "unknown", "title": "", "description": ""},
         }
     )
-    assert info.threat_status.verdict == "unknown"
+    with pytest.warns(DeprecationWarning, match="threat_status"):
+        status = info.threat_status
+    assert status is not None
+    assert status.verdict == "unknown"
     assert UrlAnalysisResponse.model_fields["extracted_file"].default is None
+
+
+def _deprecated_fields() -> list[tuple[type[BaseModel], str]]:
+    found = []
+    for name in dir(types):
+        model = getattr(types, name)
+        if not (isinstance(model, type) and issubclass(model, BaseModel)):
+            continue
+        own = vars(model).get("__annotations__", {})
+        for field_name, field in model.model_fields.items():
+            if field.deprecated and field_name in own:
+                found.append((model, field_name))
+    return found
+
+
+_DEPRECATED = _deprecated_fields()
+
+
+def test_api_deprecations_are_marked() -> None:
+    marked = {f"{model.__name__}.{field}" for model, field in _DEPRECATED}
+    assert {
+        "Indicator.rule_source",
+        "Indicator.score_factors",
+        "Indicator.score_result",
+        "Indicator.score_cap",
+        "Indicator.finding_source",
+        "Indicator.author",
+        "Indicator.score_maximum",
+        "MitreTechniqueUsage.score_maximum",
+        "NetworkThreat.metadata",
+        "SubmissionOverviewJobs.completed",
+        "IndicatorRelated.signal_id",
+        "VerdictDecisive.source",
+        "Verdict.format",
+        "ScoreBreakdown.deciding_layer",
+        "IoC.raw_type",
+        "KillchainDroppedFile.raw_path",
+        "KillchainDroppedFile.path_authority",
+        "KillchainInventoryCoverage.counts",
+        "KillchainProcess.tid",
+        "Process.tid",
+        "Artifact.process_attribution",
+        "NetworkEndpoint.max_alert_severity",
+        "UrlAnalysisResponse.job_id",
+        "UrlAnalysisResponse.verdict_provenance",
+        "UrlAnalysisResponse.extracted_file",
+        "UrlAnalysisIpInfo.threat_status",
+        "UrlScoreIndicator.weighted_points",
+        "UrlScoreExplanation.scoring_version",
+    } <= marked
+
+
+@pytest.mark.parametrize(
+    ("model", "field_name"), _DEPRECATED, ids=[f"{m.__name__}.{f}" for m, f in _DEPRECATED]
+)
+def test_deprecated_field_is_optional_and_documented(
+    model: type[BaseModel], field_name: str
+) -> None:
+    assert not model.model_fields[field_name].is_required()
+    docstring = _field_docstring(model, field_name)
+    assert docstring is not None
+    assert docstring.startswith("Deprecated:")
+
+
+@pytest.mark.parametrize(
+    ("model", "field_name"), _DEPRECATED, ids=[f"{m.__name__}.{f}" for m, f in _DEPRECATED]
+)
+def test_deprecated_field_warns_on_read(model: type[BaseModel], field_name: str) -> None:
+    instance = model.model_construct()
+    with pytest.warns(DeprecationWarning, match=field_name):
+        getattr(instance, field_name)
+
+
+def test_fields_the_api_removes_next_may_be_absent() -> None:
+    related = IndicatorRelated.model_validate({"eventId": 7, "text": "Read the key."})
+    decisive = VerdictDecisive.model_validate({"text": "Child process image replaced."})
+    note = RunNote.model_validate({"text": "The sample exited early."})
+    assert related.model_dump()["signal_id"] is None
+    assert decisive.model_dump()["source"] is None
+    assert note.code is None
+
+
+def test_dump_of_a_deprecated_field_does_not_warn() -> None:
+    row = IoC.model_validate(
+        {"type": "ip", "value": "203.0.113.7", "artifacts": [], "rawType": "IP"}
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert row.model_dump(by_alias=True)["rawType"] == "IP"
+        repr(row)
+
+
+def test_jobs_mirror_completed_without_a_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        jobs = SubmissionOverviewJobs.model_validate(
+            {"total": 3, "succeeded": 2, "failed": 1, "skipped": 0, "finished": 3, "completed": 9}
+        )
+        assert jobs.model_dump()["completed"] == 3

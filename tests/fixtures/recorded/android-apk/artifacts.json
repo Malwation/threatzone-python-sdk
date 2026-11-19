@@ -1,0 +1,23 @@
+{
+ "items": [
+  {
+   "id": "65f0aa000000000000000001",
+   "filename": "redacted",
+   "size": 11959167,
+   "type": "sample",
+   "source": "user_upload",
+   "hashes": {
+    "md5": "11111111111111111111111111111111",
+    "sha1": "2222222222222222222222222222222222222222",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+   },
+   "tags": [],
+   "processAttribution": null,
+   "analysisStatus": "analyzed",
+   "analysisTrigger": "auto",
+   "analysisReason": null,
+   "downloadLink": "redacted"
+  }
+ ],
+ "total": 1
+}

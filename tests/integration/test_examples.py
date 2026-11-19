@@ -58,6 +58,39 @@ def test_recipe_01_submits_malicious_pe(
     assert result.level == "malicious"
 
 
+@pytest.mark.parametrize("server_has_tiers", [True, False])
+def test_recipe_01_reads_iocs_on_every_server(server_has_tiers: bool) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if "tier" in request.url.params and not server_has_tiers:
+            return httpx.Response(
+                400,
+                json={
+                    "statusCode": 400,
+                    "message": "property tier should not exist",
+                    "code": "INVALID_QUERY_PARAM",
+                },
+            )
+        items = [{"type": "ip", "value": "203.0.113.7", "artifacts": []}]
+        page = {"items": items, "total": 1, "page": 1, "limit": 100, "totalPages": 1}
+        return httpx.Response(200, json=page)
+
+    client = ThreatZone(
+        api_key="test-key",
+        base_url="https://fake.threat.zone/public-api",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    iocs = recipe_01_submit_and_wait.get_indicator_iocs(
+        client, "00000000-0000-4000-8000-000000000001"
+    )
+    assert [ioc.value for ioc in iocs] == ["203.0.113.7"]
+    assert [request.url.params.get("tier") for request in seen] == (
+        ["ioc"] if server_has_tiers else ["ioc", None]
+    )
+
+
 def test_recipe_02_url_analysis(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
     target = scenarios.seed_phishing_url(fake_api)
     result = recipe_02_url_analysis.main(sync_client, target)

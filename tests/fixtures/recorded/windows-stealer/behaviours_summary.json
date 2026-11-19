@@ -1,0 +1,105 @@
+{
+ "totalCount": 98786,
+ "firstTimestamp": 1795014627.400109,
+ "lastTimestamp": 1795014804.842117,
+ "byType": [
+  {
+   "value": "redacted",
+   "count": 47726
+  },
+  {
+   "value": "redacted",
+   "count": 44109
+  },
+  {
+   "value": "redacted",
+   "count": 6951
+  }
+ ],
+ "byOperation": [
+  {
+   "value": "redacted",
+   "count": 46059
+  },
+  {
+   "value": "redacted",
+   "count": 29218
+  },
+  {
+   "value": "redacted",
+   "count": 13945
+  },
+  {
+   "value": "redacted",
+   "count": 2867
+  },
+  {
+   "value": "redacted",
+   "count": 2554
+  }
+ ],
+ "byProcess": [
+  {
+   "processId": 3172,
+   "processName": "redacted",
+   "count": 35500,
+   "firstTimestamp": 1795014697.811037,
+   "lastTimestamp": 1795014713.504543
+  },
+  {
+   "processId": 4256,
+   "processName": "redacted",
+   "count": 26214,
+   "firstTimestamp": 1795014663.37465,
+   "lastTimestamp": 1795014804.842117
+  },
+  {
+   "processId": 2604,
+   "processName": "redacted",
+   "count": 20845,
+   "firstTimestamp": 1795014627.400109,
+   "lastTimestamp": 1795014663.435511
+  },
+  {
+   "processId": 3064,
+   "processName": "redacted",
+   "count": 9029,
+   "firstTimestamp": 1795014709.5062,
+   "lastTimestamp": 1795014713.202641
+  },
+  {
+   "processId": 5108,
+   "processName": "redacted",
+   "count": 3437,
+   "firstTimestamp": 1795014702.742332,
+   "lastTimestamp": 1795014704.139342
+  }
+ ],
+ "exits": [
+  {
+   "processId": 2604,
+   "eventId": 24235,
+   "status": "redacted"
+  },
+  {
+   "processId": 4180,
+   "eventId": 57596,
+   "status": "redacted"
+  },
+  {
+   "processId": 5108,
+   "eventId": 72376,
+   "status": "redacted"
+  },
+  {
+   "processId": 3064,
+   "eventId": 100543,
+   "status": "redacted"
+  },
+  {
+   "processId": 3172,
+   "eventId": 101312,
+   "status": "redacted"
+  }
+ ]
+}

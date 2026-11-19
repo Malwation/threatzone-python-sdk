@@ -68,7 +68,11 @@ class Process(BaseModel):
     origin: ProcessOrigin | None = None
     """Who started the process. ``None`` on reports that do not record it and on older
     servers."""
-    tid: int
+    tid: int | None = Field(
+        default=None,
+        deprecated="tid is removed from the API in its next release.",
+    )
+    """Deprecated: ``0`` on every row. Removed from the API in its next release."""
     name: str | None = None
     cmd: str | None = None
     cwd: str | None = None
@@ -108,7 +112,11 @@ class ProcessTreeNode(BaseModel):
     origin: ProcessOrigin | None = None
     """Who started the process. ``None`` on reports that do not record it and on older
     servers."""
-    tid: int
+    tid: int | None = Field(
+        default=None,
+        deprecated="tid is removed from the API in its next release.",
+    )
+    """Deprecated: ``0`` on every row. Removed from the API in its next release."""
     name: str | None = None
     cmd: str | None = None
     cwd: str | None = None

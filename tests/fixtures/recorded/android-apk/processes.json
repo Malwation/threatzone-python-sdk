@@ -1,0 +1,53 @@
+{
+ "items": [
+  {
+   "pid": 6415,
+   "ppid": 0,
+   "pidGen": 1,
+   "origin": "sample",
+   "tid": 0,
+   "name": "redacted",
+   "cmd": "redacted",
+   "cwd": "",
+   "image": "redacted",
+   "method": "fork",
+   "timestamp": 1795014745,
+   "exitTimestamp": null,
+   "network": {
+    "items": [],
+    "count": 0
+   },
+   "events": {
+    "items": [
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     },
+     {
+      "type": "api_calls",
+      "path": "redacted",
+      "mode": "redacted"
+     }
+    ],
+    "count": 89
+   }
+  }
+ ],
+ "total": 1
+}

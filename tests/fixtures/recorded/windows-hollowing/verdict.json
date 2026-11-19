@@ -1,0 +1,150 @@
+{
+ "format": "windows-v2-worker-1",
+ "score": 100,
+ "tier": "Malicious",
+ "summary": "redacted",
+ "narrative": {
+  "headline": "redacted",
+  "sequence": [
+   {
+    "seq": 3091,
+    "tOffsetS": 0,
+    "pid": 2736,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 12751,
+    "tOffsetS": 35.6,
+    "pid": 1624,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 22388,
+    "tOffsetS": 78.9,
+    "pid": 1624,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 22810,
+    "tOffsetS": 79,
+    "pid": 1624,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 23857,
+    "tOffsetS": 80.3,
+    "pid": 1624,
+    "image": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "decisive": [
+   {
+    "source": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "tierReason": "redacted",
+  "notObserved": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "wouldRaise": [],
+  "wouldLower": [],
+  "coverageNote": "redacted",
+  "text": "redacted"
+ },
+ "story": {
+  "summary": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "truncated": true,
+  "steps": [
+   {
+    "tOffsetS": 0,
+    "process": {
+     "image": "redacted",
+     "pid": 2736
+    },
+    "category": "execution",
+    "text": "started",
+    "count": 1,
+    "evidenceSeqs": []
+   },
+   {
+    "tOffsetS": 75.1,
+    "process": {
+     "image": "redacted",
+     "pid": 2736
+    },
+    "category": "injection",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     15725,
+     16047
+    ]
+   },
+   {
+    "tOffsetS": 80.3,
+    "process": {
+     "image": "redacted",
+     "pid": 1624
+    },
+    "category": "injection",
+    "text": "redacted",
+    "count": 6,
+    "evidenceSeqs": [
+     23773,
+     23804,
+     23866,
+     23870,
+     40598
+    ]
+   },
+   {
+    "tOffsetS": 80.3,
+    "process": {
+     "image": "redacted",
+     "pid": 1624
+    },
+    "category": "injection",
+    "text": "redacted",
+    "count": 3,
+    "evidenceSeqs": [
+     23773,
+     23804,
+     23866,
+     23870,
+     40598
+    ]
+   },
+   {
+    "tOffsetS": 80.3,
+    "process": {
+     "image": "redacted",
+     "pid": 1624
+    },
+    "category": "execution",
+    "text": "redacted",
+    "count": 3,
+    "evidenceSeqs": [
+     23773,
+     40598,
+     50201
+    ]
+   }
+  ]
+ }
+}

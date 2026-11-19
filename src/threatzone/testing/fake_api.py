@@ -1504,6 +1504,7 @@ class FakeThreatZoneAPI:
             _responses.build_iocs_response(
                 state,
                 type_filter=self._first(query, "type"),
+                tier_filter=self._first(query, "tier"),
                 page=page,
                 limit=limit,
             )

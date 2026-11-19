@@ -1,4 +1,4 @@
-"""Recipe 1: Submit a file, wait for analysis, print verdict.
+"""Recipe 1: Submit a file, wait for the final verdict, print what the analysis found.
 
 Runnable two ways:
 
@@ -15,14 +15,74 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
-from threatzone import AnalysisTimeoutError, ThreatZone
-from threatzone.types import Submission
+from threatzone import (
+    AnalysisTimeoutError,
+    BadRequestError,
+    ReportUnavailableError,
+    ThreatZone,
+)
+from threatzone.types import IoC, Submission
+
+
+def wait_for_final(
+    client: ThreatZone, uuid: str, *, timeout: float = 900, poll_interval: float = 5
+) -> Submission:
+    """Wait until every report is done and the platform stamps the final score.
+
+    ``finalized`` is ``None`` on older servers and can stay ``False`` on a submission last
+    updated more than 24 hours ago, so the timeout always ends the wait.
+    """
+    deadline = time.monotonic() + timeout
+    submission = client.wait_for_completion(uuid, timeout=timeout, poll_interval=poll_interval)
+    while submission.finalized is False and time.monotonic() < deadline:
+        time.sleep(poll_interval)
+        submission = client.get_submission(uuid)
+    return submission
+
+
+def get_indicator_iocs(client: ThreatZone, uuid: str) -> list[IoC]:
+    """Return the IoCs without the values that only strings found in the files hold.
+
+    Servers before the release that adds IoC tiers reject ``tier`` with
+    ``BadRequestError``. Every row they return is an indicator, so read the list without it.
+    """
+    try:
+        return client.get_iocs(uuid, tier="ioc", limit=100).items
+    except BadRequestError:
+        return client.get_iocs(uuid, limit=100).items
+
+
+def print_findings(client: ThreatZone, uuid: str) -> None:
+    """Print the behaviour verdict, the run notes, the key detections and the IoCs."""
+    try:
+        verdict = client.get_verdict(uuid)
+        run = client.get_run(uuid)
+    except ReportUnavailableError:
+        print("No dynamic report for this submission.")
+    else:
+        print(f"Behaviour verdict: {verdict.tier} ({verdict.score}/100)")
+        if verdict.summary:
+            print(verdict.summary)
+        for note in run.run_notes:
+            print(f"Run note: {note.text}")
+
+    rows = client.get_indicators(uuid, limit=100).items
+    key_rows = [row for row in rows if row.in_verdict_chain] or sorted(
+        rows, key=lambda row: row.score, reverse=True
+    )[:5]
+    for row in key_rows:
+        print(f"[{row.level} {row.score:g}] {row.name} {', '.join(row.attack_codes)}")
+        print(f"  {row.summary or row.description}")
+
+    for ioc in get_indicator_iocs(client, uuid):
+        print(f"IoC {ioc.type}: {ioc.value}")
 
 
 def main(client: ThreatZone, sample_path: Path) -> Submission:
-    """Submit a sample, poll until complete, print verdict, return final submission."""
+    """Submit a sample, wait for the final verdict, print the findings, return the submission."""
     created = client.create_sandbox_submission(
         sample_path,
         environment="w10_x64",
@@ -42,14 +102,15 @@ def main(client: ThreatZone, sample_path: Path) -> Submission:
     print(f"Submission (auto-env): {auto.uuid}")
 
     try:
-        final = client.wait_for_completion(created.uuid, timeout=900, poll_interval=5)
+        final = wait_for_final(client, created.uuid)
     except AnalysisTimeoutError as exc:
         print(f"Still running after {exc.elapsed:.0f}s. UUID={exc.uuid}")
         raise
 
-    print(f"Verdict: {final.level}")
+    print(f"Verdict: {final.level} ({final.score}/100)")
     for report in final.reports:
         print(f"  {report.type:<12} -> {report.status} (level={report.level})")
+    print_findings(client, created.uuid)
     return final
 
 

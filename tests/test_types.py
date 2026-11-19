@@ -1024,9 +1024,19 @@ class TestNetworkTypes:
         assert q.type == "A"
         assert q.status == "NOERROR"
 
-    def test_dns_query_rejects_invalid_type(self, sample_dns_query: dict[str, Any]) -> None:
-        with pytest.raises(ValidationError):
-            DnsQuery.model_validate({**sample_dns_query, "type": "AAAAA"})
+    @pytest.mark.parametrize("record_type", ["-", "HTTPS", "SVCB"])
+    def test_dns_query_accepts_any_record_type(
+        self, sample_dns_query: dict[str, Any], record_type: str
+    ) -> None:
+        q = DnsQuery.model_validate(
+            {**sample_dns_query, "type": record_type, "status": "TIMEOUT", "statusText": "-"}
+        )
+        assert q.type == record_type
+
+    def test_dns_query_type_may_be_null_or_absent(self, sample_dns_query: dict[str, Any]) -> None:
+        assert DnsQuery.model_validate({**sample_dns_query, "type": None}).type is None
+        without_type = {k: v for k, v in sample_dns_query.items() if k != "type"}
+        assert DnsQuery.model_validate(without_type).type is None
 
     def test_http_request(self, sample_http_request: dict[str, Any]) -> None:
         h = HttpRequest.model_validate(sample_http_request)

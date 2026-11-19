@@ -76,9 +76,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The fake API supports `get_url_analysis_similar_pages()`, with
   `FakeThreatZoneAPI.register_similar_page()` and the `seed_similar_pages` scenario. Its score
   explanation returns evidence facts and evidence labels.
+- Fields that the API already sends and the SDK dropped: `Submission.finalized`, `IoC.tier`
+  (`IoCTier`: `ioc` or `strings`), `IoC.ports`, `BehavioursResponse.total_exact`,
+  `KillchainDroppedFile.guest_size`, `OverviewSummary.behavior_event_count_available`,
+  `SummaryNetwork.exfil_request_count` / `windows_background_count` /
+  `host_app_background_count`, `NetworkSummary.host_app_background_count`,
+  `NetworkSourceCounts.host_app_background`, `Indicator.url_analysis`
+  (`IndicatorUrlAnalysis`), `UrlAnalysisResponse.privacy_context` /
+  `privacy_provisional` / `privacy_unavailable_reason`,
+  `UrlAnalysisSession.recording_started_at`, `UrlScoreIndicator.level` / `artifact_ids`,
+  `UrlScoreAggregation.band_adjustment` / `exempt_points` and
+  `UrlAnalysisImpersonationTarget.display_name` / `evidence`. Each is `None` (or empty) on
+  older servers.
+- `get_iocs(uuid, tier=...)` filters by tier: `ioc`, `strings` or `all` (the server
+  default). Servers before the release that adds IoC tiers reject `tier` with
+  `BadRequestError`; Recipe 1 and the README then read the list without it. The fake API
+  supports the filter and sends `tier` and `finalized`.
+- A parity test parses recorded staging responses of five runs (shape only) and fails on
+  every key that a model drops.
+
+### Fixed
+
+- `get_dns_queries()` no longer raises `ValidationError` on a query whose record type the
+  sensor did not record. The API sends `type: "-"` for it. `DnsRecordType` now accepts any
+  string, and `DnsQuery.type` is optional.
 
 ### Changed
 
+- The SDK needs `pydantic>=2.7` (for deprecated fields).
+- `IndicatorRelated.signal_id`, `VerdictDecisive.source` and `RunNote.code` are optional, so
+  a response without them parses. Every deprecated field below is optional too.
 - `NetworkSubmissionOnlyAlerts.scope` and `.source` are now `str | None` (default `None`).
   The server sends one analyst sentence for each, or `null`, in place of the codes
   `submission_unattributed` and `pinned_offline_eve`. The SDK no longer fails to parse
@@ -93,6 +120,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UrlAnalysisResponse.extracted_file`: never populated; always `None`. Use
   `downloaded_files`.
 - `UrlAnalysisIpInfo.threat_status`: no source writes it.
+- The API removes these fields in its next release. Reading one now raises a
+  `DeprecationWarning`; docs/TYPES.md lists what to read instead:
+  `Indicator.rule_source`, `score_factors`, `score_result`, `score_cap`, `finding_source`,
+  `author`, `score_maximum`; `MitreTechniqueUsage.score_maximum`;
+  `IndicatorRelated.signal_id`; `VerdictDecisive.source`;
+  `Verdict.format`; `ScoreBreakdown.deciding_layer`; `IoC.raw_type`;
+  `KillchainDroppedFile.raw_path`, `path_authority`, `path_authority_reason`,
+  `source_actor_bound`, `capture_closed`; `KillchainInventoryCoverage.counts`;
+  `KillchainProcess.tid`, `Process.tid`, `ProcessTreeNode.tid`;
+  `Artifact.process_attribution`; `NetworkEndpoint.max_alert_severity`;
+  `NetworkThreat.metadata`; `SubmissionOverviewJobs.completed`;
+  `UrlAnalysisResponse.job_id`, `verdict_provenance`, `extracted_file`;
+  `UrlAnalysisBrowserSnapshot.job_id`, `revision`; `UrlAnalysisIpInfo.threat_status`;
+  `UrlScoreExplanation.schema_version`, `scoring_version`, `pass_`;
+  `UrlScoreIndicator.original_rule_score`, `weighted_points`, `suppressed_by`.
 
 ## 1.1.4
 

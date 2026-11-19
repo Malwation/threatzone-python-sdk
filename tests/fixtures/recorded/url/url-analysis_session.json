@@ -1,0 +1,29 @@
+{
+ "state": "finished",
+ "collectionStatus": "completed",
+ "recordingStatus": "available",
+ "queuePosition": null,
+ "queueReason": null,
+ "vncAvailable": false,
+ "reportAvailable": true,
+ "startedAt": 1795015236399,
+ "readyAt": 1795015251046,
+ "expiresAt": 1795015431046,
+ "finishedAt": 1795015440886,
+ "failureCode": null,
+ "extensionsUsed": 0,
+ "extensionsMax": 3,
+ "stopRequestedAt": null,
+ "sessionConfig": {
+  "deviceProfileId": "desktop-chrome",
+  "networkConfigId": "65f0aa000000000000000014",
+  "networkConfigSource": "admin-default",
+  "networkConfigName": "redacted",
+  "sessionDurationSeconds": 180,
+  "devicePresetId": "65f0aa000000000000000011",
+  "devicePresetName": "Desktop"
+ },
+ "recordingStartedAt": 1795015251796,
+ "link": null,
+ "expired": true
+}

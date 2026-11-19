@@ -1,0 +1,122 @@
+{
+ "format": "windows-v2-worker-1",
+ "score": 13,
+ "tier": "Benign",
+ "summary": "redacted",
+ "narrative": {
+  "headline": "redacted",
+  "sequence": [
+   {
+    "seq": 0,
+    "tOffsetS": -2.3,
+    "pid": 356,
+    "image": "redacted",
+    "text": "redacted"
+   },
+   {
+    "seq": 107669,
+    "tOffsetS": 63.6,
+    "pid": 4164,
+    "image": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "decisive": [
+   {
+    "source": "redacted",
+    "text": "redacted"
+   }
+  ],
+  "tierReason": "redacted",
+  "notObserved": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "wouldRaise": [],
+  "wouldLower": [],
+  "coverageNote": "redacted",
+  "text": "redacted"
+ },
+ "story": {
+  "summary": [
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted",
+   "redacted"
+  ],
+  "truncated": false,
+  "steps": [
+   {
+    "tOffsetS": 0,
+    "process": {
+     "image": "redacted",
+     "pid": 356
+    },
+    "category": "execution",
+    "text": "started",
+    "count": 1,
+    "evidenceSeqs": []
+   },
+   {
+    "tOffsetS": 63.6,
+    "process": {
+     "image": "redacted",
+     "pid": 4164
+    },
+    "category": "execution",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     107657,
+     107669
+    ]
+   },
+   {
+    "tOffsetS": 85.2,
+    "process": {
+     "image": "redacted",
+     "pid": 4164
+    },
+    "category": "file",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     113391,
+     113392
+    ]
+   },
+   {
+    "tOffsetS": 85.2,
+    "process": {
+     "image": "redacted",
+     "pid": 4164
+    },
+    "category": "file",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     113415,
+     113416
+    ]
+   },
+   {
+    "tOffsetS": 85.3,
+    "process": {
+     "image": "redacted",
+     "pid": 4164
+    },
+    "category": "file",
+    "text": "redacted",
+    "count": 1,
+    "evidenceSeqs": [
+     113423,
+     113424
+    ]
+   }
+  ]
+ }
+}

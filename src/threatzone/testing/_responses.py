@@ -218,6 +218,7 @@ def _submission_detail_payload(state: SubmissionState) -> dict[str, Any]:
     breakdown = _live_score_breakdown(state)
     payload["scoreBreakdown"] = breakdown
     payload["score"] = breakdown["score"] if breakdown is not None else None
+    payload["finalized"] = all(r["status"] in ("completed", "error") for r in reports)
     return payload
 
 
@@ -429,11 +430,14 @@ def build_iocs_response(
     type_filter: str | None,
     page: int | None,
     limit: int | None,
+    tier_filter: str | None = None,
 ) -> IoCsResponse:
-    """Build the paginated IoC list response."""
+    """Build the paginated IoC list response. Every seeded IoC is in the ``ioc`` tier."""
     items: list[dict[str, Any]] = []
     for seed in state.iocs:
         if type_filter and seed.type.lower() != type_filter:
+            continue
+        if tier_filter == "strings":
             continue
         items.append(
             {
@@ -441,6 +445,7 @@ def build_iocs_response(
                 "value": seed.value,
                 "artifacts": [state.artifact_ids[0]] if state.artifact_ids else [],
                 "rawType": seed.type,
+                "tier": "ioc",
             }
         )
     total = len(items)
