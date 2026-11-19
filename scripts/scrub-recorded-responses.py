@@ -6,7 +6,8 @@ Usage: scrub-recorded-responses.py <run dir> <fixture dir>
 <run dir> holds one <route>.json per route of one submission, for example
 root.json and network_dns_limit_5.json. Keys, nesting, value types, numbers,
 booleans, nulls, timestamps and short code tokens stay. Every other string (names, paths,
-hosts, URLs, sentences, hashes, IDs and addresses) is replaced. Lists keep their first 5
+hosts, URLs, sentences, hashes, IDs and addresses) is replaced. The WHOIS and certificate dates
+and the geolocation city, which can identify the analysed domain, get fixed values. Lists keep their first 5
 items plus every later item that adds a key path.
 """
 
@@ -94,7 +95,34 @@ NAME_KEYS = {
     "application_name",
     "package_name",
     "packageName",
+    "city",
+    "registrarIanaId",
 }
+
+WHOIS_DATE_KEYS = {"creationDate", "updatedDate", "expirationDate", "whoisCreationDate"}
+CERT_KEYS = {"sslCertificate"}
+CERT_DATE_KEYS = {"renewedAt", "expiresAt"}
+
+
+def fixed_date(v):
+    if isinstance(v, str):
+        return "2000-01-01T00:00:00.000Z" if ISO_RE.match(v) else v
+    if isinstance(v, int) and not isinstance(v, bool):
+        return 946684800
+    return v
+
+
+def scrub_dates(v, key=None):
+    if isinstance(v, dict):
+        return {
+            k: fixed_date(x)
+            if k in WHOIS_DATE_KEYS or (key in CERT_KEYS and k in CERT_DATE_KEYS)
+            else scrub_dates(x, k)
+            for k, x in v.items()
+        }
+    if isinstance(v, list):
+        return [scrub_dates(x, key) for x in v]
+    return v
 
 
 def scrub(v, key=None):
@@ -114,7 +142,7 @@ def main() -> None:
     target.mkdir(parents=True, exist_ok=True)
     for path in sorted(source.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
-        text = json.dumps(scrub(data), indent=1)
+        text = json.dumps(scrub_dates(scrub(data)), indent=1)
         (target / path.name).write_text(text + "\n", encoding="utf-8")
 
 
