@@ -419,7 +419,11 @@ class NetworkThreat(NetworkRowSource):
     timeshift: float
     timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
     """Seconds from the start of the capture. ``None`` when the server does not send it."""
-    metadata: dict[str, list[str]]
+    metadata: dict[str, list[str]] | None = Field(
+        default=None,
+        deprecated="metadata is removed from the API in its next release.",
+    )
+    """Deprecated: the Suricata rule metadata. Removed from the API in its next release."""
     details: dict[str, str | int]
     tls: NetworkThreatTls | None = None
     capture: NetworkThreatCapture | None = None

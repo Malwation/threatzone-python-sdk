@@ -400,6 +400,8 @@ The SDK never sends these `POST` requests again after a read or write timeout.
 ## Indicators and artifacts
 
 ```python
+from threatzone import BadRequestError
+
 uuid = completed.uuid
 
 for row in client.get_indicators(uuid).items:
@@ -414,8 +416,13 @@ for row in client.get_indicators(uuid).items:
     if not row.id:
         print(row.source, row.artifacts)
 
-# tier="ioc" leaves out the values that only strings found in the files hold.
-for ioc in client.get_iocs(uuid, tier="ioc").items:
+# tier="ioc" leaves out the values that only strings found in the files hold. Servers
+# before the release that adds IoC tiers reject tier; every row they return is an IoC.
+try:
+    iocs = client.get_iocs(uuid, tier="ioc").items
+except BadRequestError:
+    iocs = client.get_iocs(uuid).items
+for ioc in iocs:
     print(ioc.type, ioc.value, ioc.ports)
 
 # Filter by the stored source value; an unknown value raises BadRequestError.

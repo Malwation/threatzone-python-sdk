@@ -39,8 +39,13 @@ and the IoCs.
 import time
 from pathlib import Path
 
-from threatzone import AnalysisTimeoutError, ReportUnavailableError, ThreatZone
-from threatzone.types import Submission
+from threatzone import (
+    AnalysisTimeoutError,
+    BadRequestError,
+    ReportUnavailableError,
+    ThreatZone,
+)
+from threatzone.types import IoC, Submission
 
 def wait_for_final(client: ThreatZone, uuid: str, timeout: float = 900) -> Submission:
     deadline = time.monotonic() + timeout
@@ -50,6 +55,13 @@ def wait_for_final(client: ThreatZone, uuid: str, timeout: float = 900) -> Submi
         time.sleep(10)
         submission = client.get_submission(uuid)
     return submission
+
+def get_indicator_iocs(client: ThreatZone, uuid: str) -> list[IoC]:
+    try:
+        return client.get_iocs(uuid, tier="ioc", limit=100).items
+    except BadRequestError:
+        # Servers before IoC tiers reject tier; every row they return is an indicator.
+        return client.get_iocs(uuid, limit=100).items
 
 def submit_and_wait(sample: Path) -> None:
     with ThreatZone() as client:
@@ -84,7 +96,7 @@ def submit_and_wait(sample: Path) -> None:
             print(f"[{row.level} {row.score:g}] {row.name} {', '.join(row.attack_codes)}")
             print(f"  {row.description}")
 
-        for ioc in client.get_iocs(created.uuid, tier="ioc", limit=100).items:
+        for ioc in get_indicator_iocs(client, created.uuid):
             print(f"IoC {ioc.type}: {ioc.value}")
 
 submit_and_wait(Path("./sample.exe"))
@@ -102,7 +114,9 @@ submit_and_wait(Path("./sample.exe"))
   differ.
 - Show the `text` of a run note. `note.code` is a stable code for automation.
 - `in_verdict_chain` marks the detections that decided the verdict. `tier="ioc"` leaves out
-  the values that only strings found in the files hold; those are never exported.
+  the values that only strings found in the files hold; those are never exported. Servers
+  before the release that adds IoC tiers reject `tier` with `BadRequestError`, so
+  `get_indicator_iocs()` then reads the list without it.
 - Use `create_static_submission()` for static-only analysis, `create_cdr_submission()` for
   CDR sanitization, and `create_open_in_browser_submission(url=...)` for
   URL + browser dynamic analysis.

@@ -89,7 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `UrlAnalysisImpersonationTarget.display_name` / `evidence`. Each is `None` (or empty) on
   older servers.
 - `get_iocs(uuid, tier=...)` filters by tier: `ioc`, `strings` or `all` (the server
-  default). The fake API supports the filter and sends `tier` and `finalized`.
+  default). Servers before the release that adds IoC tiers reject `tier` with
+  `BadRequestError`; Recipe 1 and the README then read the list without it. The fake API
+  supports the filter and sends `tier` and `finalized`.
 - A parity test parses recorded staging responses of five runs (shape only) and fails on
   every key that a model drops.
 
@@ -121,12 +123,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The API removes these fields in its next release. Reading one now raises a
   `DeprecationWarning`; docs/TYPES.md lists what to read instead:
   `Indicator.rule_source`, `score_factors`, `score_result`, `score_cap`, `finding_source`,
-  `author`, `score_maximum`; `IndicatorRelated.signal_id`; `VerdictDecisive.source`;
+  `author`, `score_maximum`; `MitreTechniqueUsage.score_maximum`;
+  `IndicatorRelated.signal_id`; `VerdictDecisive.source`;
   `Verdict.format`; `ScoreBreakdown.deciding_layer`; `IoC.raw_type`;
   `KillchainDroppedFile.raw_path`, `path_authority`, `path_authority_reason`,
   `source_actor_bound`, `capture_closed`; `KillchainInventoryCoverage.counts`;
   `KillchainProcess.tid`, `Process.tid`, `ProcessTreeNode.tid`;
   `Artifact.process_attribution`; `NetworkEndpoint.max_alert_severity`;
+  `NetworkThreat.metadata`; `SubmissionOverviewJobs.completed`;
   `UrlAnalysisResponse.job_id`, `verdict_provenance`, `extracted_file`;
   `UrlAnalysisBrowserSnapshot.job_id`, `revision`; `UrlAnalysisIpInfo.threat_status`;
   `UrlScoreExplanation.schema_version`, `scoring_version`, `pass_`;

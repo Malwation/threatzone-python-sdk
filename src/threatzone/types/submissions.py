@@ -78,13 +78,13 @@ class SubmissionOverviewJobs(BaseModel):
     failed: int
     skipped: int
     finished: int
-    completed: int = 0
-    """Deprecated alias of ``finished`` (always equal).
-
-    Kept for backward compatibility with integrations that read
-    ``overview.jobs.completed``; new code should use ``finished``. The value is
-    forced to mirror ``finished`` after validation regardless of any incoming
-    ``completed`` value.
+    completed: int = Field(
+        default=0,
+        deprecated="completed is removed from the API in its next release. Read finished.",
+    )
+    """Deprecated: read ``finished``. Always equal to ``finished``: the value is set from
+    ``finished`` after validation, whatever ``completed`` the server sends. Removed from the
+    API in its next release.
     """
 
     @model_validator(mode="after")

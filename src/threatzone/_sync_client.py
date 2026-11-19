@@ -1000,7 +1000,9 @@ class ThreatZone:
             type: Filter by IoC type.
             tier: ``"ioc"`` for the indicators, ``"strings"`` for the values that only
                 strings found in the files of the submission hold, ``"all"`` for both. The
-                server default is ``"all"``. Each item carries its ``tier``.
+                server default is ``"all"``. Each item carries its ``tier``. Servers
+                before the release that adds IoC tiers reject ``tier`` with
+                ``BadRequestError``; every row they return is an indicator.
             page: 1-indexed page number.
             limit: Maximum items per page (1-100).
 

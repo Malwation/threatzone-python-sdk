@@ -18,8 +18,13 @@ import sys
 import time
 from pathlib import Path
 
-from threatzone import AnalysisTimeoutError, ReportUnavailableError, ThreatZone
-from threatzone.types import Submission
+from threatzone import (
+    AnalysisTimeoutError,
+    BadRequestError,
+    ReportUnavailableError,
+    ThreatZone,
+)
+from threatzone.types import IoC, Submission
 
 
 def wait_for_final(
@@ -36,6 +41,18 @@ def wait_for_final(
         time.sleep(poll_interval)
         submission = client.get_submission(uuid)
     return submission
+
+
+def get_indicator_iocs(client: ThreatZone, uuid: str) -> list[IoC]:
+    """Return the IoCs without the values that only strings found in the files hold.
+
+    Servers before the release that adds IoC tiers reject ``tier`` with
+    ``BadRequestError``. Every row they return is an indicator, so read the list without it.
+    """
+    try:
+        return client.get_iocs(uuid, tier="ioc", limit=100).items
+    except BadRequestError:
+        return client.get_iocs(uuid, limit=100).items
 
 
 def print_findings(client: ThreatZone, uuid: str) -> None:
@@ -60,7 +77,7 @@ def print_findings(client: ThreatZone, uuid: str) -> None:
         print(f"[{row.level} {row.score:g}] {row.name} {', '.join(row.attack_codes)}")
         print(f"  {row.summary or row.description}")
 
-    for ioc in client.get_iocs(uuid, tier="ioc", limit=100).items:
+    for ioc in get_indicator_iocs(client, uuid):
         print(f"IoC {ioc.type}: {ioc.value}")
 
 

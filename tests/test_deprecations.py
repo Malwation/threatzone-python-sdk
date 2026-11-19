@@ -17,6 +17,7 @@ from threatzone.types import (
     IndicatorRelated,
     IoC,
     RunNote,
+    SubmissionOverviewJobs,
     UrlAnalysisIpInfo,
     UrlAnalysisResponse,
     VerdictDecisive,
@@ -153,6 +154,9 @@ def test_api_deprecations_are_marked() -> None:
         "Indicator.finding_source",
         "Indicator.author",
         "Indicator.score_maximum",
+        "MitreTechniqueUsage.score_maximum",
+        "NetworkThreat.metadata",
+        "SubmissionOverviewJobs.completed",
         "IndicatorRelated.signal_id",
         "VerdictDecisive.source",
         "Verdict.format",
@@ -212,3 +216,12 @@ def test_dump_of_a_deprecated_field_does_not_warn() -> None:
         warnings.simplefilter("error")
         assert row.model_dump(by_alias=True)["rawType"] == "IP"
         repr(row)
+
+
+def test_jobs_mirror_completed_without_a_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        jobs = SubmissionOverviewJobs.model_validate(
+            {"total": 3, "succeeded": 2, "failed": 1, "skipped": 0, "finished": 3, "completed": 9}
+        )
+        assert jobs.model_dump()["completed"] == 3
