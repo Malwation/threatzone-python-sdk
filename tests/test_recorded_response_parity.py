@@ -61,13 +61,11 @@ _ROUTES: dict[str, type[BaseModel]] = {
     "syscalls_limit_3": T.SyscallsResponse,
     "verdict": T.Verdict,
     "run": T.RunNotes,
-    "previous-run": T.PreviousRun,
     "network_summary": T.NetworkSummary,
     "network_endpoints_limit_5": T.NetworkEndpoints,
     "url-analysis": T.UrlAnalysisResponse,
     "url-analysis_indicators": T.UrlAnalysisIndicators,
     "url-analysis_session": T.UrlAnalysisSession,
-    "url-analysis_similar-pages": T.UrlSimilarPages,
 }
 
 

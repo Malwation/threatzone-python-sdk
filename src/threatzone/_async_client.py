@@ -84,10 +84,8 @@ from .types import (
     OverviewSummary,
     PaginatedSubmissions,
     PdfReportStatus,
-    PreviousRun,
     ProcessesResponse,
     ProcessTreeResponse,
-    RunComparison,
     RunNotes,
     SignatureCheckResponse,
     StaticScanResponse,
@@ -107,7 +105,6 @@ from .types import (
     UrlAnalysisSession,
     UrlAnalysisSessionStop,
     UrlDownloadSubmission,
-    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRuleCategory,
@@ -1963,41 +1960,8 @@ class AsyncThreatZone:
         )
         return UrlAnalysisBrowserSection.model_validate(response.json())
 
-    async def get_url_analysis_similar_pages(
-        self, uuid: str, *, limit: int = 20
-    ) -> UrlSimilarPages:
-        """
-        Get the URL analysis reports on other domains whose pages match the analysed page.
-
-        Every plan can use this call. A match needs at least two page dimensions and a
-        report from the last 30 days. The list holds only submissions that the API token
-        can open: public submissions and private submissions of the token workspace.
-
-        Args:
-            uuid: Submission UUID (must be a URL submission).
-            limit: Maximum number of items, from 1 to 50. The default is 20.
-
-        Returns:
-            UrlSimilarPages. ``total`` is the number of similar pages that the token can
-            read, at most 200. ``items`` holds the first ``limit`` of them, with the most
-            matched dimensions first. A report without a page fingerprint, for example a
-            report from before this feature, returns ``total == 0``.
-
-        Raises:
-            BadRequestError: When ``limit`` is not an integer from 1 to 50
-                (``INVALID_QUERY_PARAM``).
-            NotFoundError: When the submission does not exist or is private to
-                another workspace.
-            ReportUnavailableError: When the submission has no completed URL analysis
-                report (HTTP 409).
-        """
-        response = await self._http.get(
-            f"/submissions/{uuid}/url-analysis/similar-pages", params={"limit": limit}
-        )
-        return UrlSimilarPages.model_validate(response.json())
-
     # =========================================================================
-    # Verdict, run notes, annotations and run compare
+    # Verdict, run notes and annotations
     # =========================================================================
 
     async def get_verdict(self, uuid: str) -> Verdict:
@@ -2171,52 +2135,6 @@ class AsyncThreatZone:
             f"/submissions/{uuid}/annotations/note", json={"text": text}
         )
         return Annotations.model_validate(response.json())
-
-    async def get_previous_run(self, uuid: str) -> PreviousRun:
-        """
-        Find the previous run of the same sample or URL.
-
-        The previous run has the same SHA256 and the same submission type, was
-        created before this run, and is in the workspace of this submission.
-        For a submission of another workspace, only a public previous run
-        counts. Deleted runs never count.
-
-        Args:
-            uuid: Submission UUID.
-
-        Returns:
-            PreviousRun. ``previous_run_uuid`` is ``None`` when no run matches.
-
-        Raises:
-            NotFoundError: When the submission does not exist, or is private
-                and belongs to another workspace.
-        """
-        response = await self._http.get(f"/submissions/{uuid}/previous-run")
-        return PreviousRun.model_validate(response.json())
-
-    async def compare_runs(self, uuid: str, other_uuid: str) -> RunComparison:
-        """
-        Compare two runs.
-
-        ``added`` items are in the ``uuid`` run only. ``removed`` items are in
-        the ``other_uuid`` run only. Each list holds at most 200 items; the
-        ``*_total`` fields count the items before that cap.
-
-        Args:
-            uuid: Submission UUID of the run to read.
-            other_uuid: Submission UUID of the run to compare with, for example
-                ``get_previous_run(uuid).previous_run_uuid``.
-
-        Returns:
-            RunComparison with the ``detections``, ``techniques``, ``iocs`` and
-            ``dropped_files`` differences.
-
-        Raises:
-            NotFoundError: When either run does not exist, or is private and
-                belongs to another workspace.
-        """
-        response = await self._http.get(f"/submissions/{uuid}/compare/{other_uuid}")
-        return RunComparison.model_validate(response.json())
 
     # =========================================================================
     # AI Report

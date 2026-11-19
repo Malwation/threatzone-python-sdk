@@ -267,29 +267,6 @@ print(tls.revision, tls.data)
   `ref.label` and `evidence_refs[].label` are short display labels. The three fields are `None`
   on older explanations and older servers. `schema_version` stays `2`.
 
-Similar pages (all plans):
-
-```python
-similar = client.get_url_analysis_similar_pages(created.uuid, limit=20)
-print(similar.total)
-for page in similar.items:
-    print(page.host, page.verdict, page.scored_at, page.matched_dimensions)
-    other = client.get_url_analysis(page.submission_uuid)
-```
-
-- `get_url_analysis_similar_pages(uuid, *, limit=20)` calls
-  `GET https://app.threat.zone/public-api/submissions/{uuid}/url-analysis/similar-pages`. It
-  returns the URL analysis reports on other domains whose pages match the analysed page in at
-  least two dimensions in the last 30 days.
-- The list holds only submissions that the API token can open: public submissions and private
-  submissions of the token workspace. `total` counts the same submissions, at most 200.
-  `items` holds the first `limit` of them, with the most matched dimensions first.
-- `matched_dimensions` holds `"dom"`, `"phash"`, `"favicon"`, `"title"`, `"form"`, `"js"` or
-  `"kit"`. New values do not fail the parse.
-- `limit` is an integer from 1 to 50. Another value raises `BadRequestError`
-  (`INVALID_QUERY_PARAM`). A report from before this feature has no page fingerprint and
-  returns `total == 0`.
-
 Media from the session:
 
 ```python
@@ -675,7 +652,7 @@ public_matches = client.search_by_sha256("<sha256>", scope="public")
 The HTML and PDF reports show the items that analysts in your workspace pinned, and their
 note, in a "Pinned evidence" section. Other workspaces do not see them.
 
-## Verdict, run notes, annotations and run compare
+## Verdict, run notes and annotations
 
 ```python
 # The Windows V2 verdict with its narrative and story, as the web report shows it.
@@ -697,12 +674,6 @@ annotations = client.pin_evidence(uuid, kind="technique", ref="technique:T1055",
 client.set_note(uuid, "The sample drops a second stage.")
 client.unpin_evidence(uuid, annotations.pins[0].id)
 client.set_note(uuid, "")  # an empty text removes the note
-
-# The previous run of the same sample, then the difference between the two runs.
-previous = client.get_previous_run(uuid).previous_run_uuid
-if previous is not None:
-    diff = client.compare_runs(uuid, previous)
-    print(diff.techniques.added, diff.iocs.removed_total)
 ```
 
 `get_verdict()` and `get_run()` need a dynamic report; without it they raise
@@ -717,10 +688,6 @@ A private submission of another workspace raises `NotFoundError`. `pin_evidence(
 the submission. `unpin_evidence()` raises `NotFoundError` with code `ANNOTATION_PIN_NOT_FOUND`
 for an unknown pin ID. The web UI and the HTML and PDF reports of your workspace show the pins
 and the note.
-
-`compare_runs()` reads only runs that your workspace can open. `added` items are in `uuid`
-only; `removed` items are in `other_uuid` only. Each list holds at most 200 items;
-`added_total` and `removed_total` count the items before that cap.
 
 ## Core concepts
 
@@ -829,12 +796,8 @@ client = ThreatZone(
 ```
 
 Available scenarios: `seed_malicious_pe`, `seed_benign_document`, `seed_cdr_document`,
-`seed_phishing_url`, `seed_similar_pages`, `seed_static_only_submission`,
+`seed_phishing_url`, `seed_static_only_submission`,
 `seed_private_cross_workspace`.
-
-`fake.register_similar_page(uuid, similar_uuid, matched_dimensions)` adds a similar page to a
-URL submission. `seed_similar_pages` adds two public matches and one private match of another
-workspace, so `get_url_analysis_similar_pages()` returns `total == 2`.
 
 Switches for error paths: `fake.rate_limit_heavy_routes(retry_after=60)` makes the heavy routes
 return 429 `RATE_LIMIT_EXCEEDED`, and `fake.mark_quota_unavailable(retry_after=30)` makes the

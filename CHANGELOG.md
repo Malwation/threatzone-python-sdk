@@ -46,12 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `400 ARTIFACT_NOT_ANALYZABLE`.
 - The fake API supports `analyze_artifact()`, `create_url_download_submission()` and
   `download_url()`, and its URL report lists downloaded files.
-- `get_url_analysis_similar_pages(uuid, *, limit=20)` returns `UrlSimilarPages`
-  (`GET /submissions/{uuid}/url-analysis/similar-pages`). It lists the URL analysis reports on
-  other domains whose pages match the analysed page. Each `UrlSimilarPage` has
-  `submission_uuid`, `host`, `verdict`, `scored_at` and `matched_dimensions`. The list holds
-  only submissions that the API token can open, and `total` counts only these submissions.
-  `limit` is an integer from 1 to 50.
 - `UrlScoreIndicator.evidence` (`UrlScoreEvidenceFact`: `kind`, `label`, `value`, `ref`) and
   `UrlScoreIndicator.evidence_total` give the facts that explain an indicator.
   `UrlScoreEvidenceRef.label` gives a short display label. The three fields are `None` on older
@@ -73,9 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stop_requested_at` and `queue_reason`.
 - `SubmissionListItem.source_url` reads the `sourceUrl` field of the deprecated v2 list. The v1
   list sends the source URL of a fetched file in `url`. `url` is `None` for an upload.
-- The fake API supports `get_url_analysis_similar_pages()`, with
-  `FakeThreatZoneAPI.register_similar_page()` and the `seed_similar_pages` scenario. Its score
-  explanation returns evidence facts and evidence labels.
+- The score explanation of the fake API returns evidence facts and evidence labels.
 - Fields that the API already sends and the SDK dropped: `Submission.finalized`, `IoC.tier`
   (`IoCTier`: `ioc` or `strings`), `IoC.ports`, `BehavioursResponse.total_exact`,
   `KillchainDroppedFile.guest_size`, `OverviewSummary.behavior_event_count_available`,
@@ -135,6 +127,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `UrlAnalysisBrowserSnapshot.job_id`, `revision`; `UrlAnalysisIpInfo.threat_status`;
   `UrlScoreExplanation.schema_version`, `scoring_version`, `pass_`;
   `UrlScoreIndicator.original_rule_score`, `weighted_points`, `suppressed_by`.
+
+### Removed
+
+- `get_previous_run()` and `compare_runs()`, with `PreviousRun`, `RunComparison`,
+  `CompareDetection`, `CompareDetectionDiff`, `CompareTechniqueDiff`, `CompareIoc`,
+  `CompareIocDiff`, `CompareDroppedFile` and `CompareDroppedFileDiff`. The API removed
+  `GET /submissions/{uuid}/previous-run` and `GET /submissions/{uuid}/compare/{otherUuid}`;
+  both return 404. The fake API no longer serves them.
+- `get_url_analysis_similar_pages()`, with `UrlSimilarPages`, `UrlSimilarPage`,
+  `UrlSimilarPageDimension`, `FakeThreatZoneAPI.register_similar_page()` and the
+  `seed_similar_pages` scenario. The API removed
+  `GET /submissions/{uuid}/url-analysis/similar-pages` before an SDK release shipped it.
 
 ## 1.1.4
 

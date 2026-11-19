@@ -79,17 +79,6 @@ from .common import (
     TagOrigin,
     ThreatLevel,
 )
-from .compare import (
-    CompareDetection,
-    CompareDetectionDiff,
-    CompareDroppedFile,
-    CompareDroppedFileDiff,
-    CompareIoc,
-    CompareIocDiff,
-    CompareTechniqueDiff,
-    PreviousRun,
-    RunComparison,
-)
 from .config import (
     DevicePresetOption,
     EnvironmentOption,
@@ -332,9 +321,6 @@ from .url_analysis import (
     UrlScoreReputationCredit,
     UrlScoreVerdict,
     UrlScoreVerdictAdjustment,
-    UrlSimilarPage,
-    UrlSimilarPageDimension,
-    UrlSimilarPages,
 )
 from .verdict import (
     RunAnalysisCutShort,
@@ -509,16 +495,6 @@ __all__ = [
     "AnnotationPin",
     "AnnotationPinKind",
     "Annotations",
-    # Run compare
-    "CompareDetection",
-    "CompareDetectionDiff",
-    "CompareDroppedFile",
-    "CompareDroppedFileDiff",
-    "CompareIoc",
-    "CompareIocDiff",
-    "CompareTechniqueDiff",
-    "PreviousRun",
-    "RunComparison",
     # Kill chain
     "Killchain",
     "KillchainCoverageCount",
@@ -694,9 +670,6 @@ __all__ = [
     "UrlScoreReputationCredit",
     "UrlScoreVerdict",
     "UrlScoreVerdictAdjustment",
-    "UrlSimilarPage",
-    "UrlSimilarPageDimension",
-    "UrlSimilarPages",
     "UrlDownloadedFileState",
     "UrlDownloadInitiator",
     "UrlDownloadLimitReason",

@@ -329,8 +329,6 @@ peer report type to dynamic/static/cdr &mdash; it is guarded separately by
 | `UrlScoreReputationCredit` | `{rule_id, eligible, nominal_points, reason}`. |
 | `UrlScoreVerdictAdjustment` | `{rule_id, from_, to, reason}`. `from_` maps to the wire field `from`. `rule_id` is `quorum`, `impersonation`, `allowlist`, `collection_failure`, `captcha_gate`, or a new value. |
 | `UrlAnalysisIndicatorEvidence` | `{state, text, truncated}`. Returned by `get_url_analysis_indicator_evidence()`. `state` is `UrlScoreEvidenceState` (`available`, `unavailable`, or a new value). `text` is pretty-printed JSON of 8192 characters or fewer; `truncated` is `True` when the API cut it. Network evidence holds metadata only. |
-| `UrlSimilarPages` | `{total, items}`. Returned by `get_url_analysis_similar_pages()`. `total` counts the similar pages that the token can read, at most 200. `items` is a list of `UrlSimilarPage`. |
-| `UrlSimilarPage` | `{submission_uuid, host, verdict, scored_at, matched_dimensions}`. `host` is the registrable domain. `verdict` is `UrlScoreVerdict`. `scored_at` is a `datetime` or `None`. `matched_dimensions` is a list of `UrlSimilarPageDimension` (`dom`, `phash`, `favicon`, `title`, `form`, `js`, `kit`, or a new value). |
 | `UrlAnalysisBrowserSection` | `{section, job_id, revision, updated_at, data}`. Returned by `get_url_analysis_browser_section()`. `section` is `UrlAnalysisBrowserSectionName` (`overview`, `findings`, `tls`, `network-summary`). `revision` is the snapshot manifest hash. `updated_at` is Unix milliseconds or `None`. `data` is free-form; `network-summary` holds only `redirects`, `domainTable` and `ipTable`. The API never returns cookies, full network entries, bodies, or the page script list. |
 
 `UrlAnalysisResponse.level` is `ThreatLevel`, shared with submission level. Everything
@@ -431,29 +429,6 @@ returns the full view after the change.
   `technique:T1055`.
 - A second pin with the same `kind` and `ref` changes nothing. A workspace can keep 200 pins on
   one submission. An empty note text removes the note.
-
----
-
-## Run Compare
-
-Returned by `get_previous_run()` and `compare_runs()`. Both routes read only runs that your
-workspace can open: runs of your workspace and public runs of other workspaces.
-
-| Type | Purpose | Endpoint |
-|------|---------|----------|
-| `PreviousRun` | `{previous_run_uuid}`. The latest earlier run with the same SHA256 and type in the workspace of the submission. `None` when no run matches. | `GET /submissions/:uuid/previous-run` |
-| `RunComparison` | `{submission_uuid, other_submission_uuid, detections, techniques, iocs, dropped_files}`. | `GET /submissions/:uuid/compare/:otherUuid` |
-| `CompareDetectionDiff` | `added` / `removed` lists of `CompareDetection` (`title`, `level`), compared by title. | nested in `RunComparison.detections` |
-| `CompareTechniqueDiff` | `added` / `removed` lists of uppercase MITRE ATT&CK technique IDs. | nested in `RunComparison.techniques` |
-| `CompareIocDiff` | `added` / `removed` lists of `CompareIoc` (`value`, `category`), compared by category and lowercase value. | nested in `RunComparison.iocs` |
-| `CompareDroppedFileDiff` | `added` / `removed` lists of `CompareDroppedFile` (`path`, `sha256`), compared by SHA256, else by lowercase path. `sha256` is `None` when the run did not hash the file. | nested in `RunComparison.dropped_files` |
-
-- `added` items are in the run of `submission_uuid` only. `removed` items are in the run of
-  `other_submission_uuid` only.
-- Each list holds at most 200 items. `added_total` and `removed_total` count the items before
-  that cap.
-- `techniques` and `dropped_files` come from the dynamic analysis. A run without a dynamic
-  analysis gives empty lists.
 
 ---
 

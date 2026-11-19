@@ -58,10 +58,8 @@ from threatzone.types import (
     NetworkThreat,
     PaginatedSubmissions,
     PdfReportStatus,
-    PreviousRun,
     ProcessesResponse,
     ProcessTreeResponse,
-    RunComparison,
     RunNotes,
     SignatureCheckResponse,
     StaticScanResponse,
@@ -79,7 +77,6 @@ from threatzone.types import (
     UrlAnalysisSession,
     UrlAnalysisSessionStop,
     UrlDownloadSubmission,
-    UrlSimilarPages,
     UserInfo,
     Verdict,
     YaraRulesResponse,
@@ -2379,31 +2376,6 @@ def build_url_analysis_indicator_evidence(
     )
 
 
-def build_url_similar_pages(
-    matches: list[tuple[SubmissionState, list[str]]], *, limit: int
-) -> UrlSimilarPages:
-    """Build the similar-pages response from the matches that the caller can read."""
-    return UrlSimilarPages.model_validate(
-        {
-            "total": len(matches),
-            "items": [
-                {
-                    "submissionUuid": other.uuid,
-                    "host": _domain_from_url(other.final_url or other.url or ""),
-                    "verdict": other.level,
-                    "scoredAt": (
-                        url_analysis_scored_at(other)
-                        if other.current_status() == "completed"
-                        else None
-                    ),
-                    "matchedDimensions": dimensions,
-                }
-                for other, dimensions in matches[:limit]
-            ],
-        }
-    )
-
-
 def _url_browser_stored_sections(state: SubmissionState) -> dict[str, dict[str, Any]]:
     target_url = state.final_url or state.url or "https://example.com"
     domain = _domain_from_url(target_url)
@@ -2837,75 +2809,6 @@ def build_annotations(state: SubmissionState) -> Annotations:
             "submissionUuid": state.uuid,
             "pins": [dict(pin) for pin in state.annotation_pins],
             "note": dict(state.annotation_note) if state.annotation_note is not None else None,
-        }
-    )
-
-
-def build_previous_run(previous_run_uuid: str | None) -> PreviousRun:
-    """Build the previous-run lookup result."""
-    return PreviousRun.model_validate({"previousRunUuid": previous_run_uuid})
-
-
-_COMPARE_LIST_CAP = 200
-_LEVEL_RANK: dict[str, int] = {"benign": 1, "suspicious": 2, "malicious": 3}
-
-
-def _compare_detections(state: SubmissionState) -> dict[str, dict[str, str]]:
-    detections: dict[str, dict[str, str]] = {}
-    for seed in state.indicators:
-        title = f"Indicator {seed.attack_code}"
-        current = detections.get(title)
-        if current is None or _LEVEL_RANK[seed.level] > _LEVEL_RANK[current["level"]]:
-            detections[title] = {"title": title, "level": seed.level}
-    return detections
-
-
-def _compare_techniques(state: SubmissionState) -> dict[str, str]:
-    if not state.has_dynamic_report:
-        return {}
-    return {code.upper(): code.upper() for code in state.mitre_techniques}
-
-
-def _compare_iocs(state: SubmissionState) -> dict[str, dict[str, str]]:
-    return {
-        f"{seed.type.lower()}:{seed.value.lower()}": {
-            "value": seed.value,
-            "category": seed.type.lower(),
-        }
-        for seed in state.iocs
-    }
-
-
-def _compare_dropped_files(state: SubmissionState) -> dict[str, dict[str, str | None]]:
-    if not state.has_dynamic_report:
-        return {}
-    return {
-        (sha256 or path.lower()): {"path": path, "sha256": sha256}
-        for path, sha256 in state.dropped_files
-    }
-
-
-def _diff(current: dict[str, Any], other: dict[str, Any]) -> dict[str, Any]:
-    added = [value for key, value in current.items() if key not in other]
-    removed = [value for key, value in other.items() if key not in current]
-    return {
-        "added": added[:_COMPARE_LIST_CAP],
-        "removed": removed[:_COMPARE_LIST_CAP],
-        "addedTotal": len(added),
-        "removedTotal": len(removed),
-    }
-
-
-def build_run_comparison(state: SubmissionState, other: SubmissionState) -> RunComparison:
-    """Build the difference between two runs, keyed as the real API keys them."""
-    return RunComparison.model_validate(
-        {
-            "submissionUuid": state.uuid,
-            "otherSubmissionUuid": other.uuid,
-            "detections": _diff(_compare_detections(state), _compare_detections(other)),
-            "techniques": _diff(_compare_techniques(state), _compare_techniques(other)),
-            "iocs": _diff(_compare_iocs(state), _compare_iocs(other)),
-            "droppedFiles": _diff(_compare_dropped_files(state), _compare_dropped_files(other)),
         }
     )
 

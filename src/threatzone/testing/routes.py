@@ -147,11 +147,6 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
     ("get_verdict", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/verdict$")),
     ("get_run", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/run$")),
     ("get_annotations", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/annotations$")),
-    ("get_previous_run", re.compile(rf"^/submissions/(?P<uuid>{_UUID})/previous-run$")),
-    (
-        "compare_runs",
-        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/compare/(?P<other_uuid>[^/]+)$"),
-    ),
     (
         "download_iocs",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/download/iocs$"),
@@ -226,10 +221,6 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
             rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/indicators/(?P<indicator_id>[^/]+)"
             r"/evidence/(?P<reference_id>[^/]+)$"
         ),
-    ),
-    (
-        "get_url_analysis_similar_pages",
-        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/url-analysis/similar-pages$"),
     ),
     (
         "get_url_analysis_browser_section",

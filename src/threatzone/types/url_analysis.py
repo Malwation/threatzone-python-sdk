@@ -47,7 +47,6 @@ UrlDownloadedFileState = (
 UrlDownloadInitiator = Literal["navigation", "script", "unknown"] | str
 UrlDownloadLimitReason = Literal["too_large", "run_bytes_exceeded", "file_count_exceeded"] | str
 UrlScoreEvidenceFactKind = Literal["observed", "would_confirm"] | str
-UrlSimilarPageDimension = Literal["dom", "phash", "favicon", "title", "form", "js", "kit"] | str
 UrlAnalysisPrivacyUnavailableReason = (
     Literal["collection_failed", "no_network", "page_not_loaded"] | str
 )
@@ -737,36 +736,3 @@ class UrlAnalysisBrowserSection(BaseModel):
     updated_at: int | None = Field(default=None, alias="updatedAt")
     # Free-form: the section data follows the report page and can add fields.
     data: dict[str, Any] = Field(default_factory=dict)
-
-
-class UrlSimilarPage(BaseModel):
-    """One URL analysis report on another domain whose page matches the analysed page."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    submission_uuid: str = Field(alias="submissionUuid")
-    """UUID of the submission. Read it with ``get_url_analysis()``."""
-    host: str
-    """Registrable domain of the similar page."""
-    verdict: UrlScoreVerdict
-    """Current verdict of the URL analysis report of that submission."""
-    scored_at: datetime | None = Field(default=None, alias="scoredAt")
-    """Time of the last score of that report. ``None`` when it has no score."""
-    matched_dimensions: list[UrlSimilarPageDimension] = Field(
-        default_factory=list, alias="matchedDimensions"
-    )
-    """Page dimensions that match, at least two."""
-
-
-class UrlSimilarPages(BaseModel):
-    """Response of ``GET /submissions/{uuid}/url-analysis/similar-pages``.
-
-    The list holds only submissions that the API token can open. ``total`` counts the same
-    submissions, at most 200. ``items`` holds the first ``limit`` of them, with the most
-    matched dimensions first.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    total: int
-    items: list[UrlSimilarPage] = Field(default_factory=list)
