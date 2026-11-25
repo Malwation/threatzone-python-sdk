@@ -5,7 +5,7 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [1.3.0] - 2026-11-25
 
 The SDK now models the Public API of Threat.Zone v3.9.5. Every new field is `None` or empty
 when an older server leaves it out, and every new parameter is left out of the request
