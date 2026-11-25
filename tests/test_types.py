@@ -3795,8 +3795,8 @@ class TestPublicApi395Fields:
             }
         )
         assert packet.timeshift_seconds == 3.42
-        assert ApiVersion.model_validate({"version": "b", "apiVersion": "3.8.0"}).api_version == (
-            "3.8.0"
+        assert ApiVersion.model_validate({"version": "b", "apiVersion": "3.9.5"}).api_version == (
+            "3.9.5"
         )
 
     def test_summary_run_verdict(self, sample_overview_summary: dict[str, Any]) -> None:

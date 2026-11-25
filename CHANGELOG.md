@@ -64,11 +64,11 @@ unless you pass it.
   Threat.Zone v3.9.5, and its attachments are `email_attachment`, not
   `compressed_file_entry`. `ArtifactType` already lists both values. Code that finds the
   submitted mail by `type == "sample"` must accept `email_file`.
-- Overview rows of `get_indicators()` have a stable `id` since Threat.Zone v3.9.5, and
+- Overview rows of `get_indicators()` have a stable `id` since Threat.Zone v3.9.0, and
   `ScoreContributor.indicator_id` is set for them. Tell overview rows apart by `source`.
 - `get_network_endpoints()` lists the endpoints in the Hosts order of the report by default
-  since Threat.Zone v3.9.5. Pass `sort="default"` for the order of before.
-- The `download_iocs()` docstring describes the export of the IoC rows of v3.9.5.
+  since Threat.Zone v3.9.0. Pass `sort="default"` for the order of before.
+- The `download_iocs()` docstring describes the export of the IoC rows of v3.9.0.
 
 ### Deprecated
 

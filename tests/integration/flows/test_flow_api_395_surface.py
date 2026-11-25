@@ -113,7 +113,7 @@ def test_media_download_link_and_version(
     [media] = sync_client.list_media_files(uuid, source="dynamic")
     assert media.download_link is not None
     assert media.download_link.endswith(f"/media/{media.id}?source=dynamic")
-    assert sync_client.get_version().api_version is not None
+    assert sync_client.get_version().api_version == "3.9.5"
 
 
 def test_ioc_export_filters(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:

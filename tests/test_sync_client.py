@@ -3590,13 +3590,13 @@ class TestPublicApi395Parameters:
 
     def test_get_version(self, api_key: str) -> None:
         ctx, mock = _patched_client(
-            _make_response(200, {"version": "2026.11.25", "apiVersion": "3.8.0"})
+            _make_response(200, {"version": "2026.11.25", "apiVersion": "3.9.5"})
         )
         with ctx, ThreatZone(api_key=api_key) as client:
             version = client.get_version()
         assert _call_url(mock).endswith("/public-api/version")
         assert isinstance(version, ApiVersion)
-        assert version.api_version == "3.8.0"
+        assert version.api_version == "3.9.5"
 
     def test_analyze_artifact_and_url_download_send_auto_select_false(self, api_key: str) -> None:
         body = {"uuid": "sub-1", "message": "Submission created successfully"}

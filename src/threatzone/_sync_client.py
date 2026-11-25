@@ -987,7 +987,7 @@ class ThreatZone:
             attack_code: Filter by MITRE ATT&CK technique code.
             in_verdict_chain: ``True`` returns only the rows that are part of the finding
                 that set the dynamic verdict, and the overview rows that set the submission
-                level. ``False`` returns the other rows. Servers before Threat.Zone v3.9.5
+                level. ``False`` returns the other rows. Servers before Threat.Zone v3.9.0
                 reject it with ``BadRequestError``.
             page: 1-indexed page number.
             limit: Maximum items per page (1-100).
@@ -1028,7 +1028,7 @@ class ThreatZone:
         Sends ``view=compact``: each row has only ``id``, ``name``, ``description``,
         ``level``, ``score``, ``attack_codes``, ``attempted_attack_codes``,
         ``in_verdict_chain``, ``actor``, ``target``, ``t_offset_s``, ``event_ids`` and
-        ``artifacts``. Servers before Threat.Zone v3.9.5 reject it with ``BadRequestError``.
+        ``artifacts``. Servers before Threat.Zone v3.9.0 reject it with ``BadRequestError``.
 
         Args:
             uuid: Submission UUID.
@@ -1102,7 +1102,7 @@ class ThreatZone:
             limit: Maximum items per page (1-100).
 
         ``source``, ``grade``, ``exported``, ``labelled``, ``group`` and ``sort`` need
-        Threat.Zone v3.9.5 or later; older servers reject them with ``BadRequestError``.
+        Threat.Zone v3.9.0 or later; older servers reject them with ``BadRequestError``.
 
         Returns:
             Paginated IoC list.
@@ -1195,7 +1195,7 @@ class ThreatZone:
             page: 1-indexed page number. Without ``page`` and ``limit`` every artifact is
                 returned.
             limit: Maximum items per page (1-100). The server default is 20 when ``page``
-                is set. ``page`` and ``limit`` need Threat.Zone v3.9.5 or later; older
+                is set. ``page`` and ``limit`` need Threat.Zone v3.9.0 or later; older
                 servers reject them with ``BadRequestError``.
 
         Returns:
@@ -2693,7 +2693,7 @@ class ThreatZone:
             attribution: Row sources to return: "sample", "sample_child",
                 "sensor_only", "windows_background". When unset, the server
                 returns every row except "windows_background".
-            sort: ``"priority"`` (the server default since Threat.Zone v3.9.5) is the Hosts
+            sort: ``"priority"`` (the server default since Threat.Zone v3.9.0) is the Hosts
                 order of the report, by ``rank``. ``"default"`` keeps the order of before:
                 sample endpoints first, then by alerts, flows and first time.
                 ``"first_contact"`` and ``"last_contact"`` sort by contact time.
@@ -2701,7 +2701,7 @@ class ThreatZone:
                 ``"background"``. ``limit`` applies after this filter.
             limit: Maximum number of endpoints (1-500). The server default is 300.
 
-        ``sort`` and ``group`` need Threat.Zone v3.9.5 or later; older servers reject them
+        ``sort`` and ``group`` need Threat.Zone v3.9.0 or later; older servers reject them
         with ``BadRequestError``.
 
         Returns:
@@ -3081,7 +3081,7 @@ class ThreatZone:
             search: Only IoCs whose value holds this text. The match ignores case.
 
         The filters are the filters of the IoC table of the web UI. With filters, the file
-        holds only the IoCs that match all of them. They need Threat.Zone v3.9.5 or later;
+        holds only the IoCs that match all of them. They need Threat.Zone v3.9.0 or later;
         older servers reject them with ``BadRequestError``.
 
         Returns:

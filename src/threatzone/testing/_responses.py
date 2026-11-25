@@ -1985,7 +1985,7 @@ def build_network_endpoints(
     groups: list[str] | None = None,
 ) -> NetworkEndpoints:
     """Build the endpoints of the network map. Without ``sort`` they are in the Hosts order
-    (``priority``), as on Threat.Zone v3.9.5."""
+    (``priority``), as on Threat.Zone v3.9.0."""
     all_rows = _endpoint_rows(state)
     rows = [row for row in all_rows if groups is None or row["group"] in groups]
     if sort in (None, "priority"):
@@ -3230,7 +3230,7 @@ def build_ioc_export(
 
 
 FAKE_SERVICE_BUILD = "fake-build"
-FAKE_API_VERSION = "3.8.0"
+FAKE_API_VERSION = "3.9.5"
 
 
 def build_api_version() -> ApiVersion:

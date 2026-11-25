@@ -120,7 +120,7 @@ class Indicator(BaseModel):
     id: str
     """Row id. An overview row (YARA, signature check, configuration and URL analysis) has the
     id of the dynamic row it links to, or a 24-character hex id that stays the same while the
-    analysis runs. Servers before Threat.Zone v3.9.5 send ``""`` for overview rows."""
+    analysis runs. Servers before Threat.Zone v3.9.0 send ``""`` for overview rows."""
     source: str | None = None
     """Engine of the row: ``dynamic_scan`` for every dynamic row, else the engine of an overview
     row (for example ``static_scan`` or ``yara_scanner``). ``None`` when the row does not record
@@ -394,7 +394,7 @@ class IoC(BaseModel):
 
     The fields after ``ports`` come from the IoC row of the value, the row that the report,
     the web UI and the IoC exports read. They are ``None`` or empty on servers before
-    Threat.Zone v3.9.5, and when the server cannot read the IoC rows of the submission.
+    Threat.Zone v3.9.0, and when the server cannot read the IoC rows of the submission.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -736,7 +736,7 @@ class OverviewSummary(BaseModel):
     ioc_count: int = Field(alias="iocCount")
     """IoC rows in the ``ioc`` tier without a label. A file counts once for all its hashes,
     and the submitted file counts too. It equals ``get_iocs(tier="ioc", group="file").total``
-    on Threat.Zone v3.9.5 and later."""
+    on Threat.Zone v3.9.0 and later."""
     yara_rule_count: int = Field(alias="yaraRuleCount")
     config_count: int = Field(alias="configCount")
     artifact_count: int = Field(alias="artifactCount")

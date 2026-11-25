@@ -201,7 +201,7 @@ class ScoreContributor(BaseModel):
     indicator_id: str | None = Field(default=None, alias="indicatorId")
     """``Indicator.id`` of the ``get_indicators()`` row of the finding, also for findings of
     other engines (YARA, signature check, configuration). ``None`` when no row stands for the
-    finding, and for overview findings on servers before Threat.Zone v3.9.5."""
+    finding, and for overview findings on servers before Threat.Zone v3.9.0."""
     title: str
     """Finding title. The text can change between releases; match on ``indicator_id``."""
     points: float

@@ -416,7 +416,7 @@ for ioc in iocs:
     print(ioc.type, ioc.value, ioc.ports)
 
 # The IoC rows of the report: grade, reasons and export state. A file is one item with
-# group="file". These parameters need Threat.Zone v3.9.5 or later.
+# group="file". These parameters need Threat.Zone v3.9.0 or later.
 for ioc in client.get_iocs(uuid, group="file", grade=["high", "medium"], sort="grade").items:
     print(ioc.id, ioc.type, ioc.value, ioc.grade, ioc.exported, [r.code for r in ioc.reasons])
 
@@ -590,7 +590,7 @@ tcp_packets = client.get_tcp_connection_packets(uuid, page[0].id)  # also: UDP
 
 # The network map: endpoints in the Hosts order of the report (rank), with their priority
 # (grade), reasons and patterns; summary holds the Hosts counts. sort="default" gives the
-# order of servers before v3.9.5. Then the flows and alerts of one host, page by page.
+# order of servers before v3.9.0. Then the flows and alerts of one host, page by page.
 endpoints = client.get_network_endpoints(
     uuid, attribution=["sample", "sample_child"], group=["sample"]
 )
@@ -642,7 +642,7 @@ with client.download_html_report(uuid) as download:
 # PermissionDeniedError. The values are not masked.
 with client.download_iocs(uuid, format="csv") as download:
     download.save("iocs.csv")
-# The filters of the IoC table of the web UI (Threat.Zone v3.9.5 or later).
+# The filters of the IoC table of the web UI (Threat.Zone v3.9.0 or later).
 with client.download_iocs(uuid, format="text", types=["domain", "url"], search="example") as d:
     d.save("domains.txt")
 
