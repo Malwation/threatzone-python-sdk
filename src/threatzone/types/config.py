@@ -82,5 +82,6 @@ class ApiVersion(BaseModel):
     version: str
     """The build of the Public API service."""
     api_version: str | None = Field(default=None, alias="apiVersion")
-    """The SemVer version of the API contract, for example ``3.9.5``. ``None`` on servers
-    before Threat.Zone v3.8.0."""
+    """The SemVer version of the API contract, for example ``3.9.5``. From Threat.Zone v3.9.5
+    on, it equals the platform release. ``None`` on servers before Threat.Zone v3.7.1, which
+    do not report it."""

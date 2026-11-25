@@ -46,7 +46,9 @@ unless you pass it.
   and `timeshift_seconds` on `NetworkHttpPacket` and `NetworkHttpPacketResponse`.
 - `get_version()` returns `ApiVersion` (`version`, `api_version`) from `GET /version`.
 - The fake API serves the new fields, parameters and `GET /version`. Its verdicts say
-  `Unknown` for a run that rated nothing, and its endpoints come in the Hosts order.
+  `Unknown` for a run that rated nothing, its endpoints come in the Hosts order, and the
+  `timeshift` of its HTTP packets is in milliseconds, as the API sends it (`0.75` is now
+  `750`; read `timeshift_seconds` for seconds).
 
 ### Changed
 
@@ -69,6 +71,11 @@ unless you pass it.
 - `get_network_endpoints()` lists the endpoints in the Hosts order of the report by default
   since Threat.Zone v3.9.0. Pass `sort="default"` for the order of before.
 - The `download_iocs()` docstring describes the export of the IoC rows of v3.9.0.
+- `ModuleInfo.module_id`, `UrlScoreBrowserSnapshot.job_id` and
+  `UrlAnalysisBrowserSection.job_id` are now `str | None`, so type checkers see them as
+  optional. The v3.9.5 API marks them deprecated and its documented responses leave the two
+  `job_id`s out. Reading them, and `AiReport.job_id` and `AiReportPending.job_id`, raises a
+  `DeprecationWarning` (see Deprecated).
 
 ### Deprecated
 
