@@ -168,6 +168,9 @@ class TestIdempotentRetries:
         assert len(seen) == 1
         assert sleeps == []
 
+    @pytest.mark.filterwarnings(
+        "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+    )
     def test_put_is_retried(self, sleeps: list[float]) -> None:
         annotations = {
             "submissionUuid": UUID,

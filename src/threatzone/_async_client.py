@@ -33,7 +33,12 @@ from ._lists import list_page
 from ._params import (
     behaviour_filter_params,
     behaviour_match_params,
+    indicator_params,
+    ioc_export_params,
+    ioc_params,
+    network_endpoint_params,
     syscall_search_params,
+    warn_removed_annotation_route,
     warn_singular_behaviour_filters,
 )
 from ._streaming import AsyncDownloadResponse
@@ -43,6 +48,7 @@ from .types import (
     AiReportRegenerateResult,
     AnnotationPinKind,
     Annotations,
+    ApiVersion,
     ArtifactJob,
     ArtifactSource,
     ArtifactsResponse,
@@ -54,6 +60,7 @@ from .types import (
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
+    CompactIndicatorsResponse,
     Connection,
     DevicePresetOption,
     DnsQuery,
@@ -64,6 +71,12 @@ from .types import (
     IndicatorLevel,
     IndicatorsResponse,
     IocExportFormat,
+    IoCExportType,
+    IoCGradeFilter,
+    IoCGroup,
+    IoCLabelledFilter,
+    IoCSort,
+    IoCSource,
     IoCsResponse,
     IoCTierFilter,
     IoCType,
@@ -75,9 +88,11 @@ from .types import (
     MitreResponse,
     NetworkConfigListItem,
     NetworkEndpoints,
+    NetworkEndpointSort,
     NetworkExfilRequest,
     NetworkFlowPackets,
     NetworkHostFlows,
+    NetworkHostGroup,
     NetworkHttpPackets,
     NetworkSummary,
     NetworkThreat,
@@ -137,7 +152,7 @@ _URL_DOWNLOAD_PATH = "/submissions/url_download"
 def _sandbox_options_payload(
     *,
     environment: str | None,
-    auto_select_environment: bool,
+    auto_select_environment: bool | None,
     metafields: dict[str, Any] | list[dict[str, Any]] | None,
     private: bool,
     entrypoint: str | None,
@@ -148,8 +163,8 @@ def _sandbox_options_payload(
     normalized_metafields = _normalize_metafields_json(metafields)
     if environment is not None:
         payload["environment"] = environment
-    if auto_select_environment:
-        payload["autoSelectEnvironment"] = True
+    if auto_select_environment is not None:
+        payload["autoSelectEnvironment"] = auto_select_environment
     if normalized_metafields is not None:
         payload["metafields"] = normalized_metafields
     if entrypoint is not None:
@@ -253,6 +268,17 @@ class AsyncThreatZone:
     # User Info
     # =========================================================================
 
+    async def get_version(self) -> ApiVersion:
+        """
+        Get the build and the API contract version of the server (``GET /version``).
+
+        Returns:
+            ApiVersion with ``version`` (the build) and ``api_version`` (the SemVer version
+            of the API contract).
+        """
+        response = await self._http.get("/version")
+        return ApiVersion.model_validate(response.json())
+
     async def get_user_info(self) -> UserInfo:
         """Get current user and workspace information."""
         response = await self._http.get("/me")
@@ -314,7 +340,7 @@ class AsyncThreatZone:
         file: FileInput,
         *,
         environment: str | None = None,
-        auto_select_environment: bool = False,
+        auto_select_environment: bool | None = None,
         metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
         private: bool = False,
         entrypoint: str | None = None,
@@ -329,9 +355,11 @@ class AsyncThreatZone:
             file: File to analyze. Can be a file path, bytes, or file-like object.
             environment: Sandbox environment to use. See get_environments() for options.
                 Takes precedence over auto_select_environment.
-            auto_select_environment: When True, the server picks the environment based
-                on the file's detected extension. Ignored if `environment` is also set.
-                Falls back to the plan's default OS for unknown extensions. Default: False.
+            auto_select_environment: ``True`` lets the server pick the environment from
+                the file's detected extension; ``False`` always starts from the plan's
+                default OS. Ignored if `environment` is also set. Falls back to the plan's
+                default OS for unknown extensions. ``None`` (the default) sends nothing, so
+                the server default applies: on, since Threat.Zone v3.9.5.
             metafields: Optional analysis metafields.
                 You can pass either:
                 - a dict map, e.g. {"timeout": 120, "internet_connection": True}
@@ -370,7 +398,7 @@ class AsyncThreatZone:
                 its submission if it succeeded, and runs the new request if it failed.
         """
         extra_fields: dict[str, Any] = {}
-        if auto_select_environment:
+        if auto_select_environment is not None:
             extra_fields["autoSelectEnvironment"] = auto_select_environment
 
         multipart = self._http._build_multipart_data(
@@ -616,7 +644,7 @@ class AsyncThreatZone:
         artifact_id: str,
         *,
         environment: str | None = None,
-        auto_select_environment: bool = False,
+        auto_select_environment: bool | None = None,
         metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
         private: bool = False,
         entrypoint: str | None = None,
@@ -636,9 +664,11 @@ class AsyncThreatZone:
             artifact_id: Artifact ID.
             environment: Sandbox environment to use. See get_environments() for options.
                 Takes precedence over auto_select_environment.
-            auto_select_environment: When True, the server picks the environment based
-                on the detected extension of the artifact. Ignored if `environment` is
-                also set. Default: False.
+            auto_select_environment: ``True`` lets the server pick the environment from
+                the detected extension of the artifact; ``False`` always starts from the
+                plan's default OS. Ignored if `environment` is also set. ``None`` (the
+                default) sends nothing, so the server default applies: on, since
+                Threat.Zone v3.9.5.
             metafields: Optional analysis metafields, as a dict map or a list of
                 {"key": ..., "value": ...} objects.
             private: If True, the new submission is private to your workspace.
@@ -683,7 +713,7 @@ class AsyncThreatZone:
         *,
         archive_password: str | None = None,
         environment: str | None = None,
-        auto_select_environment: bool = False,
+        auto_select_environment: bool | None = None,
         metafields: dict[str, Any] | list[dict[str, Any]] | None = None,
         private: bool = False,
         entrypoint: str | None = None,
@@ -702,9 +732,10 @@ class AsyncThreatZone:
                 The server uses ``infected`` when it is not set.
             environment: Sandbox environment to use. See get_environments() for options.
                 Takes precedence over auto_select_environment.
-            auto_select_environment: When True, the server picks the environment based
-                on the detected extension of the file. Ignored if `environment` is also
-                set. Default: False.
+            auto_select_environment: ``True`` lets the server pick the environment from
+                the detected extension of the file; ``False`` always starts from the plan's
+                default OS. Ignored if `environment` is also set. ``None`` (the default)
+                sends nothing, so the server default applies: on, since Threat.Zone v3.9.5.
             metafields: Optional analysis metafields, as a dict map or a list of
                 {"key": ..., "value": ...} objects.
             private: If True, the submission is private to your workspace.
@@ -949,6 +980,7 @@ class AsyncThreatZone:
         category: str | None = None,
         pid: int | None = None,
         attack_code: str | None = None,
+        in_verdict_chain: bool | None = None,
         page: int | None = None,
         limit: int | None = None,
     ) -> IndicatorsResponse:
@@ -961,31 +993,76 @@ class AsyncThreatZone:
             category: Filter by free-form indicator category.
             pid: Filter by process ID that emitted the indicator.
             attack_code: Filter by MITRE ATT&CK technique code.
+            in_verdict_chain: ``True`` returns only the rows that are part of the finding
+                that set the dynamic verdict, and the overview rows that set the submission
+                level. ``False`` returns the other rows. Servers before Threat.Zone v3.9.0
+                reject it with ``BadRequestError``.
             page: 1-indexed page number.
             limit: Maximum items per page (1-100).
 
         Returns:
             Paginated indicators with severity rollup.
         """
-        params: dict[str, Any] = {}
-        if level is not None:
-            params["level"] = level
-        if category is not None:
-            params["category"] = category
-        if pid is not None:
-            params["pid"] = pid
-        if attack_code is not None:
-            params["attackCode"] = attack_code
-        if page is not None:
-            params["page"] = page
-        if limit is not None:
-            params["limit"] = limit
-
+        params = indicator_params(
+            level=level,
+            category=category,
+            pid=pid,
+            attack_code=attack_code,
+            in_verdict_chain=in_verdict_chain,
+            page=page,
+            limit=limit,
+        )
         response = await self._http.get(
             f"/submissions/{uuid}/indicators",
             params=params if params else None,
         )
         return IndicatorsResponse.model_validate(response.json())
+
+    async def get_compact_indicators(
+        self,
+        uuid: str,
+        *,
+        level: IndicatorLevel | None = None,
+        category: str | None = None,
+        pid: int | None = None,
+        attack_code: str | None = None,
+        in_verdict_chain: bool | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+    ) -> CompactIndicatorsResponse:
+        """
+        Get the indicators of a submission with only the fields of a detection list.
+
+        Sends ``view=compact``: each row has only ``id``, ``name``, ``description``,
+        ``level``, ``score``, ``attack_codes``, ``attempted_attack_codes``,
+        ``in_verdict_chain``, ``actor``, ``target``, ``t_offset_s``, ``event_ids`` and
+        ``artifacts``. Servers before Threat.Zone v3.9.0 reject it with ``BadRequestError``.
+
+        Args:
+            uuid: Submission UUID.
+            level: Filter by indicator severity level.
+            category: Filter by free-form indicator category.
+            pid: Filter by process ID that emitted the indicator.
+            attack_code: Filter by MITRE ATT&CK technique code.
+            in_verdict_chain: The filter of ``get_indicators()``.
+            page: 1-indexed page number.
+            limit: Maximum items per page (1-100).
+
+        Returns:
+            Paginated compact indicators with severity rollup.
+        """
+        params = indicator_params(
+            level=level,
+            category=category,
+            pid=pid,
+            attack_code=attack_code,
+            in_verdict_chain=in_verdict_chain,
+            page=page,
+            limit=limit,
+        )
+        params["view"] = "compact"
+        response = await self._http.get(f"/submissions/{uuid}/indicators", params=params)
+        return CompactIndicatorsResponse.model_validate(response.json())
 
     async def get_iocs(
         self,
@@ -993,36 +1070,68 @@ class AsyncThreatZone:
         *,
         type: IoCType | None = None,
         tier: IoCTierFilter | None = None,
+        source: Sequence[IoCSource] | None = None,
+        grade: Sequence[IoCGradeFilter] | None = None,
+        exported: bool | None = None,
+        labelled: IoCLabelledFilter | None = None,
+        group: IoCGroup | None = None,
+        sort: IoCSort | None = None,
         page: int | None = None,
         limit: int | None = None,
     ) -> IoCsResponse:
         """
         Get Indicators of Compromise (IoCs) for a submission.
 
+        Each item carries the fields of its IoC row (``id``, ``grade``, ``reasons``,
+        ``exported``, ...), the row that the report, the web UI and ``download_iocs()`` read.
+
         Args:
             uuid: Submission UUID.
-            type: Filter by IoC type.
+            type: Filter by IoC type. ``"file"`` lists the items of files.
             tier: ``"ioc"`` for the indicators, ``"strings"`` for the values that only
                 strings found in the files of the submission hold, ``"all"`` for both. The
                 server default is ``"all"``. Each item carries its ``tier``. Servers
                 before the release that adds IoC tiers reject ``tier`` with
                 ``BadRequestError``; every row they return is an indicator.
+            source: Only values with evidence from one of these sources, for example
+                ``["network", "config"]``.
+            grade: Only values of these grades. ``"none"`` is a value without a grade.
+            exported: ``True`` lists only the values in the IoC exports, ``False`` only
+                the others.
+            labelled: ``"exclude"`` (the server default) leaves out labelled values such
+                as shared infrastructure, ``"include"`` lists them too, ``"only"`` lists
+                only labelled values.
+            group: ``"value"`` (the server default) lists one item per type and value.
+                ``"file"`` lists one item per IoC row: a file is one item of type
+                ``"file"`` with its SHA-256 as ``value``.
+            sort: ``"default"`` (the server default) or ``"grade"``: graded values first,
+                then labelled values, then strings.
             page: 1-indexed page number.
             limit: Maximum items per page (1-100).
 
+        ``source``, ``grade``, ``exported``, ``labelled``, ``group`` and ``sort`` need
+        Threat.Zone v3.9.0 or later; older servers reject them with ``BadRequestError``.
+
         Returns:
             Paginated IoC list.
-        """
-        params: dict[str, Any] = {}
-        if type is not None:
-            params["type"] = type
-        if tier is not None:
-            params["tier"] = tier
-        if page is not None:
-            params["page"] = page
-        if limit is not None:
-            params["limit"] = limit
 
+        Raises:
+            ServiceUnavailableError: When the server cannot read the IoC rows and the
+                request has one of the IoC row parameters, or ``type="file"`` (HTTP 503,
+                ``STORAGE_UNAVAILABLE``). Retry after ``retry_after`` seconds.
+        """
+        params = ioc_params(
+            type=type,
+            tier=tier,
+            source=source,
+            grade=grade,
+            exported=exported,
+            labelled=labelled,
+            group=group,
+            sort=sort,
+            page=page,
+            limit=limit,
+        )
         response = await self._http.get(
             f"/submissions/{uuid}/iocs",
             params=params if params else None,
@@ -1081,6 +1190,8 @@ class AsyncThreatZone:
         uuid: str,
         *,
         source: ArtifactSource | None = None,
+        page: int | None = None,
+        limit: int | None = None,
     ) -> ArtifactsResponse:
         """
         Get extracted artifacts for a submission.
@@ -1089,12 +1200,17 @@ class AsyncThreatZone:
             uuid: Submission UUID.
             source: Return only the artifacts with this stored source value, for example
                 ``"dynamic_report"``. An unknown value raises ``BadRequestError``.
+            page: 1-indexed page number. Without ``page`` and ``limit`` every artifact is
+                returned.
+            limit: Maximum items per page (1-100). The server default is 20 when ``page``
+                is set. ``page`` and ``limit`` need Threat.Zone v3.9.0 or later; older
+                servers reject them with ``BadRequestError``.
 
         Returns:
             Artifact list. Each artifact carries nested MD5/SHA1/SHA256 hashes, the engine
-            analysis state and the download route path.
+            analysis state, the download route path and the process that wrote it.
         """
-        params: dict[str, Any] | None = {"source": source} if source is not None else None
+        params: dict[str, Any] = {"source": source, "page": page, "limit": limit}
         response = await self._http.get(f"/submissions/{uuid}/artifacts", params=params)
         return ArtifactsResponse.model_validate(response.json())
 
@@ -2017,6 +2133,9 @@ class AsyncThreatZone:
         """
         Get the evidence pins and the note of your workspace on a submission.
 
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
+
         Pins and the note belong to the workspace of the API token. Each
         workspace that can see the submission keeps its own pins and note.
         You never read the annotations of another workspace.
@@ -2032,6 +2151,7 @@ class AsyncThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("get_annotations")
         response = await self._http.get(f"/submissions/{uuid}/annotations")
         return Annotations.model_validate(response.json())
 
@@ -2045,6 +2165,9 @@ class AsyncThreatZone:
     ) -> Annotations:
         """
         Add an evidence pin for your workspace.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         Your workspace can pin a submission that it can see: its own
         submissions and public submissions of other workspaces. The pin stays
@@ -2072,6 +2195,7 @@ class AsyncThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("pin_evidence")
         response = await self._http.post(
             f"/submissions/{uuid}/annotations/pins",
             json={"kind": kind, "ref": ref, "label": label},
@@ -2081,6 +2205,9 @@ class AsyncThreatZone:
     async def unpin_evidence(self, uuid: str, pin_id: str) -> Annotations:
         """
         Remove one evidence pin of your workspace.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         Args:
             uuid: Submission UUID.
@@ -2104,6 +2231,7 @@ class AsyncThreatZone:
             pin is removed. ``pin_evidence()`` and ``set_note()`` are safe to
             send again.
         """
+        warn_removed_annotation_route("unpin_evidence")
         response = await self._http.delete(
             f"/submissions/{uuid}/annotations/pins/{quote(pin_id, safe='')}"
         )
@@ -2112,6 +2240,9 @@ class AsyncThreatZone:
     async def set_note(self, uuid: str, text: str) -> Annotations:
         """
         Replace the note of your workspace on a submission.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         The request replaces the full note text. An empty text, or a text with
         only spaces, removes the note. Your workspace can write a note on a
@@ -2131,6 +2262,7 @@ class AsyncThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("set_note")
         response = await self._http.put(
             f"/submissions/{uuid}/annotations/note", json={"text": text}
         )
@@ -2571,10 +2703,16 @@ class AsyncThreatZone:
         uuid: str,
         *,
         attribution: Sequence[str] | None = None,
+        sort: NetworkEndpointSort | None = None,
+        group: Sequence[NetworkHostGroup] | None = None,
         limit: int | None = None,
     ) -> NetworkEndpoints:
         """
         Get the remote endpoints of the network map: the rows of each host joined.
+
+        Each endpoint carries the Hosts fields of the report (``group``, ``grade``,
+        ``reasons``, ``rank``, ...), and the response carries the Hosts counts in
+        ``summary``.
 
         This is a heavy route. Each API token can send 30 heavy-route requests per minute.
 
@@ -2583,20 +2721,28 @@ class AsyncThreatZone:
             attribution: Row sources to return: "sample", "sample_child",
                 "sensor_only", "windows_background". When unset, the server
                 returns every row except "windows_background".
+            sort: ``"priority"`` (the server default since Threat.Zone v3.9.0) is the Hosts
+                order of the report, by ``rank``. ``"default"`` keeps the order of before:
+                sample endpoints first, then by alerts, flows and first time.
+                ``"first_contact"`` and ``"last_contact"`` sort by contact time.
+            group: Only endpoints of these Hosts groups: ``"sample"``, ``"shared"``,
+                ``"background"``. ``limit`` applies after this filter.
             limit: Maximum number of endpoints (1-500). The server default is 300.
 
+        ``sort`` and ``group`` need Threat.Zone v3.9.0 or later; older servers reject them
+        with ``BadRequestError``.
+
         Returns:
-            The endpoints, sample endpoints first. ``total`` is the count before ``limit``.
+            The endpoints in the order of ``sort``. ``total`` is the count before ``limit``.
 
         Raises:
             RateLimitError: When the token sent too many heavy-route requests.
             BadRequestError: When a parameter is not valid.
             ReportUnavailableError: When the dynamic report is not yet available.
         """
-        params: dict[str, Any] = {
-            "attribution": ",".join(attribution) if attribution is not None else None,
-            "limit": limit,
-        }
+        params = network_endpoint_params(
+            attribution=attribution, sort=sort, group=group, limit=limit
+        )
         response = await self._http.get(f"/submissions/{uuid}/network/endpoints", params=params)
         return NetworkEndpoints.model_validate(response.json())
 
@@ -2934,38 +3080,55 @@ class AsyncThreatZone:
         """
         return await self._http.get_stream(f"/submissions/{uuid}/download/stix-2.1-report")
 
-    async def download_iocs(self, uuid: str, *, format: IocExportFormat) -> AsyncDownloadResponse:
+    async def download_iocs(
+        self,
+        uuid: str,
+        *,
+        format: IocExportFormat,
+        types: Sequence[IoCExportType] | None = None,
+        artifacts: Sequence[str] | None = None,
+        search: str | None = None,
+    ) -> AsyncDownloadResponse:
         """
-        Download the IP, domain, URL and SHA-256 indicators of a submission as one file.
+        Download the IoC rows of a submission as one file.
 
-        The web UI offers the same file. The file has no grade column and no
-        grade field. The server removes values that are not valid for their
-        type and duplicate values, and reads at most the first 50,000 IoC
-        records; use ``get_iocs()`` to read every record of every type. Values
-        are not masked: protect the file as sensitive data.
+        The file holds the values in the ``ioc`` tier, of an exported type, without a
+        label: the values that ``get_iocs()`` marks ``exported``. A file is one IoC with all
+        its hashes. The file can hold values that ``get_iocs()`` does not list, such as the
+        C2s of a configuration and the SHA-256 of the submitted file. Values are not
+        masked: protect the file as sensitive data.
 
         Args:
             uuid: Submission UUID.
-            format: ``"csv"`` (columns ``type``, ``value``, ``defanged``,
-                ``sources``), ``"text"`` (one defanged value on each line),
-                ``"stix"`` (STIX 2.1 bundle) or ``"misp"`` (MISP event JSON).
-                ``"stix"`` and ``"misp"`` need the ``stixReport`` plan
-                permission.
+            format: ``"csv"`` (``type``, ``value``, ``defanged``, ``sources``, ``port``, then
+                ``state``, ``grade``, ``first_seen``, ``process``, ``found_in``,
+                ``file_name``, ``md5``, ``sha1``, ``sha512`` and ``reasons``), ``"text"``
+                (one defanged value on each line), ``"stix"`` (STIX 2.1 bundle) or
+                ``"misp"`` (MISP event JSON). ``"stix"`` and ``"misp"`` need the
+                ``stixReport`` plan permission.
+            types: Only IoCs of these types, for example ``["domain", "url"]``. A file is
+                the type ``"file"``, with all its hashes.
+            artifacts: Only IoCs of these artifacts (``Artifact.id``): the file of the
+                artifact, or a value found in it.
+            search: Only IoCs whose value holds this text. The match ignores case.
+
+        The filters are the filters of the IoC table of the web UI. With filters, the file
+        holds only the IoCs that match all of them. They need Threat.Zone v3.9.0 or later;
+        older servers reject them with ``BadRequestError``.
 
         Returns:
             AsyncDownloadResponse for streaming or saving the file.
 
         Raises:
-            BadRequestError: When ``format`` is not known
+            BadRequestError: When ``format`` or a filter is not valid
                 (``INVALID_QUERY_PARAM``).
             PermissionDeniedError: When ``format`` is ``"stix"`` or ``"misp"``
                 and the plan has no ``stixReport`` permission.
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
-        return await self._http.get_stream(
-            f"/submissions/{uuid}/download/iocs", params={"format": format}
-        )
+        params = ioc_export_params(format=format, types=types, artifacts=artifacts, search=search)
+        return await self._http.get_stream(f"/submissions/{uuid}/download/iocs", params=params)
 
     async def get_pdf_report_status(self, uuid: str) -> PdfReportStatus:
         """

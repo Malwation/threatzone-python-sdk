@@ -324,7 +324,13 @@ class AiReport(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     status: AiReportStatus
-    job_id: str | None = Field(default=None, alias="jobId")
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release.",
+    )
+    """Deprecated: the internal id of a URL analysis job. No route takes it. Removed from the
+    API in its next release."""
     verdict: AiVerdict | None = None
     confidence: AiConfidence | None = None
     agrees_with_engine: bool | None = Field(default=None, alias="agreesWithEngine")
@@ -341,13 +347,19 @@ class AiReportPending(BaseModel):
     """AI report that is not ready yet (HTTP 202).
 
     ``status`` is ``waiting_for_analysis``, ``queued``, or ``in_progress``.
-    ``job_id`` and ``stage`` are set only for ``in_progress``. Poll again later.
+    ``stage`` is set only for ``in_progress``. Poll again later.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
     status: AiReportPendingStatus
-    job_id: str | None = Field(default=None, alias="jobId")
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release.",
+    )
+    """Deprecated: the internal id of the URL analysis job of an ``in_progress`` report. No
+    route takes it. Removed from the API in its next release."""
     stage: AiReportProgressStage | None = None
 
 

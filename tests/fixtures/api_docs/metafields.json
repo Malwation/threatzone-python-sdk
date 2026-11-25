@@ -1,0 +1,57 @@
+{
+  "sandbox": [
+    {
+      "key": "timeout",
+      "label": "Execution Duration",
+      "description": "Maximum time the sample is allowed to run.",
+      "shortDescription": "Maximum time the sample is allowed to run.",
+      "longDescription": null,
+      "type": "select",
+      "default": 120,
+      "active": true,
+      "accessible": true,
+      "options": [
+        {
+          "value": 60,
+          "label": "60 Seconds",
+          "accessible": true
+        },
+        {
+          "value": 120,
+          "label": "120 Seconds",
+          "accessible": true
+        },
+        {
+          "value": 180,
+          "label": "180 Seconds",
+          "accessible": false
+        },
+        {
+          "value": 240,
+          "label": "240 Seconds",
+          "accessible": false
+        },
+        {
+          "value": 300,
+          "label": "300 Seconds",
+          "accessible": false
+        }
+      ]
+    },
+    {
+      "key": "snapshot",
+      "label": "Snapshot",
+      "description": "Fast bootup feature for ~3 second VM access.",
+      "shortDescription": "Fast bootup feature for ~3 second VM access.",
+      "longDescription": null,
+      "type": "boolean",
+      "default": true,
+      "active": true,
+      "accessible": true
+    }
+  ],
+  "static": [],
+  "cdr": [],
+  "url": [],
+  "open_in_browser": []
+}

@@ -11,8 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VerdictTier = Literal["Malicious", "Suspicious", "Benign", "Not Measured"] | str
-"""Tier of the Windows V2 verdict. A newer server can send another value."""
+VerdictTier = Literal["Malicious", "Suspicious", "Benign", "Unknown", "Not Measured"] | str
+"""Tier of the Windows V2 verdict. ``Unknown`` is a run that could not rate the sample, for
+example a program that crashed at start. Servers before Threat.Zone v3.9.5 sent
+``Not Measured`` for it. A newer server can send another value."""
 
 VerdictStoryCategory = (
     Literal[
@@ -63,6 +65,10 @@ class VerdictDecisive(BaseModel):
     )
     """Deprecated: removed from the API in its next release. ``None`` when the server leaves
     it out."""
+    indicator_id: str | None = Field(default=None, alias="indicatorId")
+    """``Indicator.id`` of the ``get_indicators()`` row behind this decisive row. ``None`` when no
+    single indicator row stands for it, as for the combined weight of several behaviours, and
+    on older servers."""
     text: str
 
 
@@ -170,7 +176,8 @@ class Verdict(BaseModel):
     score: float | None = None
     """Dynamic verdict score from 0 to 100."""
     tier: VerdictTier | None = None
-    """Older reports stored ``Informative``; the API returns ``Benign`` for them."""
+    """Older reports stored ``Informative``; the API returns ``Benign`` for them. A run that
+    rated nothing is ``Unknown`` (``Not Measured`` on servers before Threat.Zone v3.9.5)."""
     summary: str | None = None
     """Verdict summary. ``None`` on reports older than schema 2.1."""
     narrative: VerdictNarrative | None = None
@@ -257,3 +264,33 @@ class RunNotes(BaseModel):
     is_dump_collector_activated: bool = Field(alias="isDumpCollectorActivated")
     """``True`` when the submission turned on the ``dump_collector`` metafield. It applies to
     legacy reports too."""
+
+
+class DynamicVerdictBrief(BaseModel):
+    """The verdict of the behaviour run alone, on the submission detail and summary.
+
+    ``Submission.level`` and ``Submission.score`` stay the submission verdict, which also
+    counts static analysis, YARA and extracted configurations. The text fields can change
+    between releases: show them, do not parse them.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    tier: VerdictTier
+    """The same value as ``get_verdict().tier``: ``Malicious``, ``Suspicious``, ``Benign`` or
+    ``Unknown``."""
+    score: float
+    """The same value as ``get_verdict().score`` (0-100)."""
+    summary: str | None = None
+    """``get_verdict().summary``. ``None`` for reports older than schema 2.1."""
+    headline: str | None = None
+    """``get_verdict().narrative.headline``. ``None`` for reports older than schema 2.1."""
+    tier_reason: str | None = Field(default=None, alias="tierReason")
+    """``get_verdict().narrative.tier_reason``. ``None`` for reports older than schema 2.1."""
+    run_notes: list[RunNote] = Field(default_factory=list, alias="runNotes")
+    """The same items as ``get_run().run_notes``. Empty for most runs."""
+    comparison: str | None = None
+    """One sentence that names the finding that rated the submission and the tier of the run
+    alone, for example "Rated Malicious (100/100) mainly because of Malware Detected: coinminer,
+    xmrig. The behaviour run on its own rated it Suspicious (45/100)." Set only when the
+    submission ``level`` and this ``tier`` are different scored tiers."""

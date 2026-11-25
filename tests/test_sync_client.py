@@ -49,6 +49,7 @@ from threatzone.types import (
     AiReportPending,
     AiReportRegenerateResult,
     Annotations,
+    ApiVersion,
     Artifact,
     ArtifactJob,
     ArtifactsResponse,
@@ -56,6 +57,7 @@ from threatzone.types import (
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
+    CompactIndicatorsResponse,
     Connection,
     DevicePresetOption,
     DnsQuery,
@@ -592,7 +594,7 @@ class TestCreateSubmissions:
         data = kwargs.get("data") or {}
         assert data.get("autoSelectEnvironment") == "true"
 
-    def test_create_sandbox_submission_omits_auto_select_when_false(
+    def test_create_sandbox_submission_omits_auto_select_by_default(
         self, api_key: str, sample_submission_created: dict[str, Any]
     ) -> None:
         ctx, mock = _patched_client(_make_response(200, sample_submission_created))
@@ -601,6 +603,30 @@ class TestCreateSubmissions:
         _, kwargs = mock.call_args
         data = kwargs.get("data") or {}
         assert "autoSelectEnvironment" not in data
+
+    def test_create_sandbox_submission_sends_auto_select_false(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_submission_created))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.create_sandbox_submission(b"fake-bytes", auto_select_environment=False)
+        _, kwargs = mock.call_args
+        data = kwargs.get("data") or {}
+        assert data.get("autoSelectEnvironment") == "false"
+
+    def test_create_sandbox_submission_reads_dynamic_skipped(self, api_key: str) -> None:
+        body = {
+            "uuid": "sub-1",
+            "message": "Submission created successfully",
+            "sha256": "a" * 64,
+            "dynamicSkipped": {"reason": "no_environment_in_plan", "platform": "linux"},
+        }
+        ctx, _ = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            created = client.create_sandbox_submission(b"fake-bytes")
+        assert created.dynamic_skipped is not None
+        assert created.dynamic_skipped.platform == "linux"
+        assert created.dynamic_skipped.architecture is None
 
     def test_create_open_in_browser_submission_sends_auto_select_environment(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -3016,6 +3042,9 @@ class TestVerdictAndRun:
             client.get_run("sub-789")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 class TestAnnotations:
     def test_get_annotations(self, api_key: str, sample_annotations: dict[str, Any]) -> None:
         ctx, mock = _patched_client(_make_response(200, sample_annotations))
@@ -3449,3 +3478,134 @@ class TestFakeApiArtifactAnalysisAndUrlDownload:
             assert download.file_name == "tool.exe"
             assert download.final_url == "https://cdn.example.com/tool.exe"
             assert download.read().startswith(b"PK")
+
+
+class TestPublicApi395Parameters:
+    def test_get_indicators_sends_in_verdict_chain_as_text(
+        self, api_key: str, sample_indicators_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_indicators_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_indicators("sub-789", in_verdict_chain=False, limit=5)
+        assert _call_params(mock) == {"inVerdictChain": "false", "limit": 5}
+
+    def test_get_compact_indicators_sends_view_compact(self, api_key: str) -> None:
+        body = {
+            "items": [
+                {
+                    "id": "6afdeb68057a5368fc2ff770",
+                    "name": "Clipboard read",
+                    "description": "The sample read the clipboard.",
+                    "level": "suspicious",
+                    "score": 45,
+                    "attackCodes": ["T1115"],
+                    "attemptedAttackCodes": [],
+                    "inVerdictChain": True,
+                    "actor": {"image": "malware.exe", "pid": 1508},
+                    "target": None,
+                    "tOffsetS": 1.5,
+                    "eventIds": [12],
+                    "artifacts": [],
+                }
+            ],
+            "total": 1,
+            "page": 1,
+            "limit": 20,
+            "totalPages": 1,
+            "levels": {"malicious": 0, "suspicious": 1, "benign": 0},
+        }
+        ctx, mock = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            page = client.get_compact_indicators("sub-789", in_verdict_chain=True)
+        assert _call_url(mock).endswith("/submissions/sub-789/indicators")
+        assert _call_params(mock) == {"inVerdictChain": "true", "view": "compact"}
+        assert isinstance(page, CompactIndicatorsResponse)
+        assert page.items[0].in_verdict_chain is True
+        assert page.items[0].attack_codes == ["T1115"]
+
+    def test_get_iocs_sends_the_row_filters(
+        self, api_key: str, sample_iocs_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_iocs_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_iocs(
+                "sub-789",
+                source=["network", "config"],
+                grade=["high", "none"],
+                exported=True,
+                labelled="include",
+                group="file",
+                sort="grade",
+            )
+        assert _call_params(mock) == {
+            "source": "network,config",
+            "grade": "high,none",
+            "exported": "true",
+            "labelled": "include",
+            "group": "file",
+            "sort": "grade",
+        }
+
+    def test_get_iocs_rejects_an_empty_filter_list(self, api_key: str) -> None:
+        with ThreatZone(api_key=api_key) as client, pytest.raises(ValueError, match="grade"):
+            client.get_iocs("sub-789", grade=[])
+
+    def test_get_artifacts_sends_page_and_limit(
+        self, api_key: str, sample_artifacts_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_artifacts_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_artifacts("sub-789", source="dynamic_report", page=2, limit=50)
+        assert _call_params(mock) == {"source": "dynamic_report", "page": 2, "limit": 50}
+
+    def test_get_artifacts_sends_nothing_by_default(
+        self, api_key: str, sample_artifacts_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_artifacts_response))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_artifacts("sub-789")
+        assert _call_params(mock) == {}
+
+    def test_get_network_endpoints_sends_sort_and_group(
+        self, api_key: str, sample_network_endpoints: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_client(_make_response(200, sample_network_endpoints))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.get_network_endpoints("sub-789", sort="default", group=["sample", "shared"])
+        assert _call_params(mock) == {"sort": "default", "group": "sample,shared"}
+
+    def test_download_iocs_sends_the_filters(self, api_key: str) -> None:
+        ctx, mock = _patched_stream(_make_response(200, content=b"type,value\n"))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.download_iocs(
+                "sub-789",
+                format="csv",
+                types=["domain", "file"],
+                artifacts=["66f0a1b2c3d4e5f6a7b8c9d0"],
+                search="example",
+            )
+        assert mock.call_args.kwargs["params"] == {
+            "format": "csv",
+            "types": "domain,file",
+            "artifacts": "66f0a1b2c3d4e5f6a7b8c9d0",
+            "search": "example",
+        }
+
+    def test_get_version(self, api_key: str) -> None:
+        ctx, mock = _patched_client(
+            _make_response(200, {"version": "2026.11.25", "apiVersion": "3.9.5"})
+        )
+        with ctx, ThreatZone(api_key=api_key) as client:
+            version = client.get_version()
+        assert _call_url(mock).endswith("/public-api/version")
+        assert isinstance(version, ApiVersion)
+        assert version.api_version == "3.9.5"
+
+    def test_analyze_artifact_and_url_download_send_auto_select_false(self, api_key: str) -> None:
+        body = {"uuid": "sub-1", "message": "Submission created successfully"}
+        ctx, mock = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            client.analyze_artifact("sub-789", "art-1", auto_select_environment=False)
+            assert mock.call_args.kwargs["json"]["autoSelectEnvironment"] is False
+            client.analyze_artifact("sub-789", "art-1")
+            assert "autoSelectEnvironment" not in mock.call_args.kwargs["json"]

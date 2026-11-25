@@ -1,0 +1,127 @@
+{
+  "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "type": "file",
+  "filename": "malware_sample.exe",
+  "hashes": {
+    "md5": "d41d8cd98f00b204e9800998ecf8427e",
+    "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "file": {
+    "name": "malware_sample.exe",
+    "size": 245760,
+    "extension": "exe",
+    "declaredExtension": "exe",
+    "realExtension": "exe",
+    "isMimetypeMismatched": false,
+    "mimetype": "application/x-dosexec",
+    "isMimetypeChecked": true,
+    "entrypoint": null,
+    "source": {
+      "type": "upload",
+      "url": null
+    },
+    "history": {
+      "filenames": [
+        "malware_sample.exe",
+        "invoice.exe"
+      ],
+      "lastReceivedAt": 1718008200000
+    }
+  },
+  "level": "malicious",
+  "score": 78.5,
+  "family": "AsyncRAT",
+  "private": false,
+  "tags": [
+    {
+      "author": "system",
+      "type": "malware_family",
+      "value": "emotet",
+      "origin": "yara"
+    }
+  ],
+  "reports": [
+    {
+      "type": "dynamic",
+      "status": "completed",
+      "level": "malicious",
+      "score": 85,
+      "duration": 42.7,
+      "format": "regular",
+      "operatingSystem": {
+        "name": "Windows 10 x64",
+        "platform": "windows"
+      },
+      "metafields": {
+        "Work Path": "Desktop",
+        "Execution Duration": "120 Seconds"
+      },
+      "metafieldValues": {
+        "work_path": "desktop",
+        "timeout": 120
+      },
+      "executionDurationSeconds": 120,
+      "declineReason": null
+    }
+  ],
+  "overview": {
+    "status": "completed",
+    "duration": 42.7,
+    "jobs": {
+      "total": 5,
+      "succeeded": 5,
+      "failed": 0,
+      "skipped": 0,
+      "finished": 5,
+      "completed": 5
+    }
+  },
+  "indicators": {
+    "levels": {
+      "malicious": 5,
+      "suspicious": 3,
+      "benign": 1
+    },
+    "artifactCount": 12
+  },
+  "mitreTechniques": [
+    "T1055",
+    "T1059.001",
+    "T1547.001"
+  ],
+  "createdAt": "2024-06-15T10:30:00Z",
+  "updatedAt": "2024-06-15T10:45:00Z",
+  "finalized": true,
+  "scoreBreakdown": {
+    "verdict": "Malicious",
+    "score": 78.5,
+    "cap": 90,
+    "contributors": [
+      {
+        "source": "dynamic_scan",
+        "indicatorId": "6afda5c3ce47c5b5d056d922",
+        "title": "Deletes volume shadow copies",
+        "points": 90,
+        "level": "malicious"
+      }
+    ],
+    "whatWouldChange": [
+      "One malicious finding removes the benign findings from the mean score."
+    ]
+  },
+  "dynamicVerdict": {
+    "tier": "Suspicious",
+    "score": 45,
+    "summary": "Suspicious (45/100): the sample read the clipboard.",
+    "headline": "Suspicious (45/100): the sample read the clipboard.",
+    "tierReason": "This action alone is enough for Suspicious; no multi-step attack pattern was seen. Malicious would have required another finding from the same process that confirms the activity, such as a payload, command-and-control traffic or persistence.",
+    "runNotes": [
+      {
+        "code": "sample_exited_early",
+        "text": "The submitted program exited on its own 1.1 s after it started."
+      }
+    ],
+    "comparison": "Rated Malicious (78.5/100) mainly because of Deletes volume shadow copies. The behaviour run on its own rated it Suspicious (45/100)."
+  }
+}

@@ -175,6 +175,11 @@ def test_api_deprecations_are_marked() -> None:
         "UrlAnalysisIpInfo.threat_status",
         "UrlScoreIndicator.weighted_points",
         "UrlScoreExplanation.scoring_version",
+        "ModuleInfo.module_id",
+        "AiReport.job_id",
+        "AiReportPending.job_id",
+        "UrlScoreBrowserSnapshot.job_id",
+        "UrlAnalysisBrowserSection.job_id",
     } <= marked
 
 
@@ -225,3 +230,64 @@ def test_jobs_mirror_completed_without_a_warning() -> None:
             {"total": 3, "succeeded": 2, "failed": 1, "skipped": 0, "finished": 3, "completed": 9}
         )
         assert jobs.model_dump()["completed"] == 3
+
+
+_ANNOTATIONS_BODY = {"submissionUuid": UUID, "pins": [], "note": None}
+_ANNOTATION_CALLS: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
+    ("get_annotations", (UUID,), {}),
+    (
+        "pin_evidence",
+        (UUID,),
+        {"kind": "technique", "ref": "technique:T1055", "label": "Injection"},
+    ),
+    ("unpin_evidence", (UUID, "8f3a2c1e-5b6d-4e7f-9a0b-1c2d3e4f5a6b"), {}),
+    ("set_note", (UUID, "A note."), {}),
+]
+
+
+def _annotations_handler(seen: list[httpx.Request]) -> Any:
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_ANNOTATIONS_BODY)
+
+    return handler
+
+
+@pytest.mark.parametrize(
+    ("method", "args", "kwargs"), _ANNOTATION_CALLS, ids=[call[0] for call in _ANNOTATION_CALLS]
+)
+def test_annotation_methods_warn_that_the_api_removed_the_route(
+    method: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> None:
+    seen: list[httpx.Request] = []
+    client = ThreatZone(
+        api_key="k",
+        base_url="https://fake.threat.zone/public-api",
+        http_client=httpx.Client(transport=httpx.MockTransport(_annotations_handler(seen))),
+    )
+    with pytest.warns(DeprecationWarning) as record:
+        getattr(client, method)(*args, **kwargs)
+    [warning] = [item for item in record if item.category is DeprecationWarning]
+    message = str(warning.message)
+    assert message.startswith(f"{method}() is deprecated")
+    assert "removed its route on 2026-10-19" in message
+    assert "SDK 2.0" in message
+    assert warning.filename == __file__
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    ("method", "args", "kwargs"), _ANNOTATION_CALLS, ids=[call[0] for call in _ANNOTATION_CALLS]
+)
+async def test_async_annotation_methods_warn_that_the_api_removed_the_route(
+    method: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> None:
+    seen: list[httpx.Request] = []
+    client = AsyncThreatZone(
+        api_key="k",
+        base_url="https://fake.threat.zone/public-api",
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_annotations_handler(seen))),
+    )
+    with pytest.warns(DeprecationWarning, match=r"removed its route on 2026-10-19.*SDK 2\.0"):
+        await getattr(client, method)(*args, **kwargs)
+    assert len(seen) == 1

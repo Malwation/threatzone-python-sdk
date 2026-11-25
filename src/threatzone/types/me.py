@@ -115,7 +115,13 @@ class ModuleInfo(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    module_id: str = Field(alias="moduleId")
+    module_id: str | None = Field(
+        default=None,
+        alias="moduleId",
+        deprecated="module_id is removed from the API in its next release. Read module_name.",
+    )
+    """Deprecated: the internal database id of the module. No route takes it. Removed from
+    the API in its next release. Read ``module_name``."""
     module_name: str = Field(alias="moduleName")
     start_time: str = Field(alias="startTime")
     """Display text. Read ``starts_at`` in code."""

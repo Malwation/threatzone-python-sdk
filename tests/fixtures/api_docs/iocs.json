@@ -1,0 +1,141 @@
+{
+  "items": [
+    {
+      "type": "domain",
+      "value": "evil-c2.example.com",
+      "artifacts": [
+        "6553f1c0e4b0a1a2b3c4d5e6"
+      ],
+      "ports": [
+        443
+      ],
+      "tier": "ioc",
+      "id": "8c1f0a9e2b7d4c11",
+      "source": "network",
+      "sources": [
+        "network",
+        "config",
+        "static"
+      ],
+      "state": "contacted",
+      "binding": "exact",
+      "description": "TLS server name",
+      "recordedValue": null,
+      "grade": "high",
+      "reasons": [
+        {
+          "code": "config_c2",
+          "text": "Named as a C2 address in the extracted AsyncRAT config.",
+          "effect": "raises"
+        },
+        {
+          "code": "contacted",
+          "text": "Contacted by the sample (loader.exe (PID 4120)).",
+          "effect": "raises"
+        }
+      ],
+      "label": null,
+      "labelDetail": null,
+      "exported": true,
+      "notExportedReason": null,
+      "firstSeen": 12.4,
+      "process": {
+        "pid": 4120,
+        "image": "C:\\Users\\admin\\AppData\\Roaming\\loader.exe",
+        "role": "child"
+      },
+      "foundIn": [
+        {
+          "kind": "process",
+          "name": "loader.exe",
+          "pid": 4120,
+          "image": "C:\\Users\\admin\\AppData\\Roaming\\loader.exe"
+        },
+        {
+          "kind": "config",
+          "name": "AsyncRAT",
+          "family": "AsyncRAT"
+        },
+        {
+          "kind": "file",
+          "name": "payload.dll",
+          "artifactId": "6553f1c0e4b0a1a2b3c4d5e6"
+        }
+      ],
+      "file": null,
+      "resolvedIps": [
+        "107.173.84.53"
+      ],
+      "family": "AsyncRAT"
+    },
+    {
+      "type": "md5",
+      "value": "9e8d6c0f6b1d4f1a0e3b2c5d7a9f8e1b",
+      "artifacts": [
+        "6553f1c0e4b0a1a2b3c4d5e7"
+      ],
+      "tier": "ioc",
+      "id": "41d2b6c0aa9f7e03",
+      "source": "file",
+      "sources": [
+        "file",
+        "static"
+      ],
+      "state": "ran",
+      "binding": null,
+      "description": "Executed file: C:\\Users\\admin\\AppData\\Roaming\\loader.exe",
+      "recordedValue": null,
+      "grade": "high",
+      "reasons": [
+        {
+          "code": "yara",
+          "text": "The file matches the malicious YARA rule AsyncRAT_Payload.",
+          "effect": "raises"
+        },
+        {
+          "code": "file_ran",
+          "text": "Ran during the analysis as loader.exe (PID 4120).",
+          "effect": "raises"
+        }
+      ],
+      "label": null,
+      "labelDetail": null,
+      "exported": true,
+      "notExportedReason": null,
+      "firstSeen": 9.8,
+      "process": {
+        "pid": 3312,
+        "image": "C:\\Users\\admin\\Desktop\\sample.exe",
+        "role": "sample"
+      },
+      "foundIn": [
+        {
+          "kind": "file",
+          "name": "loader.exe",
+          "artifactId": "6553f1c0e4b0a1a2b3c4d5e7"
+        }
+      ],
+      "file": {
+        "sha256": "3f2a5b7c9d1e4f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
+        "sha1": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "md5": "9e8d6c0f6b1d4f1a0e3b2c5d7a9f8e1b",
+        "sha512": null,
+        "names": [
+          "loader.exe"
+        ],
+        "writtenTo": [
+          "C:\\Users\\admin\\AppData\\Roaming\\loader.exe"
+        ],
+        "size": 48640,
+        "class": "executed",
+        "artifactId": "6553f1c0e4b0a1a2b3c4d5e7"
+      },
+      "resolvedIps": [],
+      "family": null
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 1
+}

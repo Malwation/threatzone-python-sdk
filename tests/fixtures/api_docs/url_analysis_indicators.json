@@ -1,0 +1,83 @@
+{
+  "state": "available",
+  "unavailableReason": null,
+  "snapshot": {
+    "jobId": "6710a3f2c1d2e3f4a5b6c7d8",
+    "scoredAt": "2026-10-01T09:30:00.000Z",
+    "browserSnapshot": {
+      "manifestHash": "9f2c4a6e8b0d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a"
+    },
+    "threatScore": 20,
+    "verdict": "suspicious",
+    "indicators": [
+      {
+        "id": "domain-age",
+        "ruleId": "whois.domain_age",
+        "source": "whois",
+        "family": "reputation",
+        "title": "Domain registered recently",
+        "reason": "The domain was registered 3 days before the analysis.",
+        "availability": "measured",
+        "confidence": "high",
+        "disposition": "contributing",
+        "evidenceRefs": [
+          {
+            "kind": "report",
+            "id": "whois",
+            "available": true
+          }
+        ],
+        "checkedUrl": "https://phish.example.com/login",
+        "level": "suspicious",
+        "evidence": [
+          {
+            "kind": "observed",
+            "label": "Domain age",
+            "value": "3 days",
+            "ref": {
+              "kind": "report",
+              "id": "whois",
+              "available": true,
+              "label": "WHOIS record"
+            }
+          }
+        ],
+        "evidenceTotal": 1
+      },
+      {
+        "id": "domain-age-cdn",
+        "ruleId": "whois.domain_age",
+        "source": "whois",
+        "family": "reputation",
+        "title": "Domain registered recently",
+        "reason": "Not counted: score comes from phish.example.com. The domain was registered 5 days before the analysis.",
+        "availability": "measured",
+        "confidence": "high",
+        "disposition": "other_url",
+        "evidenceRefs": [
+          {
+            "kind": "report",
+            "id": "whois",
+            "available": true
+          }
+        ],
+        "checkedUrl": "https://cdn.example.net/app.js",
+        "level": "suspicious"
+      }
+    ],
+    "aggregation": {
+      "highPoints": 20,
+      "heuristicPoints": 0,
+      "reputationCredits": [],
+      "creditScope": "heuristic",
+      "effectiveCredit": 0,
+      "scoreBeforeClamp": 20,
+      "scoreAfterClamp": 20,
+      "roundingAdjustment": 0,
+      "impersonationFloorAdjustment": 0,
+      "exemptPoints": 0,
+      "bandAdjustment": 0
+    },
+    "verdictAdjustments": []
+  }
+}
