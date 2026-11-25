@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1.png",
+    "name": "1.png",
+    "kind": "screenshot",
+    "size": 48213,
+    "downloadLink": "/public-api/submissions/a1b2c3d4-e5f6-7890-abcd-ef1234567890/media/1.png?source=url_analysis"
+  },
+  {
+    "id": "recording.mp4",
+    "name": "recording.mp4",
+    "kind": "video",
+    "size": 2390112,
+    "downloadLink": "/public-api/submissions/a1b2c3d4-e5f6-7890-abcd-ef1234567890/media/recording.mp4?source=url_analysis"
+  }
+]

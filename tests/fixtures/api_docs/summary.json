@@ -1,0 +1,39 @@
+{
+  "score": 78.5,
+  "family": "AsyncRAT",
+  "indicators": {
+    "total": 9,
+    "levels": {
+      "malicious": 5,
+      "suspicious": 3,
+      "benign": 1
+    }
+  },
+  "behaviorEventCount": 1342,
+  "behaviorEventCountAvailable": true,
+  "syscallCount": 15420,
+  "iocCount": 12,
+  "yaraRuleCount": 7,
+  "configCount": 2,
+  "artifactCount": 18,
+  "mitreTechniqueCount": 5,
+  "network": {
+    "dnsCount": 42,
+    "httpCount": 15,
+    "tcpCount": 28,
+    "udpCount": 5,
+    "threatCount": 3,
+    "countsAvailable": true,
+    "availability": null,
+    "sourceScope": null
+  },
+  "dynamicVerdict": {
+    "tier": "Suspicious",
+    "score": 45,
+    "summary": "Suspicious (45/100): the sample read the clipboard.",
+    "headline": "Suspicious (45/100): the sample read the clipboard.",
+    "tierReason": "This action alone is enough for Suspicious; no multi-step attack pattern was seen. Malicious would have required another finding from the same process that confirms the activity, such as a payload, command-and-control traffic or persistence.",
+    "runNotes": [],
+    "comparison": "Rated Malicious (78.5/100) mainly because of Deletes volume shadow copies. The behaviour run on its own rated it Suspicious (45/100)."
+  }
+}

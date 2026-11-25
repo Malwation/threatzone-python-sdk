@@ -29,6 +29,22 @@ TagOrigin = (
 TagAuthor = Literal["system", "user"] | str
 MetafieldValue = bool | int | float | str
 """A stored analysis option value with its type."""
+DeclineReasonCode = (
+    Literal[
+        "vpn_credentials_missing",
+        "vpn_auth_rejected",
+        "vpn_profile_invalid",
+        "vpn_unreachable",
+        "sample_too_large",
+        "sample_unsupported",
+        "archive_unreadable",
+        "timeout_out_of_range",
+        "start_arguments_rejected",
+    ]
+    | str
+)
+"""Why a dynamic analysis did not start. The API documents a closed set; treat an unknown
+code as no reason."""
 
 
 _RowT = TypeVar("_RowT")
@@ -155,6 +171,17 @@ class ReportOperatingSystem(BaseModel):
     platform: OperatingSystemPlatform | str
 
 
+class DeclineReason(BaseModel):
+    """Why the dynamic analysis did not start, for a cause that the submitter can fix."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: DeclineReasonCode
+    """One key of a closed set, for example ``vpn_credentials_missing``."""
+    text: str
+    """The message for the user. Show it as it is."""
+
+
 class ReportStatus(BaseModel):
     """Status of an analysis report."""
 
@@ -180,6 +207,20 @@ class ReportStatus(BaseModel):
     """Stored analysis option values with their types, keyed by the metafield key, for
     example ``{"timeout": 120, "internet_connection": True}``. Only ``get_submission()``
     sends it. ``None`` when the report has no options and on older servers."""
+    metafield_value_labels: dict[str, str] | None = Field(
+        default=None, alias="metafieldValueLabels"
+    )
+    """Option names of the ``metafield_values`` entries whose value is a database id
+    (``trace_profile``, ``region_preset`` and ``device_preset``), keyed by the metafield key,
+    for example ``{"trace_profile": "Heavy"}``. Show these names to people; send the id in
+    ``metafield_values`` back to submit with the same options. A value that no option names is
+    left out. Only ``get_submission()`` sends it. ``None`` when the report has none of these
+    options and on older servers."""
     execution_duration_seconds: float | None = Field(default=None, alias="executionDurationSeconds")
     """The ``timeout`` option of a dynamic report in seconds. Only ``get_submission()``
     sends it. ``None`` for other reports and on older servers."""
+    decline_reason: DeclineReason | None = Field(default=None, alias="declineReason")
+    """Why the dynamic analysis did not start, when the submitter can fix the cause, for
+    example an OpenVPN profile without a username and password. Set only on a ``dynamic``
+    report with ``status`` ``error``. ``None`` on every other report, on an internal failure,
+    after a restart and on older servers."""

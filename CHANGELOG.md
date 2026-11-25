@@ -5,6 +5,78 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+The SDK now models the Public API of Threat.Zone v3.9.5. Every new field is `None` or empty
+when an older server leaves it out, and every new parameter is left out of the request
+unless you pass it.
+
+### Added
+
+- `Submission.dynamic_verdict` and `OverviewSummary.dynamic_verdict` (`DynamicVerdictBrief`:
+  `tier`, `score`, `summary`, `headline`, `tier_reason`, `run_notes`, `comparison`): the
+  verdict of the behaviour run alone. `level` and `score` stay the submission verdict.
+- `ReportStatus.decline_reason` (`DeclineReason`: `code`, `text`; `DeclineReasonCode`) on a
+  `dynamic` report with `status` `error`, when the run did not start for a cause the
+  submitter can fix, for example an OpenVPN profile without credentials.
+- `ReportStatus.metafield_value_labels`: the names of the options stored as database ids
+  (`trace_profile`, `region_preset`, `device_preset`).
+- `dynamic_skipped` (`DynamicSkipped`: `reason`, `platform`, `architecture`) on
+  `SubmissionCreated`, `UrlDownloadSubmission` and `Submission`: the sandbox submission was
+  accepted for static analysis only, because no environment of the plan can run the sample.
+- `get_indicators(in_verdict_chain=...)`, and `get_compact_indicators()` for `view=compact`
+  (`CompactIndicator`, `CompactIndicatorsResponse`).
+- `VerdictDecisive.indicator_id`: the `Indicator.id` of the row behind a decisive row.
+- The IoC row fields on `IoC`: `id`, `source`, `sources`, `state`, `binding`,
+  `description`, `recorded_value`, `grade`, `reasons` (`IoCReason`), `label`, `label_detail`,
+  `exported`, `not_exported_reason`, `first_seen`, `process` (`IoCProcess`), `found_in`
+  (`IoCFoundIn`), `file` (`IoCFile`), `resolved_ips` and `family`, with the literals of
+  `threatzone.types.ioc_rows`.
+- `get_iocs()` parameters `source`, `grade`, `exported`, `labelled`, `group` and `sort`.
+  `IoCType` adds `mutex`, `pipe`, `scheduled_task`, `service`, `registry_value`,
+  `root_certificate`, `config_hash` and `file`.
+- `download_iocs()` filters `types`, `artifacts` and `search`.
+- `Artifact.writer` (`ArtifactWriter`: `guest_path`, `pid`, `process_name`), and
+  `get_artifacts(page=..., limit=...)` with `ArtifactsResponse.page`, `limit` and
+  `total_pages`.
+- The Hosts fields on `NetworkEndpoint` (`group`, `grade`, `reasons`, `label`,
+  `label_detail`, `detection_level`, `patterns`, `ioc_id`, `rank`), `NetworkEndpoints.summary`
+  (`NetworkHostSummary`), and `get_network_endpoints(sort=..., group=...)`.
+- `MediaFile.download_link`, `MetafieldOption.short_description` and `long_description`,
+  and `timeshift_seconds` on `NetworkHttpPacket` and `NetworkHttpPacketResponse`.
+- `get_version()` returns `ApiVersion` (`version`, `api_version`) from `GET /version`.
+- The fake API serves the new fields, parameters and `GET /version`. Its verdicts say
+  `Unknown` for a run that rated nothing, and its endpoints come in the Hosts order.
+
+### Changed
+
+- `auto_select_environment` of `create_sandbox_submission()`, `analyze_artifact()` and
+  `create_url_download_submission()` is `bool | None` and defaults to `None`, which sends
+  nothing. Since Threat.Zone v3.9.5 the server auto-selects the environment by default, so a
+  call without the argument now runs on the environment of the file type. Pass `False` to
+  start from the plan's default OS. The SDK now sends `False` when you pass it; before, it
+  left the field out, so the server default applied.
+- `VerdictTier` adds `Unknown`. Since Threat.Zone v3.9.5, `tier` of `get_verdict()` and of
+  `dynamic_verdict` is `Unknown`, not `Not Measured`, for a run that rated nothing, also for
+  reports stored before. Code that compares `tier` with `"Not Measured"` must accept
+  `"Unknown"`.
+- A mail submitted through the API is an `email_file` artifact, not `sample`, since
+  Threat.Zone v3.9.5, and its attachments are `email_attachment`, not
+  `compressed_file_entry`. `ArtifactType` already lists both values. Code that finds the
+  submitted mail by `type == "sample"` must accept `email_file`.
+- Overview rows of `get_indicators()` have a stable `id` since Threat.Zone v3.9.5, and
+  `ScoreContributor.indicator_id` is set for them. Tell overview rows apart by `source`.
+- `get_network_endpoints()` lists the endpoints in the Hosts order of the report by default
+  since Threat.Zone v3.9.5. Pass `sort="default"` for the order of before.
+- The `download_iocs()` docstring describes the export of the IoC rows of v3.9.5.
+
+### Deprecated
+
+- The API removes these fields in its next release: `ModuleInfo.module_id` (read
+  `module_name`), `AiReport.job_id`, `AiReportPending.job_id`, `UrlScoreBrowserSnapshot.job_id`
+  and `UrlAnalysisBrowserSection.job_id` (read `revision`). They are optional now, so a
+  response without them parses.
+
 ## [1.2.0] - 2026-11-19
 
 ### Added

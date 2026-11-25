@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "key": "malware-c2.example.com",
+      "host": "malware-c2.example.com",
+      "ips": [
+        "192.0.2.10"
+      ],
+      "ports": [
+        443
+      ],
+      "protocols": [
+        "DNS",
+        "TLS"
+      ],
+      "source": "sample",
+      "firstTimeshift": 1250,
+      "lastTimeshift": 12500,
+      "requestCount": 14,
+      "alertCount": 1,
+      "maxAlertSeverity": "1",
+      "maxAlertSeverityLevel": 1,
+      "processIds": [
+        1924
+      ],
+      "attributionNote": null,
+      "group": "sample",
+      "grade": "high",
+      "reasons": [
+        {
+          "code": "config_c2",
+          "text": "Named as a C2 address in the extracted AsyncRAT config.",
+          "effect": "raises"
+        }
+      ],
+      "label": null,
+      "labelDetail": null,
+      "detectionLevel": "malicious",
+      "patterns": [
+        "beacon"
+      ],
+      "iocId": "8c1f0a9e2b7d4c11",
+      "rank": 0
+    }
+  ],
+  "total": 42,
+  "truncated": false,
+  "summary": {
+    "hostCount": 12,
+    "ratedCount": 2,
+    "protocols": [
+      "DNS",
+      "TLS",
+      "HTTP",
+      "QUIC"
+    ],
+    "sharedCount": 5,
+    "backgroundCount": 9,
+    "backgroundWithAlerts": 1,
+    "truncated": false
+  }
+}

@@ -527,7 +527,12 @@ class UrlScoreBrowserSnapshot(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    job_id: str = Field(alias="jobId")
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release.",
+    )
+    """Deprecated: removed from the API in its next release."""
     manifest_hash: str = Field(alias="manifestHash")
 
 
@@ -731,7 +736,12 @@ class UrlAnalysisBrowserSection(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     section: UrlAnalysisBrowserSectionName | str
-    job_id: str = Field(alias="jobId")
+    job_id: str | None = Field(
+        default=None,
+        alias="jobId",
+        deprecated="job_id is removed from the API in its next release. Read revision.",
+    )
+    """Deprecated: removed from the API in its next release. Read ``revision``."""
     revision: str
     updated_at: int | None = Field(default=None, alias="updatedAt")
     # Free-form: the section data follows the report page and can add fields.

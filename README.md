@@ -104,7 +104,8 @@ print(f"Verdict: {completed.level}")
 print(f"MITRE techniques: {completed.mitre_techniques}")
 ```
 
-- Pass `auto_select_environment=True` to let the server route the sample to a Windows / Linux / macOS / Android environment based on its detected type. See [recipe 14](./docs/RECIPES.md#14-auto-select-sandbox-environment).
+- Since Threat.Zone v3.9.5 the server routes the sample to a Windows / Linux / macOS / Android environment based on its detected type by default. Pass `auto_select_environment=False` to always start from the plan's default OS, or `True` to ask for it on an older server. See [recipe 14](./docs/RECIPES.md#14-auto-select-sandbox-environment).
+- When no environment of the plan can run the sample, the submission runs static analysis only and `created.dynamic_skipped` says why (`reason`, `platform`, `architecture`).
 
 ### Score explanation
 
@@ -126,8 +127,15 @@ if detail.score_breakdown is not None:
   between releases. Match on `indicator_id`, not on the title.
 - `score` and `level` are the submission verdict: static analysis, YARA and the behaviour
   run together. `get_verdict()` describes the behaviour run alone.
+- `dynamic_verdict` (also on `get_overview_summary()`) is the verdict of the behaviour run
+  alone: `tier`, `score`, `tier_reason`, `run_notes` and, when the two verdicts differ,
+  a `comparison` sentence. It is `None` until the run is published.
 - The detail response also carries `overview.duration`, `file.history` (other names of the
-  same sample), `reports[].metafields` (the analysis options) and `tags[].author`.
+  same sample), `reports[].metafields` (the analysis options), `reports[].metafield_value_labels`
+  (the names of options stored as database ids, such as `trace_profile`), `tags[].author` and
+  `dynamic_skipped`.
+- A dynamic report with `status == "error"` carries `decline_reason` (`code`, `text`) when the
+  submitter can fix the cause, for example an OpenVPN profile without credentials. Show `text`.
 
 ### Filename canonicalisation (`dynamic_mimetype_check`)
 
@@ -389,9 +397,14 @@ for row in client.get_indicators(uuid).items:
         print(row.actor.image, row.actor.pid, row.actor.pid_gen)
     for event in row.related or []:
         print(event.event_id, event.t_offset_s, event.text)
-    # Overview rows have an empty id. source names the engine that produced them.
-    if not row.id:
-        print(row.source, row.artifacts)
+    # Overview rows (YARA, signature check, configuration, URL analysis) have a stable id.
+    # source names the engine: every row whose source is not dynamic_scan is an overview row.
+    if row.source != "dynamic_scan":
+        print(row.id, row.source, row.artifacts)
+
+# Only the findings that set the verdict, with only the fields of a detection list.
+for row in client.get_compact_indicators(uuid, in_verdict_chain=True).items:
+    print(row.id, row.name, row.level, row.score)
 
 # tier="ioc" leaves out the values that only strings found in the files hold. Servers
 # before the release that adds IoC tiers reject tier; every row they return is an IoC.
@@ -402,9 +415,16 @@ except BadRequestError:
 for ioc in iocs:
     print(ioc.type, ioc.value, ioc.ports)
 
+# The IoC rows of the report: grade, reasons and export state. A file is one item with
+# group="file". These parameters need Threat.Zone v3.9.5 or later.
+for ioc in client.get_iocs(uuid, group="file", grade=["high", "medium"], sort="grade").items:
+    print(ioc.id, ioc.type, ioc.value, ioc.grade, ioc.exported, [r.code for r in ioc.reasons])
+
 # Filter by the stored source value; an unknown value raises BadRequestError.
-for artifact in client.get_artifacts(uuid, source="dynamic_report").items:
+for artifact in client.get_artifacts(uuid, source="dynamic_report", page=1, limit=50).items:
     print(artifact.filename, artifact.analysis_status, artifact.analysis_reason)
+    if artifact.writer is not None:  # the process that wrote the file in the run
+        print(artifact.writer.process_name, artifact.writer.pid, artifact.writer.guest_path)
     # The engine jobs of the artifact, oldest first.
     for job in client.get_artifact_jobs(uuid, artifact.id):
         print(job.engine_type, job.status, job.error_code)  # error_code: JOB_FAILED, ...
@@ -568,8 +588,14 @@ for pair in client.get_http_request_packets(uuid, http_row.id).items:
     print(pair.method, pair.url, pair.body.data if pair.body else None)
 tcp_packets = client.get_tcp_connection_packets(uuid, page[0].id)  # also: UDP
 
-# The network map: endpoints, then the flows and alerts of one host, page by page.
-endpoints = client.get_network_endpoints(uuid, attribution=["sample", "sample_child"])
+# The network map: endpoints in the Hosts order of the report (rank), with their priority
+# (grade), reasons and patterns; summary holds the Hosts counts. sort="default" gives the
+# order of servers before v3.9.5. Then the flows and alerts of one host, page by page.
+endpoints = client.get_network_endpoints(
+    uuid, attribution=["sample", "sample_child"], group=["sample"]
+)
+for endpoint in endpoints.items:
+    print(endpoint.rank, endpoint.key, endpoint.grade, endpoint.patterns)
 host = endpoints.items[0].key
 flows = client.get_network_host_flows(uuid, host, attribution=["sample", "sample_child"])
 while True:
@@ -611,11 +637,14 @@ with client.download_stix_report(uuid) as download:  # STIX 2.1 bundle
 with client.download_html_report(uuid) as download:
     download.save("report.html")
 
-# IP, domain, URL and SHA-256 indicators as one file: csv, text, stix or misp.
+# The exported IoC rows as one file: csv, text, stix or misp.
 # stix and misp need the stixReport plan permission; without it the call raises
 # PermissionDeniedError. The values are not masked.
 with client.download_iocs(uuid, format="csv") as download:
     download.save("iocs.csv")
+# The filters of the IoC table of the web UI (Threat.Zone v3.9.5 or later).
+with client.download_iocs(uuid, format="text", types=["domain", "url"], search="example") as d:
+    d.save("domains.txt")
 
 # AI analyst report: AiReport (HTTP 200) or AiReportPending (HTTP 202).
 from threatzone import AiReportPending

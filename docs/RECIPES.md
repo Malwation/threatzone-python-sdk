@@ -881,6 +881,11 @@ with ThreatZone(api_key="<your-api-key>") as client:
 
 **Notes.**
 
+- Since Threat.Zone v3.9.5 the server auto-selects by default, so `True` is needed only on
+  older servers. Pass `auto_select_environment=False` to always start from the plan's
+  default OS. The SDK leaves the field out when you pass nothing.
+- When no environment of the plan can run the file, the server accepts it for static
+  analysis only: `submission.dynamic_skipped` names the `platform` it needs.
 - If you also pass `environment="w10_x64"`, the explicit choice wins and the auto flag
   is ignored (the server logs a warning but the request succeeds).
 - Unknown extensions fall back to your plan's default OS, so the call never fails just

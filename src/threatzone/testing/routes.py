@@ -24,6 +24,7 @@ _SHA = r"[A-Fa-f0-9]{1,128}"
 
 
 _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
+    ("get_version", re.compile(r"^/version$")),
     ("get_user_info", re.compile(r"^/me$")),
     ("get_metafields_all", re.compile(r"^/config/metafields$")),
     (

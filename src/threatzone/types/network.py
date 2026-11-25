@@ -14,6 +14,7 @@ from typing import Annotated, Literal, TypeVar
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer
 
 from .common import ListEnvelopeFields
+from .ioc_rows import IoCGrade, IoCInfraCategory, IoCLabel, IoCReason
 
 DnsRecordType = (
     Literal[
@@ -87,6 +88,14 @@ NetworkExfilRequestCapture = Literal["decrypted_https"] | str
 
 NetworkAvailabilityState = Literal["disabled", "unavailable", "verified_zero", "observed"] | str
 NetworkCoverage = Literal["none", "partial", "complete"] | str
+NetworkHostGroup = Literal["sample", "shared", "background"] | str
+"""Group of the Hosts section of the report. Also the ``group`` filter of
+``get_network_endpoints()``."""
+NetworkHostPattern = Literal["beacon", "restart_loop", "refused_mail"] | str
+NetworkHostDetectionLevel = Literal["malicious", "suspicious", "benign"] | str
+NetworkEndpointSort = Literal["priority", "default", "first_contact", "last_contact"] | str
+"""Order of ``get_network_endpoints()``. The server default is ``priority``."""
+
 NetworkAttribution = (
     Literal[
         "sample",
@@ -483,6 +492,9 @@ class NetworkHttpPacketResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     timeshift: float
+    """Milliseconds from the capture start to the response."""
+    timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
+    """Seconds from the capture start to the response. ``None`` on older servers."""
     destination_ip: str = Field(alias="destinationIp")
     destination_port: int = Field(alias="destinationPort")
     headers: dict[str, str] | None = None
@@ -496,6 +508,9 @@ class NetworkHttpPacket(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     timeshift: float
+    """Milliseconds from the capture start to the request."""
+    timeshift_seconds: float | None = Field(default=None, alias="timeshiftSeconds")
+    """Seconds from the capture start to the request. ``None`` on older servers."""
     url: str
     method: str
     """HTTP method as sent. A non-standard method is returned as sent."""
@@ -589,10 +604,50 @@ class NetworkEndpoint(BaseModel):
     ``NetworkThreat.severity_level``. ``None`` without alerts and on older servers."""
     process_ids: list[int] = Field(alias="processIds")
     attribution_note: str | None = Field(default=None, alias="attributionNote")
+    group: NetworkHostGroup | None = None
+    """The group of the Hosts section of the report: ``sample``, ``shared`` (a shared service
+    or infrastructure host, not graded) or ``background``. ``None`` on older servers."""
+    grade: IoCGrade | None = None
+    """The priority of the host, the grade of its IoC row. ``None`` for ``shared`` and
+    ``background`` hosts and on older servers."""
+    reasons: list[IoCReason] = Field(default_factory=list)
+    """Why the host has its priority. Empty for a ``background`` host."""
+    label: IoCLabel | None = None
+    """The label of the IoC row of the host, such as ``shared_infrastructure``."""
+    label_detail: IoCInfraCategory | None = Field(default=None, alias="labelDetail")
+    """The kind of shared infrastructure of a ``shared_infrastructure`` host."""
+    detection_level: NetworkHostDetectionLevel | None = Field(default=None, alias="detectionLevel")
+    """The highest level of the detections that name the host or its addresses."""
+    patterns: list[NetworkHostPattern] = Field(default_factory=list)
+    """Traffic patterns of the host: ``beacon``, ``restart_loop``, ``refused_mail``."""
+    ioc_id: str | None = Field(default=None, alias="iocId")
+    """``IoC.id`` of the IoC row the priority comes from."""
+    rank: int | None = None
+    """The position of the host in the Hosts section, 0 first. ``None`` on older servers."""
+
+
+class NetworkHostSummary(BaseModel):
+    """The counts of the Hosts section of the report, over every endpoint of the run."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    host_count: int = Field(alias="hostCount")
+    """Hosts of the ``sample`` group."""
+    rated_count: int = Field(alias="ratedCount")
+    """Hosts of the ``sample`` group that a Malicious or Suspicious detection names."""
+    protocols: list[str] = Field(default_factory=list)
+    """The protocols of the most ``sample`` hosts, at most four."""
+    shared_count: int = Field(alias="sharedCount")
+    background_count: int = Field(alias="backgroundCount")
+    background_with_alerts: int = Field(alias="backgroundWithAlerts")
+    truncated: bool = False
+    """``True`` when the server read only part of the network rows of the run, so the counts
+    are a lower limit."""
 
 
 class NetworkEndpoints(ListEnvelopeFields):
-    """The endpoints of a submission, sample endpoints first."""
+    """The endpoints of a submission, in the order of the ``sort`` parameter. The server
+    default is the Hosts order of the report (``sort="priority"``, by ``rank``)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -600,6 +655,9 @@ class NetworkEndpoints(ListEnvelopeFields):
     total: int
     """Endpoints before ``limit``. A lower limit when ``truncated`` is ``True``."""
     truncated: bool
+    summary: NetworkHostSummary | None = None
+    """The counts of the Hosts section, whatever ``attribution``, ``group`` and ``limit`` say.
+    ``None`` when the server cannot read the IoC rows of the run and on older servers."""
 
 
 class NetworkHostFlowMethod(BaseModel):

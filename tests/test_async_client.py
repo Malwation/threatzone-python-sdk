@@ -44,6 +44,7 @@ from threatzone.types import (
     AiReportPending,
     AiReportRegenerateResult,
     Annotations,
+    ApiVersion,
     Artifact,
     ArtifactJob,
     ArtifactsResponse,
@@ -52,6 +53,7 @@ from threatzone.types import (
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
+    CompactIndicatorsResponse,
     Connection,
     DevicePresetOption,
     DnsQuery,
@@ -647,7 +649,7 @@ class TestAsyncCreateSubmissions:
         data = kwargs.get("data") or {}
         assert data.get("autoSelectEnvironment") == "true"
 
-    async def test_create_sandbox_submission_omits_auto_select_when_false(
+    async def test_create_sandbox_submission_omits_auto_select_by_default(
         self, api_key: str, sample_submission_created: dict[str, Any]
     ) -> None:
         ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
@@ -657,6 +659,17 @@ class TestAsyncCreateSubmissions:
         _, kwargs = mock.call_args
         data = kwargs.get("data") or {}
         assert "autoSelectEnvironment" not in data
+
+    async def test_create_sandbox_submission_sends_auto_select_false(
+        self, api_key: str, sample_submission_created: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_submission_created))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.create_sandbox_submission(b"fake-bytes", auto_select_environment=False)
+        _, kwargs = mock.call_args
+        data = kwargs.get("data") or {}
+        assert data.get("autoSelectEnvironment") == "false"
 
     async def test_create_open_in_browser_submission_sends_auto_select_environment(
         self, api_key: str, sample_submission_created: dict[str, Any]
@@ -3305,3 +3318,104 @@ class TestAsyncFakeApiArtifactAnalysisAndUrlDownload:
             assert download.file_name == "t.exe"
             assert (await download.read()).startswith(b"PK")
             await download.close()
+
+
+class TestAsyncPublicApi395Parameters:
+    async def test_get_compact_indicators_sends_view_compact(self, api_key: str) -> None:
+        body = {
+            "items": [
+                {
+                    "id": "6afdeb68057a5368fc2ff770",
+                    "name": "Clipboard read",
+                    "description": "The sample read the clipboard.",
+                    "level": "suspicious",
+                    "score": 45,
+                }
+            ],
+            "total": 1,
+            "page": 1,
+            "limit": 20,
+            "totalPages": 1,
+            "levels": {"malicious": 0, "suspicious": 1, "benign": 0},
+        }
+        ctx, mock = _patched_async_client(_make_response(200, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                page = await client.get_compact_indicators("sub-789", in_verdict_chain=False)
+        assert _call_params(mock) == {"inVerdictChain": "false", "view": "compact"}
+        assert isinstance(page, CompactIndicatorsResponse)
+        assert page.items[0].event_ids == []
+
+    async def test_get_iocs_sends_the_row_filters(
+        self, api_key: str, sample_iocs_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_iocs_response))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_iocs(
+                    "sub-789", source=["file"], exported=False, labelled="only", sort="grade"
+                )
+        assert _call_params(mock) == {
+            "source": "file",
+            "exported": "false",
+            "labelled": "only",
+            "sort": "grade",
+        }
+
+    async def test_get_artifacts_sends_page_and_limit(
+        self, api_key: str, sample_artifacts_response: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_artifacts_response))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_artifacts("sub-789", page=1, limit=20)
+        assert _call_params(mock) == {"page": 1, "limit": 20}
+
+    async def test_get_network_endpoints_sends_sort_and_group(
+        self, api_key: str, sample_network_endpoints: dict[str, Any]
+    ) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, sample_network_endpoints))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.get_network_endpoints("sub-789", sort="last_contact", group=["shared"])
+        assert _call_params(mock) == {"sort": "last_contact", "group": "shared"}
+
+    async def test_download_iocs_sends_the_filters(self, api_key: str) -> None:
+        ctx, mock = _patched_async_stream(_make_response(200, content=b"type,value\n"))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                await client.download_iocs("sub-789", format="text", types=["url"], search="gate")
+        assert mock.call_args.kwargs["params"] == {
+            "format": "text",
+            "types": "url",
+            "search": "gate",
+        }
+
+    async def test_get_version(self, api_key: str) -> None:
+        ctx, mock = _patched_async_client(_make_response(200, {"version": "2026.11.25"}))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                version = await client.get_version()
+        assert _call_url(mock).endswith("/public-api/version")
+        assert isinstance(version, ApiVersion)
+        assert version.api_version is None
+
+    async def test_url_download_sends_auto_select_false(self, api_key: str) -> None:
+        body = {
+            "uuid": "sub-1",
+            "message": "Submission created successfully",
+            "sha256": "a" * 64,
+            "filename": "a.exe",
+            "mimetype": "application/x-dosexec",
+            "size": 10,
+            "finalUrl": "https://example.com/a.exe",
+            "dynamicSkipped": None,
+        }
+        ctx, mock = _patched_async_client(_make_response(200, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                created = await client.create_url_download_submission(
+                    "https://example.com/a.exe", auto_select_environment=False
+                )
+        assert mock.call_args.kwargs["json"]["autoSelectEnvironment"] is False
+        assert created.dynamic_skipped is None

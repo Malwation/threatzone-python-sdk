@@ -30,7 +30,11 @@ class MediaFile(BaseModel):
     name: str
     content_type: str | None = Field(default=None, alias="contentType")
     size: int | None = None
+    """File size in bytes. ``None`` when the server cannot list the stored file."""
     kind: str | None = None
+    download_link: str | None = Field(default=None, alias="downloadLink")
+    """Path of the ``get_media_file()`` route for this file, with the ``source`` it was listed
+    from. ``None`` on older servers."""
 
 
 class PdfReportStatus(BaseModel):

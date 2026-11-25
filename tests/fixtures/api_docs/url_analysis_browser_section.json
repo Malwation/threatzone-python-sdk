@@ -1,0 +1,40 @@
+{
+  "section": "network-summary",
+  "revision": "9f2c4a6e8b0d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a",
+  "updatedAt": 1760000000000,
+  "data": {
+    "redirects": [
+      {
+        "fromUrl": "http://example.com/",
+        "toUrl": "https://example.com/",
+        "status": 301,
+        "method": "GET"
+      }
+    ],
+    "domainTable": [
+      {
+        "domain": "example.com",
+        "requests": 3,
+        "bytes": 1200,
+        "ips": [
+          "192.0.2.10"
+        ],
+        "isThirdParty": false,
+        "isTracker": false
+      }
+    ],
+    "ipTable": [
+      {
+        "ip": "192.0.2.10",
+        "requests": 3,
+        "bytes": 1200,
+        "domains": [
+          "example.com"
+        ],
+        "country": null,
+        "countryCode": null,
+        "org": null
+      }
+    ]
+  }
+}

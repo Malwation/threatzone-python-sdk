@@ -735,6 +735,7 @@ class FakeThreatZoneAPI:
 
     def _handlers(self) -> dict[str, Callable[[httpx.Request, RouteMatch], httpx.Response]]:
         return {
+            "get_version": self._handle_get_version,
             "get_user_info": self._handle_get_user_info,
             "get_metafields_all": self._handle_metafields_all,
             "get_metafields_by_type": self._handle_metafields_by_type,
@@ -859,6 +860,15 @@ class FakeThreatZoneAPI:
             return float(raw)
         except ValueError as exc:
             raise _BadQueryParam(key) from exc
+
+    @staticmethod
+    def _strict_bool(query: dict[str, list[str]], key: str) -> bool | None:
+        raw = FakeThreatZoneAPI._first(query, key)
+        if raw is None:
+            return None
+        if raw not in ("true", "false"):
+            raise _BadQueryParam(key)
+        return raw == "true"
 
     @staticmethod
     def _text_list(query: dict[str, list[str]], key: str) -> list[str] | None:
@@ -1051,6 +1061,9 @@ class FakeThreatZoneAPI:
                 },
             )
         return None
+
+    def _handle_get_version(self, _request: httpx.Request, _match: RouteMatch) -> httpx.Response:
+        return _json(_responses.build_api_version())
 
     def _handle_get_user_info(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
         del request, match
@@ -1440,6 +1453,13 @@ class FakeThreatZoneAPI:
             )
         raw_pid = self._first(query, "pid")
         pid_value: int | None = int(raw_pid) if raw_pid is not None else None
+        view = self._first(query, "view")
+        if view not in (None, "full", "compact"):
+            return self._bad_query_param("view")
+        try:
+            in_verdict_chain = self._strict_bool(query, "inVerdictChain")
+        except _BadQueryParam as exc:
+            return self._bad_query_param(exc.param)
         return _json(
             _responses.build_indicators_response(
                 state,
@@ -1449,6 +1469,8 @@ class FakeThreatZoneAPI:
                 attack_code=self._first(query, "attackCode"),
                 page=page,
                 limit=limit,
+                in_verdict_chain=in_verdict_chain,
+                compact=view == "compact",
             )
         )
 
@@ -1469,14 +1491,37 @@ class FakeThreatZoneAPI:
                 "INVALID_QUERY_PARAM",
                 {"param": exc.param},
             )
-        return _json(
-            _responses.build_iocs_response(
-                state,
-                type_filter=self._first(query, "type"),
-                tier_filter=self._first(query, "tier"),
-                page=page,
-                limit=limit,
-            )
+        try:
+            ioc_query = self._ioc_query(query)
+        except _BadQueryParam as exc:
+            return self._bad_query_param(exc.param)
+        return _json(_responses.build_iocs_response(state, page=page, limit=limit, query=ioc_query))
+
+    def _ioc_query(self, query: dict[str, list[str]]) -> _responses.IocQuery:
+        closed = {
+            "labelled": _responses.IOC_LABELLED_FILTERS,
+            "group": _responses.IOC_GROUPS,
+            "sort": _responses.IOC_SORTS,
+        }
+        for key, allowed in closed.items():
+            value = self._first(query, key)
+            if value is not None and value not in allowed:
+                raise _BadQueryParam(key)
+        source = self._text_list(query, "source")
+        if source is not None and not set(source) <= _responses.IOC_SOURCES:
+            raise _BadQueryParam("source")
+        grade = self._text_list(query, "grade")
+        if grade is not None and not set(grade) <= _responses.IOC_GRADE_FILTERS:
+            raise _BadQueryParam("grade")
+        return _responses.IocQuery(
+            type=self._first(query, "type"),
+            tier=self._first(query, "tier"),
+            source=source,
+            grade=grade,
+            exported=self._strict_bool(query, "exported"),
+            labelled=self._first(query, "labelled"),
+            group=self._first(query, "group"),
+            sort=self._first(query, "sort"),
         )
 
     def _handle_get_yara_rules(self, request: httpx.Request, match: RouteMatch) -> httpx.Response:
@@ -1519,7 +1564,8 @@ class FakeThreatZoneAPI:
         if err is not None or state is None:
             assert err is not None
             return err
-        source = self._first(self._query(request), "source")
+        query = self._query(request)
+        source = self._first(query, "source")
         if source is not None and source not in _responses.ARTIFACT_SOURCES:
             return _error(
                 400,
@@ -1528,7 +1574,18 @@ class FakeThreatZoneAPI:
                 "INVALID_QUERY_PARAM",
                 {"param": "source"},
             )
-        return _json(_responses.build_artifacts_response(state, source=source))
+        try:
+            page = self._int(query, "page")
+            limit = self._int(query, "limit")
+        except _BadQueryParam as exc:
+            return self._bad_query_param(exc.param)
+        if page is not None and page < 1:
+            return self._bad_query_param("page")
+        if limit is not None and not 1 <= limit <= 100:
+            return self._bad_query_param("limit")
+        return _json(
+            _responses.build_artifacts_response(state, source=source, page=page, limit=limit)
+        )
 
     def _handle_get_artifact_jobs(
         self, _request: httpx.Request, match: RouteMatch
@@ -2059,8 +2116,16 @@ class FakeThreatZoneAPI:
         attribution_error = self._network_attribution_error(query)
         if attribution_error is not None:
             return attribution_error
+        sort = self._first(query, "sort")
+        if sort is not None and sort not in _responses.NETWORK_ENDPOINT_SORTS:
+            return self._bad_query_param("sort")
+        groups = self._text_list(query, "group")
+        if groups is not None and not set(groups) <= _responses.NETWORK_HOST_GROUPS:
+            return self._bad_query_param("group")
         return _json(
-            _responses.build_network_endpoints(state, limit=limit or _NETWORK_ENDPOINT_LIMIT)
+            _responses.build_network_endpoints(
+                state, limit=limit or _NETWORK_ENDPOINT_LIMIT, sort=sort, groups=groups
+            )
         )
 
     def _handle_get_network_host_flows(
@@ -2251,7 +2316,8 @@ class FakeThreatZoneAPI:
         if err is not None or state is None:
             assert err is not None
             return err
-        export_format = self._first(self._query(request), "format")
+        query = self._query(request)
+        export_format = self._first(query, "format")
         if export_format not in _responses.IOC_EXPORT_FORMATS:
             return self._bad_query_param("format", "format must be csv, text, stix or misp.")
         if export_format in {"stix", "misp"} and not state.stix_report_allowed:
@@ -2261,7 +2327,15 @@ class FakeThreatZoneAPI:
                 "The workspace plan does not have the stixReport permission.",
                 "FORBIDDEN",
             )
-        export = _responses.build_ioc_export(state, export_format)
+        types = self._text_list(query, "types")
+        if types is not None and not set(types) <= _responses.IOC_EXPORT_ROW_TYPES:
+            return self._bad_query_param("types")
+        export_filter = _responses.IocExportFilter(
+            types=types,
+            artifacts=self._text_list(query, "artifacts"),
+            search=self._first(query, "search"),
+        )
+        export = _responses.build_ioc_export(state, export_format, export_filter)
         return httpx.Response(
             200,
             content=export.content,
@@ -2692,8 +2766,7 @@ class FakeThreatZoneAPI:
         source, source_err = self._resolve_media_source(request, state)
         if source_err is not None:
             return source_err
-        del source
-        return _json_list(list(_responses.build_media_files(state)))
+        return _json_list(list(_responses.build_media_files(state, source)))
 
     def _resolve_media_source(
         self, request: httpx.Request, state: SubmissionState

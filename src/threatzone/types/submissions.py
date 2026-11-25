@@ -16,6 +16,7 @@ from .common import (
     Tag,
     ThreatLevel,
 )
+from .verdict import DynamicVerdictBrief
 
 SubmissionLevel = ThreatLevel
 SubmissionType = Literal["file", "url"]
@@ -34,6 +35,25 @@ ScoreLayer = (
     | str
 )
 
+DynamicSkippedReason = Literal["no_environment_in_plan"] | str
+"""Why the dynamic analysis did not run. A newer server can send another value."""
+DynamicSkippedPlatform = Literal["linux", "android", "macos", "windows"] | str
+DynamicSkippedArchitecture = Literal["x64", "arm64"] | str
+
+
+class DynamicSkipped(BaseModel):
+    """A sandbox submission that was accepted for static analysis only."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    reason: DynamicSkippedReason
+    """``no_environment_in_plan``: no sandbox environment of the plan can run the sample."""
+    platform: DynamicSkippedPlatform
+    """The platform the sample needs a sandbox environment of."""
+    architecture: DynamicSkippedArchitecture | None = None
+    """The only CPU architecture the sample runs on, for a thin Mach-O binary built for one
+    CPU. ``None`` when the sample runs on either architecture."""
+
 
 class SubmissionCreated(BaseModel):
     """Response from creating a new submission."""
@@ -43,6 +63,10 @@ class SubmissionCreated(BaseModel):
     uuid: str
     message: str
     sha256: str | None = None
+    dynamic_skipped: DynamicSkipped | None = Field(default=None, alias="dynamicSkipped")
+    """Set when a sandbox submission was accepted for static analysis only, because no
+    environment of the plan can run the sample. ``None`` when the dynamic analysis runs, for
+    the other submission kinds and on older servers."""
 
 
 class UrlDownloadSubmission(SubmissionCreated):
@@ -175,7 +199,9 @@ class ScoreContributor(BaseModel):
 
     source: str
     indicator_id: str | None = Field(default=None, alias="indicatorId")
-    """Dynamic indicator identifier. ``None`` for findings of other engines."""
+    """``Indicator.id`` of the ``get_indicators()`` row of the finding, also for findings of
+    other engines (YARA, signature check, configuration). ``None`` when no row stands for the
+    finding, and for overview findings on servers before Threat.Zone v3.9.5."""
     title: str
     """Finding title. The text can change between releases; match on ``indicator_id``."""
     points: float
@@ -245,6 +271,15 @@ class Submission(BaseModel):
     artifacts. The platform stamps only submissions updated in the last 24 hours, so an older
     submission can keep ``False``: poll with a timeout. Only ``get_submission()`` sends it;
     ``None`` on older servers."""
+    dynamic_verdict: DynamicVerdictBrief | None = Field(default=None, alias="dynamicVerdict")
+    """The verdict of the behaviour run alone, with its tier reason and run notes. ``level``
+    and ``score`` keep their meaning as the submission verdict. Only ``get_submission()``
+    sends it. ``None`` for a legacy report, until the run of the current analysis attempt is
+    published, and on older servers."""
+    dynamic_skipped: DynamicSkipped | None = Field(default=None, alias="dynamicSkipped")
+    """Set when the sandbox submission was accepted for static analysis only. Only
+    ``get_submission()`` sends it. ``None`` when the dynamic analysis ran or was never
+    requested, and on older servers."""
 
     def is_complete(self) -> bool:
         """Check if all reports have completed."""

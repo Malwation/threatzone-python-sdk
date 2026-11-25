@@ -26,6 +26,7 @@ from threatzone.types import (
     AnnotationNote,
     AnnotationPin,
     Annotations,
+    ApiVersion,
     Artifact,
     ArtifactHashes,
     ArtifactJob,
@@ -37,10 +38,13 @@ from threatzone.types import (
     BehaviourSummary,
     CdrResponse,
     CdrSanitizedFileInfoDetail,
+    CompactIndicator,
     Connection,
     ConnectionPackets,
+    DeclineReason,
     DevicePresetOption,
     DnsQuery,
+    DynamicVerdictBrief,
     EmlAnalysis,
     EmlAnalysisAttachment,
     EmlAnalysisHeaders,
@@ -79,6 +83,7 @@ from threatzone.types import (
     NetworkExfilRequest,
     NetworkFlowPackets,
     NetworkHostFlows,
+    NetworkHttpPacketResponse,
     NetworkHttpPackets,
     NetworkPacketData,
     NetworkSummary,
@@ -132,6 +137,7 @@ from threatzone.types import (
     UserInfo,
     UserInfoDetails,
     Verdict,
+    VerdictDecisive,
     VerdictNarrative,
     VerdictStory,
     VerdictStoryStep,
@@ -1994,7 +2000,8 @@ class TestUrlAnalysisIndicatorsTypes:
     def test_browser_section(self, url_analysis_browser_section_payload: dict[str, Any]) -> None:
         section = UrlAnalysisBrowserSection.model_validate(url_analysis_browser_section_payload)
         assert section.section == "tls"
-        assert section.job_id == "6710a3f2c1d2e3f4a5b6c7d8"
+        with pytest.warns(DeprecationWarning, match="job_id"):
+            assert section.job_id == "6710a3f2c1d2e3f4a5b6c7d8"
         assert section.updated_at == 1760000000000
         assert section.data["tls"]["protocol"] == "TLS 1.3"
 
@@ -2113,7 +2120,8 @@ class TestMeTypes:
 
     def test_module_info(self, sample_user_info: dict[str, Any]) -> None:
         m = ModuleInfo.model_validate(sample_user_info["modules"][0])
-        assert m.module_id == "mod-1"
+        with pytest.warns(DeprecationWarning, match="module_id"):
+            assert m.module_id == "mod-1"
         assert m.module_name == "cdr"
         assert m.end_time == "Unlimited"
 
@@ -2552,7 +2560,8 @@ class TestAiReportTypes:
         pending = AiReportPending.model_validate({"status": status})
         assert pending.status == status
         assert pending.stage is None
-        assert pending.job_id is None
+        with pytest.warns(DeprecationWarning, match="job_id"):
+            assert pending.job_id is None
 
     def test_completed_report_reads_the_run_fields(self, sample_ai_report: dict[str, Any]) -> None:
         report = AiReport.model_validate(sample_ai_report)
@@ -3564,3 +3573,236 @@ class TestUrlDetectionBreadthFields:
         )
         assert fetched.url == "https://files.example/invoice.exe"
         assert fetched.source_url == "https://files.example/invoice.exe"
+
+
+class TestPublicApi395Fields:
+    """Fields and values that Threat.Zone v3.9.5 adds, and the older payloads without them."""
+
+    def test_report_status_decline_reason_and_option_names(
+        self, sample_report_status_completed: dict[str, Any]
+    ) -> None:
+        older = ReportStatus.model_validate(sample_report_status_completed)
+        assert older.decline_reason is None
+        assert older.metafield_value_labels is None
+        declined = ReportStatus.model_validate(
+            {
+                **sample_report_status_completed,
+                "status": "error",
+                "declineReason": {
+                    "code": "vpn_credentials_missing",
+                    "text": "The OpenVPN profile needs a username and a password.",
+                },
+                "metafieldValueLabels": {"trace_profile": "Heavy"},
+            }
+        )
+        assert declined.decline_reason is not None
+        assert declined.decline_reason.code == "vpn_credentials_missing"
+        assert declined.metafield_value_labels == {"trace_profile": "Heavy"}
+        dumped = declined.model_dump(by_alias=True)
+        assert dumped["declineReason"]["code"] == "vpn_credentials_missing"
+
+    def test_decline_reason_accepts_a_new_code(self) -> None:
+        reason = DeclineReason.model_validate({"code": "vpn_new_cause", "text": "Fix it."})
+        assert reason.code == "vpn_new_cause"
+
+    def test_submission_run_verdict_and_dynamic_skipped(
+        self, sample_submission_detail: dict[str, Any]
+    ) -> None:
+        older = Submission.model_validate(sample_submission_detail)
+        assert older.dynamic_verdict is None
+        assert older.dynamic_skipped is None
+        submission = Submission.model_validate(
+            {
+                **sample_submission_detail,
+                "dynamicVerdict": {
+                    "tier": "Unknown",
+                    "score": 0,
+                    "summary": None,
+                    "headline": None,
+                    "tierReason": None,
+                    "runNotes": [{"code": "sample_crashed", "text": "The sample crashed."}],
+                    "comparison": None,
+                },
+                "dynamicSkipped": {
+                    "reason": "no_environment_in_plan",
+                    "platform": "macos",
+                    "architecture": "arm64",
+                },
+            }
+        )
+        assert submission.dynamic_verdict is not None
+        assert submission.dynamic_verdict.tier == "Unknown"
+        assert submission.dynamic_verdict.run_notes[0].code == "sample_crashed"
+        assert submission.dynamic_skipped is not None
+        assert submission.dynamic_skipped.architecture == "arm64"
+
+    def test_run_brief_needs_tier_and_score(self) -> None:
+        with pytest.raises(ValidationError):
+            DynamicVerdictBrief.model_validate({"tier": "Suspicious"})
+        brief = DynamicVerdictBrief.model_validate({"tier": "Suspicious", "score": 45})
+        assert brief.run_notes == []
+        assert brief.comparison is None
+
+    @pytest.mark.parametrize("tier", ["Unknown", "Not Measured"])
+    def test_verdict_tier_of_a_run_that_rated_nothing(self, tier: str) -> None:
+        assert Verdict.model_validate({"tier": tier, "score": 0}).tier == tier
+
+    def test_decisive_row_indicator_id(self) -> None:
+        decisive = VerdictDecisive.model_validate(
+            {"indicatorId": "6afdeb68057a5368fc2ff770", "text": "Clipboard read."}
+        )
+        assert decisive.indicator_id == "6afdeb68057a5368fc2ff770"
+        assert VerdictDecisive.model_validate({"text": "Two behaviours."}).indicator_id is None
+
+    def test_ioc_row_fields(self, sample_ioc: dict[str, Any]) -> None:
+        older = IoC.model_validate(sample_ioc)
+        assert older.id is None
+        assert older.reasons == []
+        assert older.found_in == []
+        row = IoC.model_validate(
+            {
+                **sample_ioc,
+                "type": "file",
+                "id": "8c1f0a9e2b7d4c11",
+                "source": "file",
+                "sources": ["file", "static"],
+                "state": "written",
+                "binding": None,
+                "grade": "high",
+                "reasons": [
+                    {"code": "file_written", "text": None, "effect": "raises"},
+                    {"code": "a_new_code", "text": "New.", "effect": "note"},
+                ],
+                "label": None,
+                "labelDetail": None,
+                "exported": True,
+                "notExportedReason": None,
+                "firstSeen": 4.2,
+                "process": {"pid": 4120, "image": "loader.exe", "role": "child"},
+                "foundIn": [{"kind": "file", "name": "loader.exe", "artifactId": "a1"}],
+                "file": {
+                    "sha256": "a" * 64,
+                    "sha1": None,
+                    "md5": None,
+                    "sha512": None,
+                    "names": ["loader.exe"],
+                    "writtenTo": ["C:\\\\Users\\\\admin\\\\loader.exe"],
+                    "size": 48640,
+                    "class": "program",
+                    "artifactId": None,
+                },
+                "resolvedIps": [],
+                "family": None,
+            }
+        )
+        assert row.type == "file"
+        assert row.reasons[1].code == "a_new_code"
+        assert row.process is not None and row.process.role == "child"
+        assert row.found_in[0].artifact_id == "a1"
+        assert row.file is not None
+        assert row.file.class_ == "program"
+        assert row.model_dump(by_alias=True)["file"]["class"] == "program"
+
+    def test_artifact_writer_and_paging(
+        self, sample_artifact: dict[str, Any], sample_artifacts_response: dict[str, Any]
+    ) -> None:
+        older = ArtifactsResponse.model_validate(sample_artifacts_response)
+        assert older.page is None
+        assert older.items[0].writer is None
+        artifact = Artifact.model_validate(
+            {
+                **sample_artifact,
+                "writer": {"guestPath": "C:\\\\x.exe", "pid": 3940, "processName": "setup.exe"},
+            }
+        )
+        assert artifact.writer is not None
+        assert artifact.writer.process_name == "setup.exe"
+
+    def test_compact_indicator_without_the_full_fields(self) -> None:
+        row = CompactIndicator.model_validate(
+            {"id": "x", "name": "n", "description": "d", "level": "benign", "score": 1}
+        )
+        assert row.attack_codes == []
+        assert row.event_ids == []
+        with pytest.raises(ValidationError):
+            Indicator.model_validate(
+                {"id": "x", "name": "n", "description": "d", "level": "benign", "score": 1}
+            )
+
+    def test_network_endpoint_hosts_fields(self, sample_network_endpoints: dict[str, Any]) -> None:
+        older = NetworkEndpoints.model_validate(sample_network_endpoints)
+        assert older.summary is None
+        assert older.items[0].rank is None
+        assert older.items[0].patterns == []
+        endpoint = {
+            **sample_network_endpoints["items"][0],
+            "group": "sample",
+            "grade": "high",
+            "reasons": [{"code": "beacon", "text": "Beacon.", "effect": "raises"}],
+            "label": None,
+            "labelDetail": None,
+            "detectionLevel": "malicious",
+            "patterns": ["beacon", "a_new_pattern"],
+            "iocId": "8c1f0a9e2b7d4c11",
+            "rank": 0,
+        }
+        endpoints = NetworkEndpoints.model_validate(
+            {
+                **sample_network_endpoints,
+                "items": [endpoint],
+                "summary": {
+                    "hostCount": 12,
+                    "ratedCount": 2,
+                    "protocols": ["DNS", "TLS"],
+                    "sharedCount": 5,
+                    "backgroundCount": 9,
+                    "backgroundWithAlerts": 1,
+                    "truncated": False,
+                },
+            }
+        )
+        assert endpoints.items[0].patterns == ["beacon", "a_new_pattern"]
+        assert endpoints.items[0].ioc_id == "8c1f0a9e2b7d4c11"
+        assert endpoints.summary is not None
+        assert endpoints.summary.background_with_alerts == 1
+
+    def test_media_metafield_packet_and_version_fields(self) -> None:
+        media = MediaFile.model_validate(
+            {"id": "s.png", "name": "s.png", "kind": "screenshot", "size": None}
+        )
+        assert media.download_link is None
+        option = MetafieldOption.model_validate(
+            {
+                "key": "timeout",
+                "label": "Timeout",
+                "description": "Analysis timeout in seconds",
+                "shortDescription": "Analysis timeout in seconds",
+                "longDescription": None,
+                "type": "number",
+                "default": 120,
+                "active": True,
+                "accessible": True,
+            }
+        )
+        assert option.short_description == "Analysis timeout in seconds"
+        packet = NetworkHttpPacketResponse.model_validate(
+            {
+                "timeshift": 3420,
+                "timeshiftSeconds": 3.42,
+                "destinationIp": "10.0.2.15",
+                "destinationPort": 49712,
+                "statusCode": 200,
+            }
+        )
+        assert packet.timeshift_seconds == 3.42
+        assert ApiVersion.model_validate({"version": "b", "apiVersion": "3.8.0"}).api_version == (
+            "3.8.0"
+        )
+
+    def test_summary_run_verdict(self, sample_overview_summary: dict[str, Any]) -> None:
+        assert OverviewSummary.model_validate(sample_overview_summary).dynamic_verdict is None
+        summary = OverviewSummary.model_validate(
+            {**sample_overview_summary, "dynamicVerdict": {"tier": "Benign", "score": 5}}
+        )
+        assert summary.dynamic_verdict is not None
+        assert summary.dynamic_verdict.tier == "Benign"

@@ -25,6 +25,11 @@ class MetafieldOption(BaseModel):
     key: str
     label: str
     description: str
+    """``long_description`` when the metafield has one, otherwise ``short_description``."""
+    short_description: str | None = Field(default=None, alias="shortDescription")
+    """A one-line explanation. ``None`` on older servers."""
+    long_description: str | None = Field(default=None, alias="longDescription")
+    """A longer explanation. ``None`` when the metafield has none and on older servers."""
     type: Literal["boolean", "number", "string", "select"]
     default: bool | int | str
     active: bool
@@ -67,3 +72,15 @@ class DevicePresetOption(BaseModel):
     category: str
     base_key: str = Field(alias="baseKey")
     default: bool = False
+
+
+class ApiVersion(BaseModel):
+    """The versions that ``GET /version`` returns."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    version: str
+    """The build of the Public API service."""
+    api_version: str | None = Field(default=None, alias="apiVersion")
+    """The SemVer version of the API contract, for example ``3.8.0``. ``None`` on servers
+    before Threat.Zone v3.8.0."""

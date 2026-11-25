@@ -175,6 +175,11 @@ def test_api_deprecations_are_marked() -> None:
         "UrlAnalysisIpInfo.threat_status",
         "UrlScoreIndicator.weighted_points",
         "UrlScoreExplanation.scoring_version",
+        "ModuleInfo.module_id",
+        "AiReport.job_id",
+        "AiReportPending.job_id",
+        "UrlScoreBrowserSnapshot.job_id",
+        "UrlAnalysisBrowserSection.job_id",
     } <= marked
 
 

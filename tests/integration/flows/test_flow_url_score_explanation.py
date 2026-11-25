@@ -46,8 +46,9 @@ def test_report_and_explanation_share_the_job_id(
     assert explanation.state == "available"
     assert explanation.unavailable_reason is None
     assert explanation.snapshot is not None
-    assert report.job_id is not None
-    assert explanation.snapshot.job_id == report.job_id
+    with pytest.warns(DeprecationWarning, match="job_id"):
+        assert report.job_id is not None
+        assert explanation.snapshot.job_id == report.job_id
     assert explanation.snapshot.verdict == "malicious"
     assert [indicator.id for indicator in explanation.snapshot.indicators] == [
         "domain-age",
@@ -151,7 +152,8 @@ def test_every_approved_browser_section(
     result = sync_client.get_url_analysis_browser_section(uuid, section)
     assert isinstance(result, UrlAnalysisBrowserSection)
     assert result.section == section
-    assert result.job_id == sync_client.get_url_analysis(uuid).job_id
+    with pytest.warns(DeprecationWarning, match="job_id"):
+        assert result.job_id == sync_client.get_url_analysis(uuid).job_id
     assert result.revision
     assert result.data
 

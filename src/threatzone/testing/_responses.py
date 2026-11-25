@@ -26,6 +26,7 @@ from threatzone.types import (
     AiReportPending,
     AiReportRegenerateResult,
     Annotations,
+    ApiVersion,
     ArtifactJob,
     ArtifactsResponse,
     BehaviourFacets,
@@ -33,6 +34,7 @@ from threatzone.types import (
     BehavioursResponse,
     BehaviourSummary,
     CdrResponse,
+    CompactIndicatorsResponse,
     Connection,
     DevicePresetOption,
     DnsQuery,
@@ -216,7 +218,30 @@ def _submission_detail_payload(state: SubmissionState) -> dict[str, Any]:
     payload["scoreBreakdown"] = breakdown
     payload["score"] = breakdown["score"] if breakdown is not None else None
     payload["finalized"] = all(r["status"] in ("completed", "error") for r in reports)
+    payload["dynamicVerdict"] = _dynamic_verdict_brief(state)
     return payload
+
+
+def _dynamic_verdict_brief(state: SubmissionState) -> dict[str, Any] | None:
+    if not state.has_dynamic_report or state.report_status_for("dynamic") != "completed":
+        return None
+    tier = _TIER_BY_LEVEL[state.level]
+    score = _SCORE_BY_LEVEL[state.level]
+    headline = f"{tier} ({score}/100): the sample connected to a remote host."
+    return {
+        "tier": tier,
+        "score": score,
+        "summary": headline,
+        "headline": headline,
+        "tierReason": "Owner policy floor.",
+        "runNotes": [
+            {
+                "code": "sample_exited_early",
+                "text": "The submitted program exited on its own 1.1 s after it started.",
+            }
+        ],
+        "comparison": None,
+    }
 
 
 def build_submission(state: SubmissionState) -> Submission:
@@ -337,6 +362,7 @@ def build_overview_summary(state: SubmissionState) -> OverviewSummary:
         "artifactCount": len(state.artifact_ids),
         "mitreTechniqueCount": len(state.mitre_techniques),
         "network": network,
+        "dynamicVerdict": _dynamic_verdict_brief(state),
     }
     return OverviewSummary.model_validate(payload)
 
@@ -350,11 +376,15 @@ def build_indicators_response(
     attack_code: str | None,
     page: int | None,
     limit: int | None,
-) -> IndicatorsResponse:
+    in_verdict_chain: bool | None = None,
+    compact: bool = False,
+) -> IndicatorsResponse | CompactIndicatorsResponse:
     """Build the paginated indicators response, applying query filters."""
     items: list[dict[str, Any]] = []
     for idx, seed in enumerate(state.indicators):
         if level and seed.level != level:
+            continue
+        if in_verdict_chain is not None and (seed.level == "malicious") != in_verdict_chain:
             continue
         if attack_code and seed.attack_code != attack_code:
             continue
@@ -409,7 +439,11 @@ def build_indicators_response(
     start = (page_number - 1) * page_limit
     items = items[start : start + page_limit]
     counts = _indicator_level_counts(state.indicators)
-    return IndicatorsResponse.model_validate(
+    model: type[IndicatorsResponse] | type[CompactIndicatorsResponse] = IndicatorsResponse
+    if compact:
+        model = CompactIndicatorsResponse
+        items = [{key: item.get(key) for key in COMPACT_INDICATOR_FIELDS} for item in items]
+    return model.model_validate(
         {
             "items": items,
             "total": total,
@@ -421,30 +455,198 @@ def build_indicators_response(
     )
 
 
-def build_iocs_response(
-    state: SubmissionState,
-    *,
-    type_filter: str | None,
-    page: int | None,
-    limit: int | None,
-    tier_filter: str | None = None,
-) -> IoCsResponse:
-    """Build the paginated IoC list response. Every seeded IoC is in the ``ioc`` tier."""
-    items: list[dict[str, Any]] = []
-    for seed in state.iocs:
-        if type_filter and seed.type.lower() != type_filter:
-            continue
-        if tier_filter == "strings":
-            continue
-        items.append(
+COMPACT_INDICATOR_FIELDS: tuple[str, ...] = (
+    "id",
+    "name",
+    "description",
+    "level",
+    "score",
+    "attackCodes",
+    "attemptedAttackCodes",
+    "inVerdictChain",
+    "actor",
+    "target",
+    "tOffsetS",
+    "eventIds",
+    "artifacts",
+)
+
+
+IOC_SOURCES: frozenset[str] = frozenset(
+    {"network", "file", "host", "config", "url_analysis", "static"}
+)
+IOC_GRADE_FILTERS: frozenset[str] = frozenset({"high", "medium", "low", "none"})
+IOC_LABELLED_FILTERS: frozenset[str] = frozenset({"exclude", "include", "only"})
+IOC_GROUPS: frozenset[str] = frozenset({"value", "file"})
+IOC_SORTS: frozenset[str] = frozenset({"default", "grade"})
+IOC_EXPORT_ROW_TYPES: frozenset[str] = frozenset(
+    {
+        "ip",
+        "domain",
+        "url",
+        "email",
+        "file",
+        "hash",
+        "mutex",
+        "pipe",
+        "scheduled_task",
+        "service",
+        "registry_value",
+        "root_certificate",
+        "config_hash",
+    }
+)
+_NETWORK_IOC_TYPES: frozenset[str] = frozenset({"ip", "domain", "url"})
+_HASH_IOC_TYPES: frozenset[str] = frozenset({"md5", "sha1", "sha256", "sha512"})
+_GRADE_ORDER: dict[str | None, int] = {"high": 0, "medium": 1, "low": 2, None: 3}
+
+
+@dataclass(frozen=True)
+class IocQuery:
+    """The ``/iocs`` filters that the fake API applies."""
+
+    type: str | None = None
+    tier: str | None = None
+    source: list[str] | None = None
+    grade: list[str] | None = None
+    exported: bool | None = None
+    labelled: str | None = None
+    group: str | None = None
+    sort: str | None = None
+
+
+def ioc_row_id(ioc_type: str, value: str) -> str:
+    """The stable IoC row id: the first 16 hex digits of sha256(type NUL value)."""
+    return hashlib.sha256(f"{ioc_type}\0{value.lower()}".encode()).hexdigest()[:16]
+
+
+def _ioc_row(state: SubmissionState, ioc_type: str, value: str) -> dict[str, Any]:
+    network = ioc_type in _NETWORK_IOC_TYPES
+    artifact_ids = [state.artifact_ids[0]] if state.artifact_ids else []
+    source = "network" if network else "static"
+    return {
+        "id": ioc_row_id(ioc_type, value),
+        "source": source,
+        "sources": [source],
+        "state": "contacted" if network else "static",
+        "binding": "exact" if network else None,
+        "description": f"Process 1508 connected to {value}." if network else None,
+        "recordedValue": None,
+        "grade": "high" if network else "low",
+        "reasons": [
             {
-                "type": seed.type.lower(),
+                "code": "contacted" if network else "static_string",
+                "text": "Contacted by the sample." if network else "Found in a file.",
+                "effect": "raises",
+            }
+        ],
+        "label": None,
+        "labelDetail": None,
+        "exported": True,
+        "notExportedReason": None,
+        "firstSeen": 1.0 if network else None,
+        "process": {"pid": 1508, "image": "malware.exe", "role": "sample"} if network else None,
+        "foundIn": (
+            [{"kind": "process", "name": "malware.exe", "pid": 1508}]
+            if network
+            else [{"kind": "file", "name": state.filename, "artifactId": artifact_ids[0]}]
+            if artifact_ids
+            else []
+        ),
+        "file": None,
+        "resolvedIps": [],
+        "family": None,
+    }
+
+
+def _ioc_file_item(state: SubmissionState, hash_values: dict[str, str]) -> dict[str, Any]:
+    sha256 = hash_values.get("sha256", state.sha256)
+    item = _ioc_row(state, "file", sha256)
+    item.update(
+        {
+            "type": "file",
+            "value": sha256,
+            "artifacts": [state.artifact_ids[0]] if state.artifact_ids else [],
+            "tier": "ioc",
+            "source": "file",
+            "sources": ["file"],
+            "state": "submitted",
+            "grade": "medium",
+            "reasons": [{"code": "submitted_file", "text": None, "effect": "raises"}],
+            "file": {
+                "sha256": sha256,
+                "sha1": hash_values.get("sha1"),
+                "md5": hash_values.get("md5"),
+                "sha512": hash_values.get("sha512"),
+                "names": [state.filename],
+                "writtenTo": [],
+                "size": 1024,
+                "class": "submitted",
+                "artifactId": state.artifact_ids[0] if state.artifact_ids else None,
+            },
+        }
+    )
+    return item
+
+
+def _ioc_items(state: SubmissionState, group: str | None) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    hash_values: dict[str, str] = {}
+    for seed in state.iocs:
+        ioc_type = seed.type.lower()
+        if group == "file" and ioc_type in _HASH_IOC_TYPES:
+            hash_values.setdefault(ioc_type, seed.value)
+            continue
+        item = _ioc_row(state, ioc_type, seed.value)
+        item.update(
+            {
+                "type": ioc_type,
                 "value": seed.value,
                 "artifacts": [state.artifact_ids[0]] if state.artifact_ids else [],
                 "rawType": seed.type,
                 "tier": "ioc",
             }
         )
+        items.append(item)
+    if hash_values:
+        items.append(_ioc_file_item(state, hash_values))
+    return items
+
+
+def _ioc_matches(item: dict[str, Any], query: IocQuery) -> bool:
+    item_type = item["type"]
+    if query.type == "file":
+        if item_type != "file" and item_type not in _HASH_IOC_TYPES:
+            return False
+    elif query.type and item_type != query.type:
+        return False
+    if query.tier == "strings":
+        return False
+    if query.source is not None and not set(query.source) & set(item["sources"]):
+        return False
+    if query.grade is not None and (item["grade"] or "none") not in query.grade:
+        return False
+    if query.exported is not None and item["exported"] != query.exported:
+        return False
+    return query.labelled != "only"
+
+
+def build_iocs_response(
+    state: SubmissionState,
+    *,
+    type_filter: str | None = None,
+    page: int | None,
+    limit: int | None,
+    tier_filter: str | None = None,
+    query: IocQuery | None = None,
+) -> IoCsResponse:
+    """Build the paginated IoC list response. Every seeded IoC is in the ``ioc`` tier, has an
+    IoC row and is exported; no seeded IoC is labelled."""
+    if query is None:
+        query = IocQuery(type=type_filter, tier=tier_filter)
+    items = [item for item in _ioc_items(state, query.group) if _ioc_matches(item, query)]
+    if query.sort == "grade":
+        items.sort(key=lambda item: _GRADE_ORDER.get(item["grade"], 3))
     total = len(items)
     page_number = page if page is not None else 1
     page_limit = limit if limit is not None else 20
@@ -526,9 +728,14 @@ ARTIFACT_SOURCES: frozenset[str] = frozenset(
 
 
 def build_artifacts_response(
-    state: SubmissionState, *, source: str | None = None
+    state: SubmissionState,
+    *,
+    source: str | None = None,
+    page: int | None = None,
+    limit: int | None = None,
 ) -> ArtifactsResponse:
-    """Build the artifacts response, applying the ``source`` filter."""
+    """Build the artifacts response, applying the ``source`` filter. Without ``page`` and
+    ``limit`` it holds every artifact, as the API does."""
     items: list[dict[str, Any]] = []
     for idx, artifact_id in enumerate(state.artifact_ids):
         if source is not None and source != "dynamic_report":
@@ -553,9 +760,32 @@ def build_artifacts_response(
                 "downloadLink": (
                     f"/public-api/submissions/{state.uuid}/download/artifact/{artifact_id}"
                 ),
+                "writer": {
+                    "guestPath": f"C:\\Users\\test\\AppData\\Local\\Temp\\artifact-{idx}.bin",
+                    "pid": 1508,
+                    "processName": "malware.exe",
+                },
             }
         )
-    return ArtifactsResponse.model_validate({"items": items, "total": len(items)})
+    total = len(items)
+    if page is None and limit is None:
+        page_number, page_limit = 1, total
+        total_pages = 1 if total else 0
+    else:
+        page_number = page if page is not None else 1
+        page_limit = limit if limit is not None else 20
+        total_pages = (total + page_limit - 1) // page_limit
+        start = (page_number - 1) * page_limit
+        items = items[start : start + page_limit]
+    return ArtifactsResponse.model_validate(
+        {
+            "items": items,
+            "total": total,
+            "page": page_number,
+            "limit": page_limit,
+            "totalPages": total_pages,
+        }
+    )
 
 
 def build_artifact_jobs() -> list[ArtifactJob]:
@@ -1585,7 +1815,8 @@ def build_http_request_packets(
         {
             "items": [
                 {
-                    "timeshift": 0.75,
+                    "timeshift": 750,
+                    "timeshiftSeconds": 0.75,
                     "url": f"http://{_C2_HOST}/gate.php",
                     "method": "POST",
                     "destinationIp": _C2_IP,
@@ -1594,7 +1825,8 @@ def build_http_request_packets(
                     "headers": {"Host": _C2_HOST, "Content-Type": "text/plain"},
                     "body": _packet_data(b"bot=fake&token=FAKE-TOKEN-FOR-TESTS"),
                     "response": {
-                        "timeshift": 0.9,
+                        "timeshift": 900,
+                        "timeshiftSeconds": 0.9,
                         "destinationIp": _LOCAL_IP,
                         "destinationPort": 49712,
                         "headers": {"Content-Type": "text/html"},
@@ -1644,8 +1876,11 @@ def _endpoint_row(
     request_count: int = 1,
     alert_count: int = 0,
     max_alert_severity: str | None = None,
+    group: str = "sample",
+    grade: str | None = "low",
 ) -> dict[str, Any]:
     is_address = key in ips
+    shared = group == "shared"
     return {
         "key": key,
         "host": None if is_address else key,
@@ -1661,7 +1896,28 @@ def _endpoint_row(
         "maxAlertSeverityLevel": int(max_alert_severity) if max_alert_severity else None,
         "processIds": [],
         "attributionNote": None,
+        "group": group,
+        "grade": None if shared else grade,
+        "reasons": [
+            {
+                "code": "label_shared_infrastructure" if shared else "contacted",
+                "text": "A public DNS service." if shared else "Contacted by the sample.",
+                "effect": "lowers" if shared else "raises",
+            }
+        ],
+        "label": "shared_infrastructure" if shared else None,
+        "labelDetail": "public_dns" if shared else None,
+        "detectionLevel": "malicious" if alert_count else None,
+        "patterns": ["beacon"] if request_count > 1 else [],
+        "iocId": ioc_row_id("ip" if is_address else "domain", key),
+        "rank": 0,
     }
+
+
+NETWORK_ENDPOINT_SORTS: frozenset[str] = frozenset(
+    {"default", "priority", "first_contact", "last_contact"}
+)
+NETWORK_HOST_GROUPS: frozenset[str] = frozenset({"sample", "shared", "background"})
 
 
 def _endpoint_rows(state: SubmissionState) -> list[dict[str, Any]]:
@@ -1678,9 +1934,15 @@ def _endpoint_rows(state: SubmissionState) -> list[dict[str, Any]]:
             request_count=3,
             alert_count=len(severities),
             max_alert_severity=str(severities[0]) if severities else None,
+            grade="high",
         ),
         _endpoint_row(
-            "benign.example.com", ips=["198.51.100.1"], ports=[], protocols=["DNS"], timeshift=1.0
+            "benign.example.com",
+            ips=["198.51.100.1"],
+            ports=[],
+            protocols=["DNS"],
+            timeshift=1.0,
+            group="shared",
         ),
     ]
     for connection in [*build_tcp_connections(state), *build_udp_connections(state)]:
@@ -1694,14 +1956,51 @@ def _endpoint_rows(state: SubmissionState) -> list[dict[str, Any]]:
                     timeshift=connection.timeshift,
                 )
             )
+    priority = sorted(rows, key=lambda row: (row["group"] == "shared", row["firstTimeshift"]))
+    for rank, row in enumerate(priority):
+        row["rank"] = rank
     return rows
 
 
-def build_network_endpoints(state: SubmissionState, *, limit: int) -> NetworkEndpoints:
-    """Build the endpoints of the network map, sample endpoints first."""
-    rows = _endpoint_rows(state)
+def _host_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    sample = [row for row in rows if row["group"] == "sample"]
+    return {
+        "hostCount": len(sample),
+        "ratedCount": sum(1 for row in sample if row["detectionLevel"] is not None),
+        "protocols": sorted({protocol for row in sample for protocol in row["protocols"]})[:4],
+        "sharedCount": sum(1 for row in rows if row["group"] == "shared"),
+        "backgroundCount": sum(1 for row in rows if row["group"] == "background"),
+        "backgroundWithAlerts": sum(
+            1 for row in rows if row["group"] == "background" and row["alertCount"]
+        ),
+        "truncated": False,
+    }
+
+
+def build_network_endpoints(
+    state: SubmissionState,
+    *,
+    limit: int,
+    sort: str | None = None,
+    groups: list[str] | None = None,
+) -> NetworkEndpoints:
+    """Build the endpoints of the network map. Without ``sort`` they are in the Hosts order
+    (``priority``), as on Threat.Zone v3.9.5."""
+    all_rows = _endpoint_rows(state)
+    rows = [row for row in all_rows if groups is None or row["group"] in groups]
+    if sort in (None, "priority"):
+        rows.sort(key=lambda row: row["rank"])
+    elif sort == "first_contact":
+        rows.sort(key=lambda row: row["firstTimeshift"])
+    elif sort == "last_contact":
+        rows.sort(key=lambda row: row["lastTimeshift"], reverse=True)
     return NetworkEndpoints.model_validate(
-        {"items": rows[:limit], "total": len(rows), "truncated": len(rows) > limit}
+        {
+            "items": rows[:limit],
+            "total": len(rows),
+            "truncated": len(rows) > limit,
+            "summary": _host_summary(all_rows),
+        }
     )
 
 
@@ -2503,8 +2802,9 @@ def _domain_from_url(url: str) -> str:
     return stripped.split("/", 1)[0]
 
 
-def build_media_files(state: SubmissionState) -> list[MediaFile]:
+def build_media_files(state: SubmissionState, source: str | None = None) -> list[MediaFile]:
     """Build the list of available media files for a submission."""
+    query = f"?source={source}" if source is not None else ""
     return [
         MediaFile.model_validate(
             {
@@ -2513,6 +2813,7 @@ def build_media_files(state: SubmissionState) -> list[MediaFile]:
                 "contentType": "image/png",
                 "size": 68,
                 "kind": "screenshot",
+                "downloadLink": f"/public-api/submissions/{state.uuid}/media/{mid}{query}",
             }
         )
         for mid in state.media_ids
@@ -2588,6 +2889,8 @@ def build_metafields() -> Metafields:
             "key": "timeout",
             "label": "Timeout",
             "description": "Analysis timeout in seconds",
+            "shortDescription": "Analysis timeout in seconds",
+            "longDescription": None,
             "type": "number",
             "default": 120,
             "active": True,
@@ -2698,7 +3001,7 @@ _TIER_BY_LEVEL: dict[str, str] = {
     "malicious": "Malicious",
     "suspicious": "Suspicious",
     "benign": "Benign",
-    "unknown": "Not Measured",
+    "unknown": "Unknown",
 }
 _SCORE_BY_LEVEL: dict[str, int] = {"malicious": 92, "suspicious": 45, "benign": 5, "unknown": 0}
 
@@ -2726,7 +3029,11 @@ def build_verdict(state: SubmissionState) -> Verdict:
                     }
                 ],
                 "decisive": [
-                    {"source": "policy:win.network.c2_policy", "text": "Remote connection."}
+                    {
+                        "source": "policy:win.network.c2_policy",
+                        "indicatorId": "ind-0",
+                        "text": "Remote connection.",
+                    }
                 ],
                 "tierReason": "Owner policy floor.",
                 "notObserved": ["no persistence request"],
@@ -2826,13 +3133,37 @@ class IocExportFile:
     filename: str
 
 
-def _ioc_export_rows(state: SubmissionState) -> list[tuple[str, str]]:
+@dataclass(frozen=True)
+class IocExportFilter:
+    """The ``/download/iocs`` filters that the fake API applies."""
+
+    types: list[str] | None = None
+    artifacts: list[str] | None = None
+    search: str | None = None
+
+
+def _ioc_export_rows(
+    state: SubmissionState, export_filter: IocExportFilter | None = None
+) -> list[tuple[str, str]]:
+    export_filter = export_filter or IocExportFilter()
     rows: list[tuple[str, str]] = []
     for seed in state.iocs:
         ioc_type = seed.type.lower()
         row = (ioc_type, seed.value)
-        if ioc_type in _IOC_EXPORT_TYPES and row not in rows:
-            rows.append(row)
+        if ioc_type not in _IOC_EXPORT_TYPES or row in rows:
+            continue
+        row_type = "file" if ioc_type in _HASH_IOC_TYPES else ioc_type
+        if export_filter.types is not None and row_type not in export_filter.types:
+            continue
+        if export_filter.artifacts is not None and not (
+            state.artifact_ids and state.artifact_ids[0] in export_filter.artifacts
+        ):
+            continue
+        if export_filter.search is not None and export_filter.search.lower() not in (
+            seed.value.lower()
+        ):
+            continue
+        rows.append(row)
     return rows
 
 
@@ -2842,9 +3173,11 @@ def _defang(ioc_type: str, value: str) -> str:
     return value.replace("http", "hxxp", 1).replace(".", "[.]")
 
 
-def build_ioc_export(state: SubmissionState, export_format: str) -> IocExportFile:
+def build_ioc_export(
+    state: SubmissionState, export_format: str, export_filter: IocExportFilter | None = None
+) -> IocExportFile:
     """Build the IoC export file in one of the four formats."""
-    rows = _ioc_export_rows(state)
+    rows = _ioc_export_rows(state, export_filter)
     if export_format == "csv":
         lines = ["type,value,defanged,sources"]
         lines += [f"{kind},{value},{_defang(kind, value)},dynamic" for kind, value in rows]
@@ -2893,4 +3226,15 @@ def build_ioc_export(state: SubmissionState, export_format: str) -> IocExportFil
         content=json.dumps(event).encode("utf-8"),
         content_type="application/json",
         filename=f"threatzone_iocs_misp_{state.uuid}.json",
+    )
+
+
+FAKE_SERVICE_BUILD = "fake-build"
+FAKE_API_VERSION = "3.8.0"
+
+
+def build_api_version() -> ApiVersion:
+    """Build the ``GET /version`` response."""
+    return ApiVersion.model_validate(
+        {"version": FAKE_SERVICE_BUILD, "apiVersion": FAKE_API_VERSION}
     )

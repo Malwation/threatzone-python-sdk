@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "507f1f77bcf86cd799439015",
+      "filename": "dropped_payload.dll",
+      "size": 245760,
+      "type": "file_dump",
+      "source": "dynamic_report",
+      "hashes": {
+        "md5": "d41d8cd98f00b204e9800998ecf8427e",
+        "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tags": [
+        "executable",
+        "packed"
+      ],
+      "analysisStatus": "analyzed",
+      "analysisTrigger": "auto",
+      "analysisReason": null,
+      "downloadLink": "/public-api/submissions/a1b2c3d4-e5f6-7890-abcd-ef1234567890/download/artifact/507f1f77bcf86cd799439015",
+      "writer": {
+        "guestPath": "C:\\ProgramData\\MS-Office\\MS-Office.exe",
+        "pid": 3940,
+        "processName": "setup.exe"
+      }
+    }
+  ],
+  "total": 18,
+  "page": 1,
+  "limit": 18,
+  "totalPages": 1
+}

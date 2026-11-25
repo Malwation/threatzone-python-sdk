@@ -104,3 +104,101 @@ def behaviour_match_params(texts: str | Sequence[str]) -> dict[str, Any]:
     if not values:
         raise ValueError("texts must not be empty.")
     return {"text": values}
+
+
+def _bool(value: bool | None) -> str | None:
+    return None if value is None else str(value).lower()
+
+
+def _drop_unset(params: dict[str, Any]) -> dict[str, Any]:
+    return {name: value for name, value in params.items() if value is not None}
+
+
+def indicator_params(
+    *,
+    level: str | None,
+    category: str | None,
+    pid: int | None,
+    attack_code: str | None,
+    in_verdict_chain: bool | None,
+    page: int | None,
+    limit: int | None,
+) -> dict[str, Any]:
+    """Build the ``/indicators`` parameters. Unset parameters are left out."""
+    return _drop_unset(
+        {
+            "level": level,
+            "category": category,
+            "pid": pid,
+            "attackCode": attack_code,
+            "inVerdictChain": _bool(in_verdict_chain),
+            "page": page,
+            "limit": limit,
+        }
+    )
+
+
+def ioc_params(
+    *,
+    type: str | None,
+    tier: str | None,
+    source: Sequence[str] | None,
+    grade: Sequence[str] | None,
+    exported: bool | None,
+    labelled: str | None,
+    group: str | None,
+    sort: str | None,
+    page: int | None,
+    limit: int | None,
+) -> dict[str, Any]:
+    """Build the ``/iocs`` parameters. Unset parameters are left out."""
+    return _drop_unset(
+        {
+            "type": type,
+            "tier": tier,
+            "source": _join("source", source),
+            "grade": _join("grade", grade),
+            "exported": _bool(exported),
+            "labelled": labelled,
+            "group": group,
+            "sort": sort,
+            "page": page,
+            "limit": limit,
+        }
+    )
+
+
+def ioc_export_params(
+    *,
+    format: str,
+    types: Sequence[str] | None,
+    artifacts: Sequence[str] | None,
+    search: str | None,
+) -> dict[str, Any]:
+    """Build the ``/download/iocs`` parameters. Unset filters are left out."""
+    return _drop_unset(
+        {
+            "format": format,
+            "types": _join("types", types),
+            "artifacts": _join("artifacts", artifacts),
+            "search": search,
+        }
+    )
+
+
+def network_endpoint_params(
+    *,
+    attribution: Sequence[str] | None,
+    sort: str | None,
+    group: Sequence[str] | None,
+    limit: int | None,
+) -> dict[str, Any]:
+    """Build the ``/network/endpoints`` parameters. Unset parameters are left out."""
+    return _drop_unset(
+        {
+            "attribution": ",".join(attribution) if attribution is not None else None,
+            "sort": sort,
+            "group": _join("group", group),
+            "limit": limit,
+        }
+    )
