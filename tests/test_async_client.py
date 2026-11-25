@@ -2995,6 +2995,9 @@ class TestAsyncVerdictAndRun:
         assert _call_url(mock).endswith("/submissions/sub-789/run")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 class TestAsyncAnnotations:
     async def test_get_annotations(self, api_key: str, sample_annotations: dict[str, Any]) -> None:
         ctx, mock = _patched_async_client(_make_response(200, sample_annotations))

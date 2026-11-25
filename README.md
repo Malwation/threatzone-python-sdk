@@ -678,10 +678,7 @@ matches = client.search_by_sha256("<sha256>", page=2, limit=100)
 public_matches = client.search_by_sha256("<sha256>", scope="public")
 ```
 
-The HTML and PDF reports show the items that analysts in your workspace pinned, and their
-note, in a "Pinned evidence" section. Other workspaces do not see them.
-
-## Verdict, run notes and annotations
+## Verdict and run notes
 
 ```python
 # The Windows V2 verdict with its narrative and story, as the web report shows it.
@@ -697,26 +694,20 @@ if run.java_output is not None:
     print(run.java_output.text)
 for note in run.run_notes:
     print(note.text)  # show the text; note.code is for automation
-
-# Evidence pins and the note of your workspace. Each write returns the full view.
-annotations = client.pin_evidence(uuid, kind="technique", ref="technique:T1055", label="Injection")
-client.set_note(uuid, "The sample drops a second stage.")
-client.unpin_evidence(uuid, annotations.pins[0].id)
-client.set_note(uuid, "")  # an empty text removes the note
 ```
 
 `get_verdict()` and `get_run()` need a dynamic report; without it they raise
 `ReportUnavailableError`. The framework writes the verdict, story and note text. The text can
 change between releases: show it, do not parse it.
 
-Pins and the note belong to the workspace of the API token. Your workspace can annotate every
-submission that it can see, also a public submission of another workspace. The annotations
-stay in your workspace: a caller never reads or changes the annotations of another workspace.
-A private submission of another workspace raises `NotFoundError`. `pin_evidence()` raises
-`BadRequestError` with code `ANNOTATION_PIN_LIMIT_REACHED` when your workspace has 200 pins on
-the submission. `unpin_evidence()` raises `NotFoundError` with code `ANNOTATION_PIN_NOT_FOUND`
-for an unknown pin ID. The web UI and the HTML and PDF reports of your workspace show the pins
-and the note.
+### Annotations (deprecated)
+
+`get_annotations()`, `pin_evidence()`, `unpin_evidence()` and `set_note()` are deprecated, on
+the sync and the async client. The Threat.Zone API removed their routes
+(`/submissions/{uuid}/annotations`) on 2026-10-19, so every call fails with `NotFoundError`.
+Each call raises a `DeprecationWarning`. The methods, and the `Annotations`, `AnnotationPin`,
+`AnnotationNote` and `AnnotationPinKind` types, are removed in SDK 2.0. Remove the calls from
+your code.
 
 ## Core concepts
 

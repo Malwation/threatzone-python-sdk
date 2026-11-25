@@ -3042,6 +3042,9 @@ class TestVerdictAndRun:
             client.get_run("sub-789")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 class TestAnnotations:
     def test_get_annotations(self, api_key: str, sample_annotations: dict[str, Any]) -> None:
         ctx, mock = _patched_client(_make_response(200, sample_annotations))

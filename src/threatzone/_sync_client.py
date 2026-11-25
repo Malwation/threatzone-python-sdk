@@ -37,6 +37,7 @@ from ._params import (
     ioc_params,
     network_endpoint_params,
     syscall_search_params,
+    warn_removed_annotation_route,
     warn_singular_behaviour_filters,
 )
 from ._streaming import DownloadResponse
@@ -2123,6 +2124,9 @@ class ThreatZone:
         """
         Get the evidence pins and the note of your workspace on a submission.
 
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
+
         Pins and the note belong to the workspace of the API token. Each
         workspace that can see the submission keeps its own pins and note.
         You never read the annotations of another workspace.
@@ -2138,6 +2142,7 @@ class ThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("get_annotations")
         response = self._http.get(f"/submissions/{uuid}/annotations")
         return Annotations.model_validate(response.json())
 
@@ -2151,6 +2156,9 @@ class ThreatZone:
     ) -> Annotations:
         """
         Add an evidence pin for your workspace.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         Your workspace can pin a submission that it can see: its own
         submissions and public submissions of other workspaces. The pin stays
@@ -2178,6 +2186,7 @@ class ThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("pin_evidence")
         response = self._http.post(
             f"/submissions/{uuid}/annotations/pins",
             json={"kind": kind, "ref": ref, "label": label},
@@ -2187,6 +2196,9 @@ class ThreatZone:
     def unpin_evidence(self, uuid: str, pin_id: str) -> Annotations:
         """
         Remove one evidence pin of your workspace.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         Args:
             uuid: Submission UUID.
@@ -2210,6 +2222,7 @@ class ThreatZone:
             pin is removed. ``pin_evidence()`` and ``set_note()`` are safe to
             send again.
         """
+        warn_removed_annotation_route("unpin_evidence")
         response = self._http.delete(
             f"/submissions/{uuid}/annotations/pins/{quote(pin_id, safe='')}"
         )
@@ -2218,6 +2231,9 @@ class ThreatZone:
     def set_note(self, uuid: str, text: str) -> Annotations:
         """
         Replace the note of your workspace on a submission.
+
+        Deprecated: the Threat.Zone API removed this route on 2026-10-19, so the
+        call fails with ``NotFoundError``. The method is removed in SDK 2.0.
 
         The request replaces the full note text. An empty text, or a text with
         only spaces, removes the note. Your workspace can write a note on a
@@ -2237,6 +2253,7 @@ class ThreatZone:
             NotFoundError: When the submission does not exist, or is private
                 and belongs to another workspace.
         """
+        warn_removed_annotation_route("set_note")
         response = self._http.put(f"/submissions/{uuid}/annotations/note", json={"text": text})
         return Annotations.model_validate(response.json())
 

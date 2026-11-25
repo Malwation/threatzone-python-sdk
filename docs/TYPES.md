@@ -421,9 +421,10 @@ field. The text can change between releases: show it, do not parse it.
 
 ## Annotations
 
-The evidence pins and the note that your workspace keeps on a submission. Returned by
-`get_annotations()`, `pin_evidence()`, `unpin_evidence()` and `set_note()`. Every write
-returns the full view after the change.
+Deprecated. The evidence pins and the note that your workspace kept on a submission. Returned
+by `get_annotations()`, `pin_evidence()`, `unpin_evidence()` and `set_note()`. The Threat.Zone
+API removed these routes on 2026-10-19, so every call fails with `NotFoundError` and raises a
+`DeprecationWarning`. The methods and these types are removed in SDK 2.0.
 
 | Type | Purpose | Endpoint |
 |------|---------|----------|

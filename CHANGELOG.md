@@ -72,6 +72,11 @@ unless you pass it.
 
 ### Deprecated
 
+- `get_annotations()`, `pin_evidence()`, `unpin_evidence()` and `set_note()`, on the sync and
+  the async client. The Threat.Zone API removed their routes (`/submissions/{uuid}/annotations`)
+  on 2026-10-19, so every call fails with `NotFoundError`. Each call now raises a
+  `DeprecationWarning`. The methods and the `Annotations`, `AnnotationPin`, `AnnotationNote`
+  and `AnnotationPinKind` types are removed in SDK 2.0.
 - The API removes these fields in its next release: `ModuleInfo.module_id` (read
   `module_name`), `AiReport.job_id`, `AiReportPending.job_id`, `UrlScoreBrowserSnapshot.job_id`
   and `UrlAnalysisBrowserSection.job_id` (read `revision`). They are optional now, so a

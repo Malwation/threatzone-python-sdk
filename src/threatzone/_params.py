@@ -202,3 +202,13 @@ def network_endpoint_params(
             "limit": limit,
         }
     )
+
+
+def warn_removed_annotation_route(method: str) -> None:
+    """Warn that an annotations method calls a route the Threat.Zone API removed."""
+    warnings.warn(
+        f"{method}() is deprecated: the Threat.Zone API removed its route on 2026-10-19, so "
+        "the call fails with NotFoundError. It is removed in SDK 2.0.",
+        DeprecationWarning,
+        stacklevel=3,
+    )

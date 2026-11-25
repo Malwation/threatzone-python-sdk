@@ -51,6 +51,9 @@ def test_verdict_needs_a_dynamic_report(
         sync_client.get_run(created.uuid)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 def test_annotation_lifecycle(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
     uuid = _submit(fake_api, sync_client)
     empty = sync_client.get_annotations(uuid)
@@ -76,12 +79,18 @@ def test_annotation_lifecycle(fake_api: FakeThreatZoneAPI, sync_client: ThreatZo
     assert exc_info.value.body["code"] == "ANNOTATION_PIN_NOT_FOUND"
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 def test_pin_rejects_an_unknown_kind(fake_api: FakeThreatZoneAPI, sync_client: ThreatZone) -> None:
     uuid = _submit(fake_api, sync_client)
     with pytest.raises(BadRequestError):
         sync_client.pin_evidence(uuid, kind="screenshot", ref="x", label="x")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 def test_public_submission_of_another_workspace_can_be_annotated(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
 ) -> None:
@@ -106,6 +115,9 @@ def test_public_submission_of_another_workspace_can_be_annotated(
     assert len(annotations.pins) == 1
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 def test_unpin_rejects_a_pin_id_that_is_not_uuid_v4(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
 ) -> None:
@@ -178,6 +190,9 @@ def test_sha256_search_scope(fake_api: FakeThreatZoneAPI, sync_client: ThreatZon
     assert sync_client.search_by_sha256(sha, scope="public") == []
 
 
+@pytest.mark.filterwarnings(
+    "ignore:(get_annotations|pin_evidence|unpin_evidence|set_note)\\(\\) is deprecated:DeprecationWarning"
+)
 async def test_async_annotations_and_ioc_export(
     fake_api: FakeThreatZoneAPI, sync_client: ThreatZone, async_client: AsyncThreatZone
 ) -> None:
