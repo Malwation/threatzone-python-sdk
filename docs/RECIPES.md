@@ -26,6 +26,7 @@ client = ThreatZone(api_key="<your-api-key>")
 14. [Auto-select sandbox environment](#14-auto-select-sandbox-environment)
 15. [Analyse the files that a URL downloaded](#15-analyse-the-files-that-a-url-downloaded)
 16. [Fetch a file from a URL](#16-fetch-a-file-from-a-url)
+17. [Watch the live sandbox view](#17-watch-the-live-sandbox-view)
 
 ---
 
@@ -974,3 +975,48 @@ with ThreatZone(api_key="<your-api-key>") as client:
 - `tls_error` is the certificate error code of the first TLS hop that failed verification,
   for example `CERT_HAS_EXPIRED`. The server still fetches the file.
 - The SDK never sends these `POST` requests again after a read or write timeout.
+
+---
+
+### 17. Watch the live sandbox view
+
+**Goal.** While the sandbox VM runs a file submission, get the WebSocket link of its live VNC
+view, the same view that the web app shows on the submission page. Needs Threat.Zone v3.9.6
+or later.
+
+```python
+import time
+
+from threatzone import ThreatZone
+
+with ThreatZone(api_key="<your-api-key>") as client:
+    created = client.create_sandbox_submission("sample.exe", private=True)
+
+    deadline = time.monotonic() + 300
+    session = client.get_dynamic_session(created.uuid)
+    while session.state != "running" and time.monotonic() < deadline:
+        time.sleep(5)
+        session = client.get_dynamic_session(created.uuid)
+
+    if session.state == "running":
+        print(f"The analysis ends at {session.expires_at} (Unix ms).")
+        if session.link is not None:
+            open_vnc_viewer(session.link)  # your RFB-over-WebSocket client, for example noVNC
+```
+
+**Notes.**
+
+- `state` is `running` while the dynamic report is `in_progress` and the VM is live. It is
+  `unavailable` before the VM starts and after the run ends, so always poll with a deadline,
+  or stop when `get_submission()` shows the dynamic report past `in_progress`. A sandbox
+  request that ran static analysis only (`created.dynamic_skipped`) never gets a live view.
+- Only the user who submitted the file and the admins of its workspace get `link`. Every
+  other caller, also for a public submission, gets `link=None` with `vnc_available=True`.
+- The token in `link` is a random secret of the run, not the submission UUID, and each new
+  run gets a new one. Treat `link` as a credential: anyone who has it can open the VM while
+  the run is in progress. Do not log it.
+- `expires_at` can move later: Extend Time and Human Simulation lengthen the run.
+- A URL submission raises `ReportUnavailableError` with `code == "DYNAMIC_REPORT_UNAVAILABLE"`.
+  Its live browser view is `get_url_analysis_session()`.
+- A server before v3.9.6 has no such route and raises `NotFoundError`.
+- See [`examples/recipe_17_live_sandbox_view.py`](../examples/recipe_17_live_sandbox_view.py).

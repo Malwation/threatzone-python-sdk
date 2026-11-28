@@ -1,7 +1,7 @@
-"""The models keep every field of the documented v1 response examples of Threat.Zone v3.9.5.
+"""The models keep every field of the documented v1 response examples of Threat.Zone v3.9.6.
 
 Each file in ``fixtures/api_docs/`` is a verbatim copy of one response example of the Public
-API guide (``apps/public-api-service/docs/api/*.md`` at the ``v3.9.5`` tag). Copy the example
+API guide (``apps/public-api-service/docs/api/*.md`` at the ``v3.9.6`` tag). Copy the example
 again when the guide changes.
 """
 
@@ -17,6 +17,7 @@ from pydantic import TypeAdapter
 
 from threatzone.types import (
     ArtifactsResponse,
+    DynamicSession,
     IoCsResponse,
     MediaFile,
     Metafields,
@@ -34,6 +35,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "api_docs"
 
 DOCUMENTED: dict[str, Any] = {
     "artifacts": ArtifactsResponse,
+    "dynamic_session": DynamicSession,
     "iocs": IoCsResponse,
     "media": list[MediaFile],
     "metafields": Metafields,
@@ -108,3 +110,13 @@ def test_browser_examples_without_the_deprecated_job_id_parse() -> None:
     assert indicators.snapshot is not None
     assert indicators.snapshot.browser_snapshot is not None
     assert "job_id" not in indicators.snapshot.browser_snapshot.model_fields_set
+
+
+def test_dynamic_session_example_parses_the_live_view() -> None:
+    session = DynamicSession.model_validate(_example("dynamic_session"))
+
+    assert session.state == "running"
+    assert session.vnc_available is True
+    assert session.link is not None
+    assert session.link.startswith("wss://")
+    assert session.expires_at == 1756200600000

@@ -75,6 +75,7 @@ from .types import (
     DeclineReason,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     DynamicSkipped,
     DynamicVerdictBrief,
     EmlAnalysis,
@@ -208,7 +209,7 @@ from .types import (
     YaraRulesResponse,
 )
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __all__ = [
     # Clients
@@ -424,6 +425,7 @@ __all__ = [
     "PaginatedSubmissions",
     "Submission",
     "DynamicSkipped",
+    "DynamicSession",
     "SubmissionSearchScope",
     "ScoreBreakdown",
     "ScoreContributor",

@@ -135,7 +135,12 @@ if detail.score_breakdown is not None:
   (the names of options stored as database ids, such as `trace_profile`), `tags[].author` and
   `dynamic_skipped`.
 - A dynamic report with `status == "error"` carries `decline_reason` (`code`, `text`) when the
-  submitter can fix the cause, for example an OpenVPN profile without credentials. Show `text`.
+  submitter can fix the cause, for example an OpenVPN profile without credentials, or with
+  `code == "ended_without_behaviour"` when the run ended without recording any behaviour. Show
+  `text`.
+- For an archive, `file.entrypoint.file_limit_reached` is `True` when the archive held more
+  files than the archive file limit, so only `analyzed_files` of its `total_files` files were
+  analyzed (Threat.Zone v3.9.6 or later; `None` on older submissions).
 
 ### Filename canonicalisation (`dynamic_mimetype_check`)
 
@@ -491,6 +496,24 @@ for detail in (cdr.sanitized_file_info.details if cdr.sanitized_file_info else [
 token can send 30 heavy-route requests each minute; above the limit the call raises
 `RateLimitError`. The API and the SDK never mask, cut or hide secret values.
 
+## Live sandbox view
+
+While the sandbox VM runs a file submission, `get_dynamic_session()` returns the state of its
+live VNC view and the WebSocket link that the web app opens (Threat.Zone v3.9.6 or later).
+
+```python
+session = client.get_dynamic_session(submission.uuid)  # poll while the run is in progress
+if session.state == "running" and session.link is not None:
+    open_vnc_viewer(session.link)  # your RFB-over-WebSocket client; the link is a secret
+print(session.vnc_available, session.expires_at)  # expires_at: Unix ms of the analysis end
+```
+
+- Only the user who submitted the file and the admins of its workspace get `link`. Every
+  other caller gets `None`. Treat the link as a credential and do not log it.
+- `state` is `"unavailable"` before the VM starts and after the run ends.
+- A URL submission raises `ReportUnavailableError` (`DYNAMIC_REPORT_UNAVAILABLE`); use
+  `get_url_analysis_session()` for its live browser view.
+
 ## Processes, behaviours and syscalls
 
 ```python
@@ -823,9 +846,10 @@ Switches for error paths: `fake.rate_limit_heavy_routes(retry_after=60)` makes t
 return 429 `RATE_LIMIT_EXCEEDED`, and `fake.mark_quota_unavailable(retry_after=30)` makes the
 create routes return 503 `QUOTA_UNAVAILABLE`. `fake.reset()` ends both.
 
-The fake supports `analyze_artifact()`, `create_url_download_submission()` and
-`download_url()`. A URL report of the fake lists one completed downloaded file for each
-artifact of the submission.
+The fake supports `analyze_artifact()`, `create_url_download_submission()`,
+`download_url()` and `get_dynamic_session()`: the live view of a file submission is `running`
+with a link while its dynamic report is `in_progress`. A URL report of the fake lists one
+completed downloaded file for each artifact of the submission.
 
 ## Development
 

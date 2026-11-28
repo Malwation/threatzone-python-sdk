@@ -5,6 +5,42 @@ All notable changes to the Threat.Zone Python SDK are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-11-28
+
+The SDK now models the Public API of Threat.Zone v3.9.6. Every new field is `None` when an
+older server leaves it out.
+
+### Added
+
+- `get_dynamic_session(uuid)` returns `DynamicSession` (`state`, `vnc_available`, `link`,
+  `expires_at`; `DynamicSessionState`) from `GET /submissions/{uuid}/dynamic/session`: the
+  live VNC view of the sandbox VM that runs a file submission. `state` is `running` while the
+  dynamic report is `in_progress` and the VM is live, else `unavailable`. Only the submitter and the admins of
+  its workspace get `link`; treat it as a credential. A URL submission raises
+  `ReportUnavailableError` (`DYNAMIC_REPORT_UNAVAILABLE`), and a server before v3.9.6 raises
+  `NotFoundError`. Since Threat.Zone v3.9.6 the token in the link is a random value of the
+  run, so a `cloudvnc?token=<submission UUID>` URL built by hand no longer opens a VM.
+- `FileEntrypoint.file_limit_reached`, `total_files` and `analyzed_files` on
+  `get_submission()` and `search_by_sha256()`: `file_limit_reached` is `True` when the archive
+  held more files than the archive file limit, so only `analyzed_files` of its `total_files`
+  files were analyzed. It is `None` on submissions created before Threat.Zone v3.9.6.
+- `DeclineReasonCode` adds `ended_without_behaviour`: a `dynamic` report with `status`
+  `error` whose run ended without recording any behaviour. Before v3.9.6 such a report had
+  `decline_reason` `None`.
+- The fake API serves `GET /submissions/{uuid}/dynamic/session` (`running` with a link while
+  the dynamic report is `in_progress`, 409 for a URL submission), and its `GET /version`
+  says `3.9.6`. Recipe 17 and `examples/recipe_17_live_sandbox_view.py` show the route.
+
+### Changed
+
+- Since Threat.Zone v3.9.6 the detected type of an Office document comes from its content, so
+  `FileInfo.real_extension` and the member mimetypes can be `xlsm`, `docm`, `pptm` and the
+  other Office types, not only `docx`, `xlsx` or `pptx`. The SDK types do not change.
+- Since Threat.Zone v3.9.6 an archive member whose Office extension does not match its content
+  gets the extension that its content needs (`book.xlsx` that holds macros becomes
+  `book.xlsm`). The `entrypoint` argument of the create methods can name such a member by its
+  new name or by its name in the archive.
+
 ## [1.3.0] - 2026-11-25
 
 The SDK now models the Public API of Threat.Zone v3.9.5. Every new field is `None` or empty

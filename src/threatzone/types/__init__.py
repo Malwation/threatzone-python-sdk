@@ -96,6 +96,7 @@ from .downloads import (
     PdfReportStatusValue,
     UrlDownloadFile,
 )
+from .dynamic_session import DynamicSession, DynamicSessionState
 from .eml import (
     EmlAnalysis,
     EmlAnalysisAttachment,
@@ -756,6 +757,9 @@ __all__ = [
     "DynamicSkippedArchitecture",
     "DynamicSkippedPlatform",
     "DynamicSkippedReason",
+    # Live sandbox view
+    "DynamicSession",
+    "DynamicSessionState",
     "SubmissionCreated",
     "SubmissionIndicatorLevels",
     "SubmissionIndicatorsRollup",

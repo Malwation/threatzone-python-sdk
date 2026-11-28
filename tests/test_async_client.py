@@ -57,6 +57,7 @@ from threatzone.types import (
     Connection,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     EmlAnalysis,
     EnvironmentOption,
     ExtractedConfigsResponse,
@@ -3422,3 +3423,68 @@ class TestAsyncPublicApi395Parameters:
                 )
         assert mock.call_args.kwargs["json"]["autoSelectEnvironment"] is False
         assert created.dynamic_skipped is None
+
+
+class TestAsyncPublicApi396Surface:
+    async def test_get_dynamic_session_running(self, api_key: str, submission_uuid: str) -> None:
+        body = {
+            "state": "running",
+            "vncAvailable": True,
+            "link": "wss://app.threat.zone/cloudvnc?token=3f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
+            "expiresAt": 1756200600000,
+        }
+        ctx, mock = _patched_async_client(_make_response(200, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                session = await client.get_dynamic_session(submission_uuid)
+        assert isinstance(session, DynamicSession)
+        assert session.state == "running"
+        assert session.link is not None
+        assert session.expires_at == 1756200600000
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/dynamic/session")
+
+    async def test_get_dynamic_session_409_on_a_url_submission(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "This is a URL submission, so it has no sandbox VM.",
+            "code": "DYNAMIC_REPORT_UNAVAILABLE",
+        }
+        ctx, _ = _patched_async_client(_make_response(409, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(ReportUnavailableError) as exc_info:
+                    await client.get_dynamic_session(submission_uuid)
+        assert exc_info.value.code == "DYNAMIC_REPORT_UNAVAILABLE"
+
+    async def test_get_dynamic_session_404(self, api_key: str, submission_uuid: str) -> None:
+        body = {"statusCode": 404, "message": "Submission not found", "code": "NOT_FOUND"}
+        ctx, _ = _patched_async_client(_make_response(404, body))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                with pytest.raises(NotFoundError):
+                    await client.get_dynamic_session(submission_uuid)
+
+    async def test_get_submission_reads_the_archive_file_limit(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        sample_submission["file"] = {
+            **sample_submission["file"],
+            "entrypoint": {
+                "filename": "payload.exe",
+                "fileLimitReached": False,
+                "totalFiles": None,
+                "analyzedFiles": None,
+            },
+        }
+        ctx, _ = _patched_async_client(_make_response(200, sample_submission))
+        with ctx:
+            async with AsyncThreatZone(api_key=api_key) as client:
+                sub = await client.get_submission("sub-789")
+        assert sub.file is not None
+        assert sub.file.entrypoint is not None
+        assert sub.file.entrypoint.file_limit_reached is False
+        assert sub.file.entrypoint.total_files is None

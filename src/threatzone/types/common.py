@@ -40,11 +40,13 @@ DeclineReasonCode = (
         "archive_unreadable",
         "timeout_out_of_range",
         "start_arguments_rejected",
+        "ended_without_behaviour",
     ]
     | str
 )
-"""Why a dynamic analysis did not start. The API documents a closed set; treat an unknown
-code as no reason."""
+"""Why a dynamic analysis did not start, or ``ended_without_behaviour`` for a run that ended
+without sending back any behaviour. The API documents a closed set; treat an unknown code as
+no reason."""
 
 
 _RowT = TypeVar("_RowT")
@@ -99,6 +101,15 @@ class FileEntrypoint(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     filename: str
+    file_limit_reached: bool | None = Field(default=None, alias="fileLimitReached")
+    """``True`` when the archive held more files than the archive file limit (1,000 files by
+    default), so only ``analyzed_files`` of its ``total_files`` files were analyzed. ``False``
+    for an archive within the limit. ``None`` on submissions created before the field existed,
+    and on older servers."""
+    total_files: int | None = Field(default=None, alias="totalFiles")
+    """How many files the archive held. Set only when ``file_limit_reached`` is ``True``."""
+    analyzed_files: int | None = Field(default=None, alias="analyzedFiles")
+    """How many of its files were analyzed. Set only when ``file_limit_reached`` is ``True``."""
 
 
 class FileSource(BaseModel):
@@ -172,7 +183,8 @@ class ReportOperatingSystem(BaseModel):
 
 
 class DeclineReason(BaseModel):
-    """Why the dynamic analysis did not start, for a cause that the submitter can fix."""
+    """Why the dynamic analysis did not start, for a cause that the submitter can fix, or that
+    the run ended without recording any behaviour (``ended_without_behaviour``)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -221,6 +233,7 @@ class ReportStatus(BaseModel):
     sends it. ``None`` for other reports and on older servers."""
     decline_reason: DeclineReason | None = Field(default=None, alias="declineReason")
     """Why the dynamic analysis did not start, when the submitter can fix the cause, for
-    example an OpenVPN profile without a username and password. Set only on a ``dynamic``
-    report with ``status`` ``error``. ``None`` on every other report, on an internal failure,
-    after a restart and on older servers."""
+    example an OpenVPN profile without a username and password, or that the run ended without
+    recording any behaviour (``ended_without_behaviour``). Set only on a ``dynamic`` report
+    with ``status`` ``error``. ``None`` on every other report, on an internal failure, after a
+    restart and on older servers."""

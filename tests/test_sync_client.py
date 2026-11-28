@@ -61,6 +61,7 @@ from threatzone.types import (
     Connection,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     EmlAnalysis,
     EnvironmentOption,
     ExtractedConfigsResponse,
@@ -3609,3 +3610,88 @@ class TestPublicApi395Parameters:
             assert mock.call_args.kwargs["json"]["autoSelectEnvironment"] is False
             client.analyze_artifact("sub-789", "art-1")
             assert "autoSelectEnvironment" not in mock.call_args.kwargs["json"]
+
+
+class TestPublicApi396Surface:
+    def test_get_dynamic_session_running(self, api_key: str, submission_uuid: str) -> None:
+        body = {
+            "state": "running",
+            "vncAvailable": True,
+            "link": "wss://app.threat.zone/cloudvnc?token=3f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
+            "expiresAt": 1756200600000,
+        }
+        ctx, mock = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            session = client.get_dynamic_session(submission_uuid)
+        assert isinstance(session, DynamicSession)
+        assert session.state == "running"
+        assert session.vnc_available is True
+        assert session.link is not None
+        assert submission_uuid not in session.link
+        assert session.expires_at == 1756200600000
+        assert _call_method(mock) == "GET"
+        assert _call_url(mock).endswith(f"/submissions/{submission_uuid}/dynamic/session")
+
+    def test_get_dynamic_session_without_access(self, api_key: str, submission_uuid: str) -> None:
+        body = {"state": "running", "vncAvailable": True, "link": None, "expiresAt": None}
+        ctx, _ = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            session = client.get_dynamic_session(submission_uuid)
+        assert session.vnc_available is True
+        assert session.link is None
+        assert session.expires_at is None
+
+    def test_get_dynamic_session_unavailable(self, api_key: str, submission_uuid: str) -> None:
+        body = {"state": "unavailable", "vncAvailable": False, "link": None, "expiresAt": None}
+        ctx, _ = _patched_client(_make_response(200, body))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            session = client.get_dynamic_session(submission_uuid)
+        assert session.state == "unavailable"
+        assert session.vnc_available is False
+
+    def test_get_dynamic_session_409_on_a_url_submission(
+        self, api_key: str, submission_uuid: str
+    ) -> None:
+        body = {
+            "statusCode": 409,
+            "error": "Conflict",
+            "message": "This is a URL submission, so it has no sandbox VM.",
+            "code": "DYNAMIC_REPORT_UNAVAILABLE",
+        }
+        ctx, _ = _patched_client(_make_response(409, body))
+        with (
+            ctx,
+            ThreatZone(api_key=api_key) as client,
+            pytest.raises(ReportUnavailableError) as exc_info,
+        ):
+            client.get_dynamic_session(submission_uuid)
+        assert exc_info.value.code == "DYNAMIC_REPORT_UNAVAILABLE"
+        assert exc_info.value.submission_uuid is None
+        assert exc_info.value.available_reports == []
+
+    def test_get_dynamic_session_404(self, api_key: str, submission_uuid: str) -> None:
+        body = {"statusCode": 404, "message": "Submission not found", "code": "NOT_FOUND"}
+        ctx, _ = _patched_client(_make_response(404, body))
+        with ctx, ThreatZone(api_key=api_key) as client, pytest.raises(NotFoundError):
+            client.get_dynamic_session(submission_uuid)
+
+    def test_get_submission_reads_the_archive_file_limit(
+        self, api_key: str, sample_submission: dict[str, Any]
+    ) -> None:
+        sample_submission["file"] = {
+            **sample_submission["file"],
+            "entrypoint": {
+                "filename": "payload.exe",
+                "fileLimitReached": True,
+                "totalFiles": 1234,
+                "analyzedFiles": 1000,
+            },
+        }
+        ctx, _ = _patched_client(_make_response(200, sample_submission))
+        with ctx, ThreatZone(api_key=api_key) as client:
+            sub = client.get_submission("sub-789")
+        assert sub.file is not None
+        assert sub.file.entrypoint is not None
+        assert sub.file.entrypoint.file_limit_reached is True
+        assert sub.file.entrypoint.total_files == 1234
+        assert sub.file.entrypoint.analyzed_files == 1000

@@ -73,6 +73,10 @@ _ROUTES_GET: list[tuple[str, re.Pattern[str]]] = [
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/signature-check$"),
     ),
     (
+        "get_dynamic_session",
+        re.compile(rf"^/submissions/(?P<uuid>{_UUID})/dynamic/session$"),
+    ),
+    (
         "get_process_tree",
         re.compile(rf"^/submissions/(?P<uuid>{_UUID})/processes/tree$"),
     ),
