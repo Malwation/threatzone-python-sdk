@@ -64,6 +64,7 @@ from .types import (
     Connection,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     EmlAnalysis,
     EnvironmentOption,
     ExtractedConfigsResponse,
@@ -1405,6 +1406,34 @@ class AsyncThreatZone:
     # =========================================================================
     # Dynamic Report
     # =========================================================================
+
+    async def get_dynamic_session(self, uuid: str) -> DynamicSession:
+        """
+        Get the live sandbox view of a file submission: its state and WebSocket link.
+
+        The web app shows this live view on the submission page. Poll it while the dynamic
+        analysis runs to learn whether the VM is still live and when the analysis ends.
+
+        Args:
+            uuid: Submission UUID (must be a file submission).
+
+        Returns:
+            DynamicSession. ``state`` is ``running`` while the dynamic report is
+            ``in_progress`` and the VM of the run is live, and ``unavailable`` before the VM
+            starts and after the run ends. ``link`` is the ``wss://`` URL of the live VNC
+            view. Only the user who submitted the file and the admins of its workspace get
+            it; every other caller gets ``None``. Treat ``link`` as a credential: anyone who
+            has it can open the VM while the run is in progress.
+
+        Raises:
+            NotFoundError: When the submission does not exist or is private and belongs to
+                another workspace. Servers before Threat.Zone v3.9.6 do not have the route
+                and also answer 404.
+            ReportUnavailableError: When the submission is a URL submission
+                (HTTP 409, ``DYNAMIC_REPORT_UNAVAILABLE``). Use get_url_analysis_session().
+        """
+        response = await self._http.get(f"/submissions/{uuid}/dynamic/session")
+        return DynamicSession.model_validate(response.json())
 
     async def get_processes(self, uuid: str) -> ProcessesResponse:
         """

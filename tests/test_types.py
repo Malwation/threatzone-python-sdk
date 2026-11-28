@@ -44,6 +44,7 @@ from threatzone.types import (
     DeclineReason,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     DynamicVerdictBrief,
     EmlAnalysis,
     EmlAnalysisAttachment,
@@ -52,6 +53,7 @@ from threatzone.types import (
     EnvironmentOption,
     ExtractedConfig,
     ExtractedConfigsResponse,
+    FileEntrypoint,
     FileInfo,
     Hashes,
     HttpRequest,
@@ -3806,3 +3808,110 @@ class TestPublicApi395Fields:
         )
         assert summary.dynamic_verdict is not None
         assert summary.dynamic_verdict.tier == "Benign"
+
+
+class TestPublicApi396Fields:
+    """Fields and values that Threat.Zone v3.9.6 adds, and the older payloads without them."""
+
+    def test_dynamic_session_running(self) -> None:
+        session = DynamicSession.model_validate(
+            {
+                "state": "running",
+                "vncAvailable": True,
+                "link": "wss://gateway.example/cloudvnc?token=3f1c2d3e",
+                "expiresAt": 1756200600000,
+            }
+        )
+        assert session.state == "running"
+        assert session.vnc_available is True
+        assert session.link == "wss://gateway.example/cloudvnc?token=3f1c2d3e"
+        assert session.expires_at == 1756200600000
+        dumped = session.model_dump(by_alias=True)
+        assert dumped["vncAvailable"] is True
+        assert dumped["expiresAt"] == 1756200600000
+
+    def test_dynamic_session_without_access_or_run(self) -> None:
+        no_access = DynamicSession.model_validate(
+            {"state": "running", "vncAvailable": True, "link": None, "expiresAt": None}
+        )
+        assert no_access.link is None
+        assert no_access.expires_at is None
+        unavailable = DynamicSession.model_validate(
+            {"state": "unavailable", "vncAvailable": False, "link": None, "expiresAt": None}
+        )
+        assert unavailable.state == "unavailable"
+        assert unavailable.vnc_available is False
+
+    def test_dynamic_session_accepts_a_new_state(self) -> None:
+        session = DynamicSession.model_validate(
+            {"state": "paused", "vncAvailable": False, "link": None, "expiresAt": None}
+        )
+        assert session.state == "paused"
+
+    def test_dynamic_session_requires_vnc_available(self) -> None:
+        with pytest.raises(ValidationError):
+            DynamicSession.model_validate({"state": "running"})
+
+    def test_entrypoint_archive_file_limit(self) -> None:
+        cut = FileEntrypoint.model_validate(
+            {
+                "filename": "payload.exe",
+                "fileLimitReached": True,
+                "totalFiles": 1234,
+                "analyzedFiles": 1000,
+            }
+        )
+        assert cut.file_limit_reached is True
+        assert cut.total_files == 1234
+        assert cut.analyzed_files == 1000
+        dumped = cut.model_dump(by_alias=True)
+        assert dumped["fileLimitReached"] is True
+        assert dumped["totalFiles"] == 1234
+        assert dumped["analyzedFiles"] == 1000
+
+    def test_entrypoint_within_the_file_limit(self) -> None:
+        within = FileEntrypoint.model_validate(
+            {
+                "filename": "payload.exe",
+                "fileLimitReached": False,
+                "totalFiles": None,
+                "analyzedFiles": None,
+            }
+        )
+        assert within.file_limit_reached is False
+        assert within.total_files is None
+        assert within.analyzed_files is None
+
+    def test_entrypoint_from_an_older_server(self) -> None:
+        older = FileEntrypoint.model_validate({"filename": "payload.exe"})
+        assert older.file_limit_reached is None
+        assert older.total_files is None
+        assert older.analyzed_files is None
+
+    def test_submission_reads_the_archive_file_limit(
+        self, sample_submission: dict[str, Any]
+    ) -> None:
+        sample_submission["file"] = {
+            **sample_submission["file"],
+            "entrypoint": {
+                "filename": "payload.exe",
+                "fileLimitReached": True,
+                "totalFiles": 1500,
+                "analyzedFiles": 1000,
+            },
+        }
+        sub = Submission.model_validate(sample_submission)
+        assert sub.file is not None
+        assert sub.file.entrypoint is not None
+        assert sub.file.entrypoint.file_limit_reached is True
+        assert sub.file.entrypoint.total_files == 1500
+        assert sub.file.entrypoint.analyzed_files == 1000
+
+    def test_decline_reason_ended_without_behaviour(self) -> None:
+        reason = DeclineReason.model_validate(
+            {
+                "code": "ended_without_behaviour",
+                "text": "This analysis ended after 32 minutes without recording any behaviour.",
+            }
+        )
+        assert reason.code == "ended_without_behaviour"

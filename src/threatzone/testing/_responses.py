@@ -17,6 +17,7 @@ import base64
 import hashlib
 import json
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
@@ -38,6 +39,7 @@ from threatzone.types import (
     Connection,
     DevicePresetOption,
     DnsQuery,
+    DynamicSession,
     EmlAnalysis,
     EnvironmentOption,
     ExtractedConfigsResponse,
@@ -2415,6 +2417,34 @@ _RISK_LEVEL_BY_LEVEL: dict[str, str] = {
 }
 
 
+FAKE_ANALYSIS_SECONDS = 300
+
+
+def build_dynamic_session(state: SubmissionState, *, can_open_live_view: bool) -> DynamicSession:
+    """Build the live sandbox view state of a file submission.
+
+    The view is ``running`` only while the dynamic report is ``in_progress``, as on the real
+    API. The link token is a random-looking value of the run, never the submission UUID.
+    """
+    running = state.has_dynamic_report and state.report_status_for("dynamic") == "in_progress"
+    if not running:
+        return DynamicSession.model_validate(
+            {"state": "unavailable", "vncAvailable": False, "link": None, "expiresAt": None}
+        )
+    token = uuid.uuid5(uuid.NAMESPACE_URL, f"fake-vnc-token:{state.uuid}")
+    started_at = int(state.created_at.timestamp() * 1000)
+    return DynamicSession.model_validate(
+        {
+            "state": "running",
+            "vncAvailable": True,
+            "link": f"wss://fake.threat.zone/cloudvnc?token={token}"
+            if can_open_live_view
+            else None,
+            "expiresAt": started_at + FAKE_ANALYSIS_SECONDS * 1000,
+        }
+    )
+
+
 def build_url_analysis_session(state: SubmissionState) -> UrlAnalysisSession:
     """Build the interactive browser session state for a URL submission."""
     active = state.session_active()
@@ -3230,7 +3260,7 @@ def build_ioc_export(
 
 
 FAKE_SERVICE_BUILD = "fake-build"
-FAKE_API_VERSION = "3.9.5"
+FAKE_API_VERSION = "3.9.6"
 
 
 def build_api_version() -> ApiVersion:

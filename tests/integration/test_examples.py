@@ -25,10 +25,12 @@ from examples import (
     recipe_10_async_client,
     recipe_11_daily_summary,
     recipe_12_mitre_cross_reference,
+    recipe_17_live_sandbox_view,
 )
 from threatzone import AsyncThreatZone, ThreatZone
 from threatzone.testing import FakeThreatZoneAPI, scenarios
 from threatzone.types import (
+    DynamicSession,
     Indicator,
     PaginatedSubmissions,
     ProcessesResponse,
@@ -215,6 +217,27 @@ def test_recipe_12_mitre_cross_reference(
     assert "indicator_attack_codes" in result
     assert "intersection" in result
     assert "T1055" in result["intersection"]
+
+
+def test_recipe_17_live_sandbox_view(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone, capsys: pytest.CaptureFixture[str]
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE-bytes")
+    sync_client.get_submission(created.uuid)
+    result = recipe_17_live_sandbox_view.main(sync_client, created.uuid, poll_interval=0.001)
+    assert isinstance(result, DynamicSession)
+    assert result.state == "running"
+    assert result.link is not None
+    assert result.link not in capsys.readouterr().out
+
+
+def test_recipe_17_stops_at_the_timeout(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    uuid = _seeded_uuid(fake_api, sync_client)
+    result = recipe_17_live_sandbox_view.main(sync_client, uuid, poll_interval=0.001, timeout=0.01)
+    assert result.state == "unavailable"
 
 
 @pytest.mark.parametrize(

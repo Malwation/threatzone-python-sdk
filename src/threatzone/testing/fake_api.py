@@ -767,6 +767,7 @@ class FakeThreatZoneAPI:
             "get_static_scan_string_facts": self._handle_get_static_scan_string_facts,
             "get_cdr": self._handle_get_cdr_report,
             "get_signature_check": self._handle_get_signature_check,
+            "get_dynamic_session": self._handle_get_dynamic_session,
             "get_processes": self._handle_get_processes,
             "get_process_tree": self._handle_get_process_tree,
             "get_killchain": self._handle_get_killchain,
@@ -1722,6 +1723,30 @@ class FakeThreatZoneAPI:
         if guard is not None:
             return guard
         return _json(_responses.build_signature_check_response(state))
+
+    def _handle_get_dynamic_session(
+        self, _request: httpx.Request, match: RouteMatch
+    ) -> httpx.Response:
+        """Any file submission answers 200, ``unavailable`` unless its run is in progress. A
+        URL submission answers 409 without details, as the real route does. Only the
+        submitter's workspace gets the link."""
+        state, err = self._require_state(match.params["uuid"])
+        if err is not None or state is None:
+            assert err is not None
+            return err
+        if state.type == "url":
+            return _error(
+                409,
+                "Conflict",
+                "This is a URL submission, so it has no sandbox VM. "
+                "Use GET /submissions/{uuid}/url-analysis/session.",
+                "DYNAMIC_REPORT_UNAVAILABLE",
+            )
+        return _json(
+            _responses.build_dynamic_session(
+                state, can_open_live_view=state.owning_workspace == _CALLER_WORKSPACE
+            )
+        )
 
     def _handle_get_processes(self, _request: httpx.Request, match: RouteMatch) -> httpx.Response:
         state, err = self._require_state(match.params["uuid"])
