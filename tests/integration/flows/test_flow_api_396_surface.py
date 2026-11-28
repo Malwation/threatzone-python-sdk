@@ -80,3 +80,18 @@ async def test_dynamic_session_async(
     session = await async_client.get_dynamic_session(created.uuid)
     assert session.state == "running"
     assert session.link is not None
+
+
+def test_dynamic_session_of_a_public_foreign_submission_has_no_link(
+    fake_api: FakeThreatZoneAPI, sync_client: ThreatZone
+) -> None:
+    scenarios.seed_malicious_pe(fake_api)
+    created = sync_client.create_sandbox_submission(b"PE")
+    sync_client.get_submission(created.uuid)
+    fake_api._states[created.uuid].owning_workspace = "other-workspace"
+
+    session = sync_client.get_dynamic_session(created.uuid)
+    assert session.state == "running"
+    assert session.vnc_available is True
+    assert session.link is None
+    assert session.expires_at is not None

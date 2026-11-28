@@ -992,21 +992,24 @@ from threatzone import ThreatZone
 with ThreatZone(api_key="<your-api-key>") as client:
     created = client.create_sandbox_submission("sample.exe", private=True)
 
+    deadline = time.monotonic() + 300
     session = client.get_dynamic_session(created.uuid)
-    while session.state != "running":
+    while session.state != "running" and time.monotonic() < deadline:
         time.sleep(5)
         session = client.get_dynamic_session(created.uuid)
 
-    print(f"The analysis ends at {session.expires_at} (Unix ms).")
-    if session.link is not None:
-        open_vnc_viewer(session.link)  # your RFB-over-WebSocket client, for example noVNC
+    if session.state == "running":
+        print(f"The analysis ends at {session.expires_at} (Unix ms).")
+        if session.link is not None:
+            open_vnc_viewer(session.link)  # your RFB-over-WebSocket client, for example noVNC
 ```
 
 **Notes.**
 
 - `state` is `running` while the dynamic report is `in_progress` and the VM is live. It is
-  `unavailable` before the VM starts and after the run ends, so stop polling when
-  `get_submission()` shows the dynamic report past `in_progress`.
+  `unavailable` before the VM starts and after the run ends, so always poll with a deadline,
+  or stop when `get_submission()` shows the dynamic report past `in_progress`. A sandbox
+  request that ran static analysis only (`created.dynamic_skipped`) never gets a live view.
 - Only the user who submitted the file and the admins of its workspace get `link`. Every
   other caller, also for a public submission, gets `link=None` with `vnc_available=True`.
 - The token in `link` is a random secret of the run, not the submission UUID, and each new

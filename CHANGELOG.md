@@ -15,7 +15,7 @@ older server leaves it out.
 - `get_dynamic_session(uuid)` returns `DynamicSession` (`state`, `vnc_available`, `link`,
   `expires_at`; `DynamicSessionState`) from `GET /submissions/{uuid}/dynamic/session`: the
   live VNC view of the sandbox VM that runs a file submission. `state` is `running` while the
-  dynamic report is `in_progress`, else `unavailable`. Only the submitter and the admins of
+  dynamic report is `in_progress` and the VM is live, else `unavailable`. Only the submitter and the admins of
   its workspace get `link`; treat it as a credential. A URL submission raises
   `ReportUnavailableError` (`DYNAMIC_REPORT_UNAVAILABLE`), and a server before v3.9.6 raises
   `NotFoundError`. Since Threat.Zone v3.9.6 the token in the link is a random value of the
@@ -36,6 +36,10 @@ older server leaves it out.
 - Since Threat.Zone v3.9.6 the detected type of an Office document comes from its content, so
   `FileInfo.real_extension` and the member mimetypes can be `xlsm`, `docm`, `pptm` and the
   other Office types, not only `docx`, `xlsx` or `pptx`. The SDK types do not change.
+- Since Threat.Zone v3.9.6 an archive member whose Office extension does not match its content
+  gets the extension that its content needs (`book.xlsx` that holds macros becomes
+  `book.xlsm`). The `entrypoint` argument of the create methods can name such a member by its
+  new name or by its name in the archive.
 
 ## [1.3.0] - 2026-11-25
 

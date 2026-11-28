@@ -1728,8 +1728,9 @@ class FakeThreatZoneAPI:
         self, _request: httpx.Request, match: RouteMatch
     ) -> httpx.Response:
         """Any file submission answers 200, ``unavailable`` unless its run is in progress. A
-        URL submission answers 409 without details, as the real route does. Only the
-        submitter's workspace gets the link."""
+        URL submission answers 409 without details, as the real route does. The fake has one
+        caller, so the workspace of a submission decides whether the link is sent; the real
+        API sends it to the submitter and the workspace admins."""
         state, err = self._require_state(match.params["uuid"])
         if err is not None or state is None:
             assert err is not None

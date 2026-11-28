@@ -2424,7 +2424,8 @@ def build_dynamic_session(state: SubmissionState, *, can_open_live_view: bool) -
     """Build the live sandbox view state of a file submission.
 
     The view is ``running`` only while the dynamic report is ``in_progress``, as on the real
-    API. The link token is a random-looking value of the run, never the submission UUID.
+    API. The link token is derived from the submission UUID and never equals it. The real API
+    makes a random token for each run.
     """
     running = state.has_dynamic_report and state.report_status_for("dynamic") == "in_progress"
     if not running:

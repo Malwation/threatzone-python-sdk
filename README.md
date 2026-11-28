@@ -848,8 +848,8 @@ create routes return 503 `QUOTA_UNAVAILABLE`. `fake.reset()` ends both.
 
 The fake supports `analyze_artifact()`, `create_url_download_submission()`,
 `download_url()` and `get_dynamic_session()`: the live view of a file submission is `running`
-with a link while its dynamic report is `in_progress`. A URL report of the fake lists one completed downloaded file for each
-artifact of the submission.
+with a link while its dynamic report is `in_progress`. A URL report of the fake lists one
+completed downloaded file for each artifact of the submission.
 
 ## Development
 
